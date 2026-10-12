@@ -1,0 +1,8 @@
+# coding-harness 툼스톤 — 레포에서 제거된 관리 파일의 대상측 잔재를 삭제하기 위한 목록.
+# 형식: 한 줄에 상대경로 1개. rules/|agents/|commands/ 아래만 허용.
+# 규칙: 레포에서 파일을 지우거나 이름을 바꾸는 커밋은 옛 경로를 여기 추가해야 한다.
+commands/dashboard.md
+commands/dashboard_helper.py
+commands/dashboard_render.py
+commands/dashboard_template.html
+commands/env-update.md

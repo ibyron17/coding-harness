@@ -1,0 +1,667 @@
+"""hub_usage.py — 한도 관련 외부 계약 파서 + 사용량 API 폴링 스케줄(순수).
+
+이 모듈은 파일시스템·시각·환경변수에 닿지 않는다(★순수, tests/hub/test_hub_usage.py·
+test_hub_usage_session_cost.py 대상).
+다루는 외부 포맷은 하나다 — Claude Code CLI 의 statusLine 입력 JSON과 그 캡처 파일
+(`rate_limits.*.resets_at`·`rate_limits.*.used_percentage`, 그리고 세션별 비용 캡처 ⑨ 의
+`session_id`·`cost.total_cost_usd`·`cost.total_api_duration_ms`·`context_window.used_percentage`,
+docs/prps/harness-benchmark-adoption.md). 초기화 예정 시각과 사용률
+퍼센트 둘 다 이 캡처가 유일한 출처다(결정 P1, docs/prps/hub-card-cleanup-and-usage-source.md) —
+Claude 데스크톱 앱이 남기던 비공개 사용량 히스토리 파일은 실제로 사라져 더 이상 다루지
+않는다. 우리가 만들지 않는 외부 포맷이라 `hub_parse.py`(진행 기록 JSONL 파서)와
+같은 fail-open 태도다 — 계약이 안 맞으면 예외가 아니라 None 을 돌려주고, 호출자(hub_collect.py)가
+그 실패를 흡수한다. 설계 근거는 docs/prps/hub-theme-and-usage-panel.md 결정 U2·U3,
+docs/prps/hub-usage-reset-time-and-refresh.md 결정 S1~S5·R1·R2·R5, docs/prps/
+hub-card-cleanup-and-usage-source.md 결정 P1~P8 이 정본이다.
+"""
+
+import json
+import math
+import re
+from dataclasses import dataclass, replace
+from datetime import datetime, timezone
+
+USAGE_SESSION_WINDOW_HOURS = 5          # rate_limits.five_hour 가 재는 창의 길이. 만료 기준의 근거(결정 U3)
+MILLISECONDS_PER_HOUR = 60 * 60 * 1000
+USAGE_MAX_SAMPLE_AGE_MS = USAGE_SESSION_WINDOW_HOURS * MILLISECONDS_PER_HOUR
+USAGE_PERCENT_MIN = 0
+USAGE_PERCENT_MAX = 100
+
+MILLISECONDS_PER_SECOND = 1000
+MILLISECONDS_PER_DAY = 24 * 60 * 60 * 1000
+# 리셋 시각이 캡처 시각으로부터 이 범위를 벗어나면 버린다. 목적은 '초 ↔ 밀리초' 단위 혼동을
+# 잡는 것이다(단위가 틀리면 1000배 어긋나므로 임계값의 정확한 크기는 중요하지 않다).
+# 8 = 가장 긴 창(7일) + 하루 여유.
+RATE_LIMIT_MAX_HORIZON_DAYS = 8
+RATE_LIMIT_MAX_HORIZON_MS = RATE_LIMIT_MAX_HORIZON_DAYS * MILLISECONDS_PER_DAY
+
+# ---- 세션 비용 캡처(⑨, docs/prps/harness-benchmark-adoption.md §6-1) ----
+# 센트 정수로 내려 부동소수 잡음을 없애고 쓰기 억제 비교(same_session_cost_values)를 단순하게 한다.
+CENTS_PER_USD = 100
+# 0.29 * 100 == 28.999999999999996 이라 그대로 내림하면 1센트를 잃는다 — 내림 전에 이 자릿수로
+# 반올림해 곱셈 잡음만 걷는다(진짜 소수부는 12.849 * 100 = 1284.9 처럼 이 자릿수 위에 있다).
+CENTS_FLOAT_NOISE_DIGITS = 6
+# 외부 값 검증 상한 — 단위 혼동(센트를 달러로 보낸 값 등)과 NaN·무한대를 버린다. 정확한 크기는
+# 중요하지 않다(RATE_LIMIT_MAX_HORIZON_DAYS 와 같은 성격).
+SESSION_COST_MAX_USD = 100_000
+SESSION_COST_MAX_CENTS = SESSION_COST_MAX_USD * CENTS_PER_USD
+MILLISECONDS_PER_MINUTE = 60 * MILLISECONDS_PER_SECOND
+# 세션 하나의 누적 API 시간 상한 — 같은 성격의 외부 값 검증이다(단위 혼동·터무니없는 값이 그대로 저장돼 칩 툴팁에 실리는
+# 것을 막는다). 정확한 크기는 중요하지 않다 — 한 세션이 실제로 이 길이를 쓸 수는 없다.
+SESSION_API_DURATION_MAX_DAYS = 365
+SESSION_API_DURATION_MAX_MS = SESSION_API_DURATION_MAX_DAYS * MILLISECONDS_PER_DAY
+SESSION_API_DURATION_MAX_MINUTES = SESSION_API_DURATION_MAX_MS // MILLISECONDS_PER_MINUTE
+# hub_dashboard_log 의 세션 ID 정의와 같은 작은 사본이다(경로 탈출 차단 — `/`·`..` 가 매치될 수
+# 없다). 그 모듈은 I/O 층이라 이 순수 모듈이 임포트하지 않는다. 앵커 없이 fullmatch 로 쓴다 —
+# `$` 는 끝 개행 앞에서도 매치된다.
+SESSION_ID_PATTERN = re.compile(r"[0-9a-f]{8}(?:-[0-9a-f]{4}){3}-[0-9a-f]{12}")
+
+
+@dataclass(frozen=True)
+class UsageSample:
+    """세션(5시간)·주간(7일) 한도 사용률 — RateLimitCapture 의 투영(결정 P3).
+
+    `is_stale` 은 아래 "파생값은 담지 않는다"는 경고의 예외다(결정 EX3·EX4) — 나이(ms)처럼
+    5초마다 바뀌는 연속값이 아니라, 캡처 수명 동안 최대 1회만 False→True 로 바뀌는 이산
+    (boolean) 값이라 content_key 재작성을 폭주시키지 않는다.
+    """
+
+    sampled_at_ms: int      # statusLine 이 이 값들을 관측한 시각(captured_at_ms). 파생값(나이)은
+                             # 담지 않는다 — content_key 재작성 폭주 방지(결정 D3)
+    session_percent: int    # rate_limits.five_hour.used_percentage 를 내림한 정수(0~100)
+    weekly_percent: int     # rate_limits.seven_day.used_percentage 를 내림한 정수(0~100)
+    is_stale: bool = False  # 5시간 만료 또는 세션 창 롤오버 — mark_stale_usage_sample 이 표시한다(R-B)
+
+
+@dataclass(frozen=True)
+class RateLimitResets:
+    """Claude Code statusLine 이 알려 준 한도 창의 초기화 예정 시각. 창은 각각 없을 수 있다."""
+
+    captured_at_ms: int                 # 이 값들을 '처음 관측한' 시각(결정 S3 — 마지막 관측이 아니다)
+    session_resets_at_ms: int | None    # rate_limits.five_hour.resets_at (초 → ms 변환됨)
+    weekly_resets_at_ms: int | None     # rate_limits.seven_day.resets_at (초 → ms 변환됨)
+
+
+@dataclass(frozen=True)
+class RateLimitCapture:
+    """statusLine 이 관측한 한도 스냅샷 1건 — 창별 초기화 예정 시각 + 내림 정수 사용률.
+
+    파일(`~/.claude/hub/rate_limits.json`)과 statusLine stdin 양쪽의 파싱 결과 타입이다.
+    화면용 두 타입(UsageSample·RateLimitResets)은 이것의 투영이다(결정 P3).
+    """
+
+    captured_at_ms: int                   # 이 값들을 '처음 관측한' 시각(결정 S3 — 마지막 관측이 아니다)
+    session_resets_at_ms: int | None      # rate_limits.five_hour.resets_at (초 → ms)
+    weekly_resets_at_ms: int | None       # rate_limits.seven_day.resets_at (초 → ms)
+    session_used_percent: int | None      # rate_limits.five_hour.used_percentage 를 내림한 정수
+    weekly_used_percent: int | None       # rate_limits.seven_day.used_percentage 를 내림한 정수
+
+
+@dataclass(frozen=True)
+class SessionCost:
+    """statusLine 이 한 세션에 대해 마지막으로 알려 준 누적 비용·API 시간·컨텍스트 사용률(⑨).
+
+    내용(프롬프트·응답)은 없다. 화면 투영 타입을 겸한다(SessionModel 이 hub_transcript 에 있는
+    것과 같은 관례).
+    """
+
+    captured_at_ms: int                  # 이 값들을 처음 관측한 시각(RateLimitCapture 와 같은 뜻 — 결정 S3)
+    total_cost_cents: int | None         # cost.total_cost_usd × 100 을 내림한 정수. 정가 기준 추정 — 구독 과금과 무관
+    api_duration_minutes: int | None     # cost.total_api_duration_ms 를 분으로 내림
+    context_used_percent: int | None     # context_window.used_percentage 를 내림한 정수(0~100)
+
+
+@dataclass(frozen=True)
+class SessionCostCapture:
+    """statusLine stdin 1건에서 판 세션 비용 — 어느 세션의 것인지를 함께 나른다."""
+
+    session_id: str                      # UUID 형식 검증을 통과한 값만(파일 이름 키로 쓰인다)
+    cost: SessionCost
+
+
+@dataclass(frozen=True)
+class StatusLineCaptures:
+    """statusLine stdin 을 한 번 파싱해 만든 두 캡처. 각각 독립적으로 없을 수 있다."""
+
+    rate_limits: RateLimitCapture | None
+    session_cost: SessionCostCapture | None
+
+
+def _is_valid_percent(value: object) -> bool:
+    """0~100 범위의 엄격한 int 인가(결정 U2).
+
+    bool 은 int 의 서브클래스라 명시적으로 배제한다. float 을 거부하는 것이 핵심이다 —
+    스키마가 0~100 정수에서 0.0~1.0 실수로 바뀌면 느슨한 변환은 "0%" 를 조용히 그린다.
+    그건 데이터 없음보다 나쁜 거짓말이다.
+    """
+    return (
+        isinstance(value, int)
+        and not isinstance(value, bool)
+        and USAGE_PERCENT_MIN <= value <= USAGE_PERCENT_MAX
+    )
+
+
+def _is_valid_epoch_ms(value: object) -> bool:
+    """엄격한 int 인가. `t` 필드도 percent 와 같은 규칙을 쓴다 — 규칙이 하나면 설명도 테스트도 하나다."""
+    return isinstance(value, int) and not isinstance(value, bool)
+
+
+def is_usage_sample_expired(sample: UsageSample, now_ms: int) -> bool:
+    """샘플이 세션 창(5시간)보다 오래됐는가 — 그러면 세션 사용률의 근거가 사라진다(결정 U3).
+
+    `session_percent` 는 정의상 5시간 창의 사용률이라, 창 길이가 곧 만료 기준이다. 시계가
+    뒤틀려 `now_ms` 가 샘플보다 과거면(나이가 음수) 만료로 보지 않는다.
+    """
+    age_ms = now_ms - sample.sampled_at_ms
+    return age_ms >= USAGE_MAX_SAMPLE_AGE_MS
+
+
+# ---- statusLine rate_limits (docs/prps/hub-usage-reset-time-and-refresh.md,
+#      docs/prps/hub-card-cleanup-and-usage-source.md) ----
+def _valid_resets_at_ms(window: object, captured_at_ms: int) -> int | None:
+    """rate_limits.{five_hour,seven_day} 하나를 검증해 ms 단위 리셋 시각을 돌려준다.
+
+    엄격 int(U2 와 같은 규칙, bool 배제) + 지평선 검사(단위 혼동·과거 값을 한 번에 잡는다)를
+    통과하지 못하면 그 창은 조용히 버려진다 — 두 창은 각각 독립적으로 없을 수 있다.
+    """
+    if not isinstance(window, dict):
+        return None
+    resets_at = window.get("resets_at")
+    if not _is_valid_epoch_ms(resets_at):
+        return None
+    resets_at_ms = resets_at * MILLISECONDS_PER_SECOND
+    if not (captured_at_ms < resets_at_ms <= captured_at_ms + RATE_LIMIT_MAX_HORIZON_MS):
+        return None
+    return resets_at_ms
+
+
+def _valid_used_percentage(window: object) -> int | None:
+    """rate_limits.{five_hour,seven_day} 또는 context_window 객체의 used_percentage 를 검증해 내림한 정수를 돌려준다.
+
+    실수·정수 모두 허용하되 bool 은 배제하고(U2 와 같은 정신) 0~100 범위 밖은 생략한다.
+    statusLine stdin·캡처 파일 양쪽에서 쓰는 퍼센트 추출의 정본이다(결정 P1·P7). 같은 필드명을 쓰는
+    context_window(세션 비용 캡처 ⑨)도 이 함수 하나로 읽는다 — 판정 규칙이 출처마다 갈리지 않게 한다.
+    """
+    if not isinstance(window, dict):
+        return None
+    value = window.get("used_percentage")
+    if not isinstance(value, (int, float)) or isinstance(value, bool):
+        return None
+    if not (USAGE_PERCENT_MIN <= value <= USAGE_PERCENT_MAX):
+        return None
+    return math.floor(value)
+
+
+def _load_json_object(text: str) -> dict | None:
+    """JSON 객체만 돌려준다 — 깨진 JSON·배열·스칼라는 None(예외 없음)."""
+    try:
+        payload = json.loads(text)
+    except (json.JSONDecodeError, TypeError):
+        return None
+    return payload if isinstance(payload, dict) else None
+
+
+def parse_status_line_rate_limits(text: str, captured_at_ms: int) -> RateLimitCapture | None:
+    """statusLine stdin JSON 에서 두 창의 초기화 예정 시각 + 사용률을 읽는다.
+
+    네 값(리셋 2개·퍼센트 2개)이 전부 없으면 None(결정 P2) — 창별·필드별로 독립 탈락한다.
+    """
+    payload = _load_json_object(text)
+    if payload is None:
+        return None
+    return _rate_limits_from_payload(payload, captured_at_ms)
+
+
+def _rate_limits_from_payload(payload: dict, captured_at_ms: int) -> RateLimitCapture | None:
+    """이미 파싱된 statusLine 객체에서 한도 캡처를 만든다(parse_status_line_rate_limits 와
+    parse_status_line_captures 가 공유한다 — stdin 을 한 번만 파싱하기 위한 분리)."""
+    rate_limits = payload.get("rate_limits")
+    if not isinstance(rate_limits, dict):
+        return None
+    five_hour = rate_limits.get("five_hour")
+    seven_day = rate_limits.get("seven_day")
+    session_resets_at_ms = _valid_resets_at_ms(five_hour, captured_at_ms)
+    weekly_resets_at_ms = _valid_resets_at_ms(seven_day, captured_at_ms)
+    session_used_percent = _valid_used_percentage(five_hour)
+    weekly_used_percent = _valid_used_percentage(seven_day)
+    if (
+        session_resets_at_ms is None
+        and weekly_resets_at_ms is None
+        and session_used_percent is None
+        and weekly_used_percent is None
+    ):
+        return None
+    return RateLimitCapture(
+        captured_at_ms=captured_at_ms,
+        session_resets_at_ms=session_resets_at_ms,
+        weekly_resets_at_ms=weekly_resets_at_ms,
+        session_used_percent=session_used_percent,
+        weekly_used_percent=weekly_used_percent,
+    )
+
+
+def is_valid_session_id(value: object) -> bool:
+    """UUID 소문자 형식인가 — 파일 이름 키로 쓸 수 있는 값만 True."""
+    return isinstance(value, str) and SESSION_ID_PATTERN.fullmatch(value) is not None
+
+
+def _non_negative_number(value: object) -> int | float | None:
+    """bool 이 아닌 0 이상의 유한한 수만 돌려준다 — 음수·NaN·무한대·bool·문자열은 None.
+
+    int 는 isfinite 에 넘기지 않는다 — 터무니없이 큰 정수는 float 변환에서 OverflowError 가 난다.
+    """
+    if isinstance(value, bool) or not isinstance(value, (int, float)):
+        return None
+    if isinstance(value, float) and not math.isfinite(value):
+        return None
+    return value if value >= 0 else None
+
+
+def _valid_total_cost_cents(cost: object) -> int | None:
+    """cost.total_cost_usd 를 센트 정수로 내린다. 범위(0 이상·SESSION_COST_MAX_USD 이하)를 벗어나면 None."""
+    if not isinstance(cost, dict):
+        return None
+    total_cost_usd = _non_negative_number(cost.get("total_cost_usd"))
+    if total_cost_usd is None or total_cost_usd > SESSION_COST_MAX_USD:
+        return None  # 범위 밖 — 단위 혼동으로 본다
+    return math.floor(round(total_cost_usd * CENTS_PER_USD, CENTS_FLOAT_NOISE_DIGITS))
+
+
+def _valid_api_duration_minutes(cost: object) -> int | None:
+    """cost.total_api_duration_ms 를 분 단위로 내린다. 음수·비정상 값이면 None."""
+    if not isinstance(cost, dict):
+        return None
+    duration_ms = _non_negative_number(cost.get("total_api_duration_ms"))
+    if duration_ms is None or duration_ms > SESSION_API_DURATION_MAX_MS:
+        return None
+    return int(duration_ms // MILLISECONDS_PER_MINUTE)
+
+
+def _session_cost_from_payload(payload: dict, captured_at_ms: int) -> SessionCostCapture | None:
+    """이미 파싱된 statusLine 객체에서 세션 비용 캡처를 만든다. 세 값은 필드별로 독립 탈락한다."""
+    session_id = payload.get("session_id")
+    if not is_valid_session_id(session_id):
+        return None
+    cost_object = payload.get("cost")
+    total_cost_cents = _valid_total_cost_cents(cost_object)
+    api_duration_minutes = _valid_api_duration_minutes(cost_object)
+    context_used_percent = _valid_used_percentage(payload.get("context_window"))
+    if total_cost_cents is None and api_duration_minutes is None and context_used_percent is None:
+        return None
+    return SessionCostCapture(
+        session_id=session_id,
+        cost=SessionCost(
+            captured_at_ms=captured_at_ms,
+            total_cost_cents=total_cost_cents,
+            api_duration_minutes=api_duration_minutes,
+            context_used_percent=context_used_percent,
+        ),
+    )
+
+
+def parse_status_line_captures(text: str, captured_at_ms: int) -> StatusLineCaptures:
+    """statusLine stdin 을 한 번 파싱해 한도 캡처와 세션 비용 캡처를 함께 만든다(JSON 이 아니면 둘 다 None)."""
+    payload = _load_json_object(text)
+    if payload is None:
+        return StatusLineCaptures(rate_limits=None, session_cost=None)
+    return StatusLineCaptures(
+        rate_limits=_rate_limits_from_payload(payload, captured_at_ms),
+        session_cost=_session_cost_from_payload(payload, captured_at_ms),
+    )
+
+
+def _is_absent_or_bounded_int(value: object, maximum: int) -> bool:
+    """캡처 파일 필드 검사 — 없거나(null) bool 이 아닌 0 이상 maximum 이하의 정수인가."""
+    if value is None:
+        return True
+    return isinstance(value, int) and not isinstance(value, bool) and 0 <= value <= maximum
+
+
+def parse_session_cost_capture(text: str) -> SessionCost | None:
+    """캡처 파일 본문을 SessionCost 로 판다. 계약 위반(타입 불일치·범위 밖·세 값 전부 없음)이면 None(예외 없음)."""
+    payload = _load_json_object(text)
+    if payload is None:
+        return None
+    captured_at_ms = payload.get("captured_at_ms")
+    total_cost_cents = payload.get("total_cost_cents")
+    api_duration_minutes = payload.get("api_duration_minutes")
+    context_used_percent = payload.get("context_used_percent")
+    if not _is_valid_epoch_ms(captured_at_ms):
+        return None
+    if not (
+        _is_absent_or_bounded_int(total_cost_cents, SESSION_COST_MAX_CENTS)
+        and _is_absent_or_bounded_int(api_duration_minutes, SESSION_API_DURATION_MAX_MINUTES)
+    ):
+        return None
+    if context_used_percent is not None and not _is_valid_percent(context_used_percent):
+        return None
+    if total_cost_cents is None and api_duration_minutes is None and context_used_percent is None:
+        return None
+    return SessionCost(
+        captured_at_ms=captured_at_ms,
+        total_cost_cents=total_cost_cents,
+        api_duration_minutes=api_duration_minutes,
+        context_used_percent=context_used_percent,
+    )
+
+
+def same_session_cost_values(previous: SessionCost | None, current: SessionCost) -> bool:
+    """captured_at_ms 를 뺀 세 값이 모두 같은가 — 같으면 다시 쓰지 않는다(same_capture_values 와 같은 이유).
+
+    `captured_at_ms` 를 비교에 넣으면 0.3초 주기의 원자적 쓰기가 정상 상태에서도 발생한다 — 절대 넣지 않는다.
+    """
+    if previous is None:
+        return False
+    return (
+        previous.total_cost_cents == current.total_cost_cents
+        and previous.api_duration_minutes == current.api_duration_minutes
+        and previous.context_used_percent == current.context_used_percent
+    )
+
+
+def parse_rate_limit_capture(text: str) -> RateLimitCapture | None:
+    """우리가 쓴 캡처 파일을 되읽는다. 계약이 안 맞으면 None(예외를 던지지 않는다).
+
+    구형 파일(퍼센트 키 없음)은 두 퍼센트 필드가 None 인 정상 캡처로 파싱된다(결정 P2,
+    읽기 하위 호환) — 마이그레이션 코드는 없다. 퍼센트는 필드 단위로 탈락시키고(엄격 int,
+    `_is_valid_percent` 재사용), 리셋 시각은 기존 규칙대로 타입이 안 맞으면 레코드 전체를
+    버린다. 네 값이 전부 없으면 None.
+    """
+    try:
+        payload = json.loads(text)
+    except (json.JSONDecodeError, TypeError):
+        return None
+    if not isinstance(payload, dict):
+        return None
+    captured_at_ms = payload.get("captured_at_ms")
+    if not _is_valid_epoch_ms(captured_at_ms):
+        return None
+    session_resets_at_ms = payload.get("session_resets_at_ms")
+    if session_resets_at_ms is not None and not _is_valid_epoch_ms(session_resets_at_ms):
+        return None
+    weekly_resets_at_ms = payload.get("weekly_resets_at_ms")
+    if weekly_resets_at_ms is not None and not _is_valid_epoch_ms(weekly_resets_at_ms):
+        return None
+    session_used_percent = payload.get("session_used_percent")
+    if session_used_percent is not None and not _is_valid_percent(session_used_percent):
+        session_used_percent = None
+    weekly_used_percent = payload.get("weekly_used_percent")
+    if weekly_used_percent is not None and not _is_valid_percent(weekly_used_percent):
+        weekly_used_percent = None
+    if (
+        session_resets_at_ms is None
+        and weekly_resets_at_ms is None
+        and session_used_percent is None
+        and weekly_used_percent is None
+    ):
+        return None
+    return RateLimitCapture(
+        captured_at_ms=captured_at_ms,
+        session_resets_at_ms=session_resets_at_ms,
+        weekly_resets_at_ms=weekly_resets_at_ms,
+        session_used_percent=session_used_percent,
+        weekly_used_percent=weekly_used_percent,
+    )
+
+
+def usage_sample_from_capture(capture: RateLimitCapture) -> UsageSample | None:
+    """캡처를 화면용 UsageSample 로 투영한다(결정 P3). 퍼센트가 둘 다 있을 때만 만들어진다."""
+    if capture.session_used_percent is None or capture.weekly_used_percent is None:
+        return None
+    return UsageSample(
+        sampled_at_ms=capture.captured_at_ms,
+        session_percent=capture.session_used_percent,
+        weekly_percent=capture.weekly_used_percent,
+    )
+
+
+def resets_from_capture(capture: RateLimitCapture) -> RateLimitResets | None:
+    """캡처를 화면용 RateLimitResets 로 투영한다(결정 P3). 리셋이 둘 다 없으면 None."""
+    if capture.session_resets_at_ms is None and capture.weekly_resets_at_ms is None:
+        return None
+    return RateLimitResets(
+        captured_at_ms=capture.captured_at_ms,
+        session_resets_at_ms=capture.session_resets_at_ms,
+        weekly_resets_at_ms=capture.weekly_resets_at_ms,
+    )
+
+
+def is_session_window_rolled_over(capture: RateLimitCapture, now_ms: int) -> bool:
+    """세션(5시간) 창이 이미 리셋됐는가(결정 P5) — 그러면 캡처된 세션 퍼센트는 확실히 틀렸다.
+
+    `session_resets_at_ms` 를 모르면(None) 참으로 취급하지 않는다 — 모름을 롤오버로
+    단정하면 근거 없이 패널을 지운다.
+    """
+    if capture.session_resets_at_ms is None:
+        return False
+    return capture.session_resets_at_ms <= now_ms
+
+
+def mark_stale_usage_sample(
+    sample: UsageSample, capture: RateLimitCapture, now_ms: int
+) -> UsageSample:
+    """낡은 샘플에 is_stale 표식을 단 새 샘플을 돌려준다(순수). 신선하면 원본 그대로.
+
+    두 가지 낡음을 하나로 접는다(결정 EX2): ① 세션 창(5시간)보다 오래된 샘플
+    ② 세션 창이 이미 리셋돼 캡처된 세션 퍼센트가 확실히 틀린 경우. 화면에서 둘을 구분할
+    실익이 없다 — 사용자가 할 행동("세션을 한 번 돌린다")이 같다.
+    """
+    if is_usage_sample_expired(sample, now_ms) or is_session_window_rolled_over(capture, now_ms):
+        return replace(sample, is_stale=True)
+    return sample
+
+
+def drop_passed_resets(resets: RateLimitResets, now_ms: int) -> RateLimitResets | None:
+    """이미 지난 초기화 시각을 버린다 — 지난 값은 더 이상 참이 아니다. 둘 다 지났으면 None."""
+    session_resets_at_ms = resets.session_resets_at_ms
+    if session_resets_at_ms is not None and session_resets_at_ms <= now_ms:
+        session_resets_at_ms = None
+    weekly_resets_at_ms = resets.weekly_resets_at_ms
+    if weekly_resets_at_ms is not None and weekly_resets_at_ms <= now_ms:
+        weekly_resets_at_ms = None
+    if session_resets_at_ms is None and weekly_resets_at_ms is None:
+        return None
+    return replace(
+        resets, session_resets_at_ms=session_resets_at_ms, weekly_resets_at_ms=weekly_resets_at_ms
+    )
+
+
+def same_capture_values(previous: RateLimitCapture | None, current: RateLimitCapture) -> bool:
+    """캡처 시각을 뺀 리셋 2개 + 퍼센트 2개가 모두 같은가 — 같으면 다시 쓰지 않는다(결정 P4).
+
+    `captured_at_ms` 를 비교에 넣으면 0.3초 주기의 원자적 쓰기가 정상 상태에서도 발생한다
+    (GOTCHA 4) — 절대 넣지 않는다. (구 `same_reset_times` — 퍼센트도 비교하게 되어 이름을
+    바꿨다. 이름이 거짓이 되면 다음 사람이 퍼센트 비교를 빼먹는다.)
+    """
+    if previous is None:
+        return False
+    return (
+        previous.session_resets_at_ms == current.session_resets_at_ms
+        and previous.weekly_resets_at_ms == current.weekly_resets_at_ms
+        and previous.session_used_percent == current.session_used_percent
+        and previous.weekly_used_percent == current.weekly_used_percent
+    )
+
+
+def format_status_line_summary(capture: RateLimitCapture | None) -> str:
+    """캡처로 터미널 상태줄 한 줄을 만든다. 쓸 값이 없으면 빈 문자열.
+
+    상태줄 출력과 패널이 항상 같은 숫자를 보이도록, 퍼센트 추출은 파서(캡처) 하나가
+    정본이다(결정 P7) — 이 함수는 캡처를 받기만 하고 다시 파싱하지 않는다.
+    """
+    if capture is None:
+        return ""
+    parts = []
+    if capture.session_used_percent is not None:
+        parts.append(f"세션 {capture.session_used_percent}%")
+    if capture.weekly_used_percent is not None:
+        parts.append(f"주간 {capture.weekly_used_percent}%")
+    return " · ".join(parts)
+
+
+# ---- 사용량 API 응답 (R1, docs/prps/hub-card-interactions-and-usage.md 「SP3 생략」 개정) ----
+# 스파이크 SP3(사전 API 호출)가 생략되고 "첫 폴링이 스파이크를 겸한다" 방식이 승인됨에 따라,
+# 1차 대응표는 SP3 실측이 아니라 커뮤니티 사용량 도구들이 공통으로 쓰는 스키마를 따른다.
+# 실 스키마가 다르면 schema_mismatch 로 강등되고 describe_json_key_structure 의 결과가
+# 자기 진단 창구가 된다 — 대응표가 틀렸을 때 화면이 깨지는 대신 조용히 강등된다(결정 A7).
+def _valid_usage_api_percentage(window: object) -> int | None:
+    """usage API 창 하나의 utilization(0~100 숫자)을 검증해 내림한 정수를 돌려준다.
+
+    필드명만 다를 뿐(utilization vs used_percentage) 값 검증 규칙은 `_valid_used_percentage`
+    를 그대로 재사용한다 — 판정 규칙이 출처마다 갈리면 상태줄과 패널이 다른 숫자를 보이게
+    된다(결정 P7 과 같은 이유).
+    """
+    if not isinstance(window, dict):
+        return None
+    return _valid_used_percentage({"used_percentage": window.get("utilization")})
+
+
+def _valid_usage_api_resets_at_ms(window: object, captured_at_ms: int) -> int | None:
+    """usage API 창 하나의 resets_at(ISO 8601 문자열)을 ms 로 변환해 검증한다.
+
+    statusLine 경로의 `resets_at` 은 초 단위 epoch 정수지만 usage API 는 ISO 8601 문자열이다
+    (1차 대응표). 문자열을 초 단위 epoch 로 바꾼 뒤 `_valid_resets_at_ms` 에 그대로 넘겨
+    지평선(단위 혼동) 검사 로직을 두 곳에 중복시키지 않는다. 타임존이 없는 문자열은 UTC 로
+    간주한다 — usage API 응답은 UTC 라고 가정하는 것이 로컬 타임존을 추측하는 것보다 안전하다.
+    """
+    if not isinstance(window, dict):
+        return None
+    resets_at = window.get("resets_at")
+    if not isinstance(resets_at, str):
+        return None
+    try:
+        parsed = datetime.fromisoformat(resets_at)
+    except ValueError:
+        return None
+    if parsed.tzinfo is None:
+        parsed = parsed.replace(tzinfo=timezone.utc)
+    return _valid_resets_at_ms({"resets_at": int(parsed.timestamp())}, captured_at_ms)
+
+
+def parse_usage_api_response(text: str, captured_at_ms: int) -> RateLimitCapture | None:
+    """usage API 응답 JSON 에서 캡처를 만든다. 계약이 안 맞으면 None(예외를 던지지 않는다).
+
+    1차 대응표(SP3 생략 개정): 최상위 `five_hour`·`seven_day` 객체, 각각
+    `utilization`(0~100 숫자)·`resets_at`(ISO 8601 문자열). 반환 타입은 기존
+    `RateLimitCapture` 그대로다 — 기존 캡처 파일 포맷·소비자를 바꾸지 않는 것이 이 설계의
+    핵심이다(결정 A2).
+    """
+    try:
+        payload = json.loads(text)
+    except (json.JSONDecodeError, TypeError, RecursionError):
+        # RecursionError 는 병리적으로 깊게 중첩된 응답에서 json.loads 가 실제로 던지는
+        # 예외다(결정 AR4/B-1 — 원격 입력이라 신뢰하지 않는다. 로컬 파일 경로의 다른
+        # json.loads except 들과 달리 여기는 원격 응답이 직접 닿는 두 곳 중 하나다).
+        return None
+    if not isinstance(payload, dict):
+        return None
+    five_hour = payload.get("five_hour")
+    seven_day = payload.get("seven_day")
+    session_resets_at_ms = _valid_usage_api_resets_at_ms(five_hour, captured_at_ms)
+    weekly_resets_at_ms = _valid_usage_api_resets_at_ms(seven_day, captured_at_ms)
+    session_used_percent = _valid_usage_api_percentage(five_hour)
+    weekly_used_percent = _valid_usage_api_percentage(seven_day)
+    if (
+        session_resets_at_ms is None
+        and weekly_resets_at_ms is None
+        and session_used_percent is None
+        and weekly_used_percent is None
+    ):
+        return None
+    return RateLimitCapture(
+        captured_at_ms=captured_at_ms,
+        session_resets_at_ms=session_resets_at_ms,
+        weekly_resets_at_ms=weekly_resets_at_ms,
+        session_used_percent=session_used_percent,
+        weekly_used_percent=weekly_used_percent,
+    )
+
+
+def _describe_json_node(node: object, path: str) -> list[str]:
+    """JSON 값 하나를 경로+타입 문자열 목록으로 접는다(재귀, 값은 절대 포함하지 않는다)."""
+    if isinstance(node, dict):
+        described: list[str] = []
+        for key in sorted(node):
+            described.extend(_describe_json_node(node[key], f"{path}/{key}"))
+        return described
+    if isinstance(node, list):
+        described = [f"{path} [list len={len(node)}]"]
+        if node:
+            described.extend(_describe_json_node(node[0], f"{path}/0"))
+        return described
+    return [f"{path} <{type(node).__name__}>"]
+
+
+def describe_json_key_structure(text: str) -> list[str] | None:
+    """JSON 문자열의 키 경로 + 타입 목록을 만든다. **값은 절대 포함하지 않는다**(불변식 A-SEC).
+
+    schema_mismatch 실패 기록(`last_usage_api_error.json` 의 `response_keys`)에 실려
+    자기 진단 창구가 된다(SP3 생략 개정) — 실제 응답 스키마가 1차 대응표와 다를 때, 사람이
+    `/hub status` 로 그 구조를 보고 대응표를 고칠 수 있게 한다. JSON 이 아니면 None.
+    """
+    try:
+        payload = json.loads(text)
+        return _describe_json_node(payload, "")
+    except (json.JSONDecodeError, TypeError, RecursionError):
+        # 위 parse_usage_api_response 와 같은 이유(결정 AR4/B-1) — 이 함수가 자기 진단
+        # 창구인 schema_mismatch 경로에서 같은 원격 응답을 다시 파싱하므로 같은 취약점을 갖는다.
+        # json.loads 가 통과해도 _describe_json_node 의 재귀 훑기가 파이썬 재귀 한도를 넘겨
+        # 같은 RecursionError 를 낼 수 있어 훑기까지 try 안에 둔다(부수효과 없는 순수 훑기라
+        # 중간에 끊겨도 None 반환이 안전하다). _describe_json_node 는 str 키만 다루고 json 을
+        # 다시 부르지 않으므로, 훑기에서 실제로 잡히는 것은 RecursionError 뿐이다.
+        return None
+
+
+# ---- 사용량 API 폴링 스케줄 (R1, 순수) ----
+USAGE_API_BACKOFF_MAX_MULTIPLIER = 12          # 기본 5분 기준 상한 60분
+USAGE_API_RATE_LIMITED_MULTIPLIER = 12         # 429 는 곧바로 상한(결정 A3)
+
+
+@dataclass(frozen=True)
+class UsageApiPollState:
+    """사용량 API 폴링의 스케줄 상태. 유지보수 티커의 지역 변수로만 산다(전역 상태 금지, 결정 A3)."""
+
+    last_attempt_at_ms: int | None = None
+    consecutive_failures: int = 0
+    forced_multiplier: int | None = None        # 429 가 요구한 즉시 상한
+
+
+def usage_api_poll_delay_ms(state: UsageApiPollState, base_interval_seconds: int) -> int:
+    """다음 시도까지 기다릴 시간(ms). 연속 실패마다 2배, 상한까지(결정 A3 — 5→10→20→40→60분).
+
+    `consecutive_failures` 가 0·1 이면 배수는 1(기본 주기 그대로) — 첫 실패 직후에는 아직
+    백오프를 태우지 않는다. `forced_multiplier`(429 특례)가 있으면 지수 계산을 건너뛰고
+    그 배수를 곧바로 쓴다 — 가장 강한 "그만 보내라" 신호에 가장 강하게 반응한다.
+    """
+    if state.forced_multiplier is not None:
+        multiplier = state.forced_multiplier
+    else:
+        multiplier = min(2 ** max(state.consecutive_failures - 1, 0), USAGE_API_BACKOFF_MAX_MULTIPLIER)
+    return base_interval_seconds * multiplier * MILLISECONDS_PER_SECOND
+
+
+def should_attempt_usage_api_poll(
+    now_ms: int, state: UsageApiPollState, base_interval_seconds: int
+) -> bool:
+    """지금 사용량 API 를 호출해도 되는가. 첫 시도(last_attempt_at_ms 가 None)는 항상 True."""
+    if state.last_attempt_at_ms is None:
+        return True
+    delay_ms = usage_api_poll_delay_ms(state, base_interval_seconds)
+    return (now_ms - state.last_attempt_at_ms) >= delay_ms
+
+
+def next_usage_api_poll_state(
+    now_ms: int, state: UsageApiPollState, failure_reason: str | None
+) -> UsageApiPollState:
+    """시도 결과를 반영한 **새** 상태를 돌려준다(원본은 불변). 성공(`failure_reason is None`)
+    이면 실패 카운트를 0 으로 되돌린다. `http_rate_limited` 는 곧바로 상한 배수로 점프한다
+    (결정 A3) — 그 외 실패 사유는 지수 백오프 카운터만 늘린다.
+    """
+    if failure_reason is None:
+        return UsageApiPollState(last_attempt_at_ms=now_ms, consecutive_failures=0, forced_multiplier=None)
+    forced_multiplier = USAGE_API_RATE_LIMITED_MULTIPLIER if failure_reason == "http_rate_limited" else None
+    return UsageApiPollState(
+        last_attempt_at_ms=now_ms,
+        consecutive_failures=state.consecutive_failures + 1,
+        forced_multiplier=forced_multiplier,
+    )

@@ -1,0 +1,805 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="color-scheme" content="light dark">
+<title>세션 진행 상황 대시보드</title>
+<!--
+DZ:DASHBOARD 갱신 맵 (동적 영역 — 셀렉터 기반 정밀 치환, hub/bin/hub_dashboard_render.py 앵커 상수·hub/README.md 「진행 기록」 참조)
+  #dz-title            : 세션 제목 텍스트
+  #dz-progress-bar      : inline style width:N%
+  #dz-progress-pct      : 진행률 텍스트 (예: 3/6 · 50%)
+  #dz-step-{n}          : [그룹 1개] 각 단계 li — class(done|active|wait) + .chip 텍스트
+                          + .step-detail 텍스트(그 단계의 한 줄 상세. 비어 있으면 CSS 가 숨긴다)
+  #dz-cell-{g}-{p}      : [그룹 2+] 매트릭스 칸 td — data-state(done|active|wait|na) + 칸 텍스트
+                          {g}=행(그룹) 번호, {p}=열(단계) 번호. 한 파일에 step/cell 이 공존하지 않는다
+  #dz-group-{g}         : [그룹 2+] 행 머리 th — init 이 그룹명을 넣고 이후 치환하지 않는다
+  #dz-log               : 작업 추적 ul — li data-seq 앵커로 prepend / data-server-port 속성(이
+                            대시보드를 서빙 중인 로컬 서버 포트. 비어 있으면 서버 없음. 오케스트레이터만
+                            읽고 쓴다 — 스크립트는 건드리지 않는다)
+                          / data-owner-token 속성(이 대시보드를 발행한 세션의 소유 토큰. init 만
+                            각인하고 step·log·impl 은 읽기만 한다 — 스크립트는 건드리지 않는다)
+  #dz-updated           : 갱신 시각 텍스트
+  #dz-impl-{k}          : [선택] 구현 세부 작업 li — class(done|active|wait) + .chip 텍스트
+                          + .step-detail 텍스트. active 가 동시에 여러 개일 수 있다
+  #dz-impl-count        : [선택] 구현 세부 진행 텍스트 (예: 3/8 · 38%). 매크로 진행률과 별개다
+  #dz-impl-tasks        : [선택] 세부 작업 ol — impl set 이 한 번 채운다
+정적(불가침): 골격 · <style> · 제목 · 하단 스크립트 · <head> 테마 스크립트
+  #dz-page-head              : 프로젝트 명 + #dz-top-actions + #dz-pip-hint 를 담는 헤더 행.
+                               .wrap 바깥(<body> 직계)에 있으며 init 이 1회만 채운다
+  #dz-project-name           : 프로젝트 표시 이름 span. #dz-page-head 안, init 2단계가 1회 채우고
+                               이후 아무도 치환하지 않는다(폴링 동기화 대상 아님)
+  #dz-top-actions            : 플로팅 버튼·테마 토글 클러스터. #dz-page-head 헤더 행 안에 있다
+                               (.wrap 바깥이라는 사실은 그대로다)
+  #dz-pip-btn / #dz-pip-hint : 플로팅 진입 버튼과 안내 한 줄. #dz-top-actions 안(#dz-pip-hint 는
+                               #dz-page-head 헤더 행 안)에 있으며 init/step/log 도, 폴링 동기화도
+                               이 둘을 건드리지 않는다
+  #dz-theme-toggle           : 라이트/다크 테마 토글 버튼. #dz-top-actions 안에 있으며 폴링
+                               동기화 대상이 아니다. 임베드 시 localStorage['dzh-theme'] 를
+                               읽기 전용으로 참조하고, storage 이벤트로 허브 테마를 따라간다
+  #dz-log-card               : 작업 추적 카드 div. PiP 압축 뷰가 CSS 로만 숨긴다
+                               (DOM 에서 제거하지 않는다 — 복귀 시 로그가 사라진다)
+  #dz-impl-card              : 구현 세부 작업 카드 div. 목록이 비면 CSS :has() 가 통째로 숨긴다
+                               (DOM 에서 제거하지 않는다 — 폴링이 outerHTML 로 동기화한다)
+  #dz-tooltip                : 작업 추적 항목 제목(.entry .lead)의 말줄임 툴팁 싱글턴. .wrap
+                               바깥(<body> 직계, #dz-page-head 와 .wrap 사이)에 있으며 init/
+                               step/log 도, 폴링도 치환하지 않는다 — 내용은 사용자 hover 만
+                               바꾼다(docs/prps/dashboard-lead-tooltip-and-interaction-lockdown.md
+                               결정 LT2·LT8). 마크업에는 문구를 각인하지 않는다 — 잘림 여부는
+                               런타임에 hover 시점의 실제 레이아웃을 재서 판정한다(결정 LT6)
+  body.dz-embedded           : 허브 상세 패널(iframe) 안에서 열렸다는 표시. #dz-page-head(행 전체)와
+                               #dz-pip-btn/#dz-pip-hint/#dz-theme-toggle(컨트롤 단위)를 CSS 로만
+                               숨기는 스코프일 뿐 폴링·동기화와는 무관하다
+  window.dzRequestRefresh    : 갱신 경로 B(서버 모드) 전용 함수 훅. poll 을 그대로 노출하며
+                               (인자·반환값 없음, 멱등) 허브 상세 패널이 즉시 갱신 3종(새로고침
+                               버튼·포커스 복귀·탭 복귀)에서 호출한다(docs/prps/
+                               hub-panel-immediate-refresh.md 결정 IR4). 이름이 계약이다 — 허브
+                               쪽 DASHBOARD_REFRESH_HOOK_NAME 상수와 문자 단위로 같아야 한다.
+                               갱신 경로 A(file://)에는 존재하지 않는다
+  상호작용 잠금               : 우클릭 네이티브 메뉴와 드래그 텍스트 선택을 문서 전체에서
+                               막는다(요구 2, docs/prps/dashboard-lead-tooltip-and-
+                               interaction-lockdown.md 결정 IL1~IL7). 선택 차단은 html{...}
+                               CSS 규칙 1개, 우클릭 차단은 document 리스너 1개다. PiP 창으로
+                               .wrap 이 이동해도 CSS 는 <style> 복사로 자동 승계되지만 우클릭
+                               리스너는 별도 document 소속이라 documentPictureInPicture 의
+                               'enter' 이벤트로 매번 다시 배선한다(결정 IL4). 복사·검사 메뉴
+                               손실은 사용자가 승인한 트레이드오프이며 우회 예외를 두지 않는다
+                               (결정 IL7) — 잘린 제목을 읽는 유일한 수단은 위 #dz-tooltip 이다
+-->
+<style>
+  :root{
+    color-scheme:light;
+    --bg:#EEF3F8;--surface:#FFFFFF;--ink:#172033;--head:#12335B;--muted:#5A6879;
+    --line:#D9E2EC;--soft:#F4F7FB;
+    --accent:#0072B2;--accent-ink:#005B8F;--accent-soft:#E4F0F8;
+    --attention:#B45309;--attention-soft:#FBEEDC;
+    --shadow:0 8px 24px rgba(19,51,91,.06);
+  }
+  @media (prefers-color-scheme:dark){
+    :root:not([data-theme="light"]){
+      color-scheme:dark;
+      --bg:#0E1621;--surface:#16202D;--ink:#E6EDF5;--head:#DCE7F2;--muted:#94A5B8;
+      --line:#26364A;--soft:#1B2634;
+      --accent:#56B4E9;--accent-ink:#8ACBF0;--accent-soft:#12324A;
+      --attention:#E69F00;--attention-soft:#3B2B0D;
+      --shadow:0 8px 24px rgba(0,0,0,.45);
+    }
+  }
+  :root[data-theme="dark"]{
+    color-scheme:dark;
+    --bg:#0E1621;--surface:#16202D;--ink:#E6EDF5;--head:#DCE7F2;--muted:#94A5B8;
+    --line:#26364A;--soft:#1B2634;
+    --accent:#56B4E9;--accent-ink:#8ACBF0;--accent-soft:#12324A;
+    --attention:#E69F00;--attention-soft:#3B2B0D;
+    --shadow:0 8px 24px rgba(0,0,0,.45);
+  }
+  *{box-sizing:border-box}
+  /* 상호작용 잠금(요구 2, docs/prps/dashboard-lead-tooltip-and-interaction-lockdown.md 결정
+     IL1~IL7) — 우클릭 네이티브 메뉴·드래그 텍스트 선택 두 가지를 문서 전체에서 막는다.
+     우클릭 차단은 아래 <script> 의 document 리스너가 맡고, 이 규칙은 선택 차단만 담당한다.
+     body 가 아니라 html 인 이유: 이 파일에 body{...} 규칙이 이미 있고 :root{...} 는 테마
+     토큰이 점유해 "왜"를 적을 자리가 없다 — html{ 은 이 파일 어디에도 없는 유일한 셀렉터라
+     회귀 검사(T22-152)가 항상 이 줄 하나를 가리킨다. user-select 는 상속 프로퍼티라 html
+     하나로 #dz-page-head·#dz-tooltip·.wrap 전부를 덮는다. -webkit- 프리픽스는 구버전
+     WebKit 대응이며(::-webkit-details-marker 선례, 아래 128행 부근), 정확한 지원 버전은
+     확인할 수 없어 주석에 적지 않는다. 예외 셀렉터(user-select:text 등)는 두지 않는다 —
+     "일부 영역만 복사 허용"을 사용자가 명시적으로 거부했다(결정 IL7). hub_template.html 의
+     같은 선언과 문자 단위로 동일해야 한다(T25-145, GOTCHA 7) — 고칠 때 양쪽을 함께 고친다.
+     실측(2026-08-26, Claude Code 내장 브라우저/Chromium 기반, 뷰포트 1280px, M6) — 필터
+     라디오 3종: 「검수」 라벨 클릭 → dzf-review 체크되고 data-kind="impl" 항목 2건이
+     display:none. 「전체」 클릭 → dzf-all 복원, 2건 다시 표시(선택 차단이 label for 클릭
+     자체를 막지 않음을 확인). <details> 토글: summary 클릭으로 open 속성이 true→false→true
+     정상 왕복. 포커스 링: Tab 으로 #dz-theme-toggle 도달 시 outline: solid 2px
+     rgb(86,180,233)(다크 테마 --accent 값) 정상 표시. 세 동작 모두 이 규칙 도입 후에도
+     그대로 동작함을 확인했다(S9). */
+  html{-webkit-user-select:none;user-select:none}
+  body{margin:0;font-family:"Pretendard","Apple SD Gothic Neo","Malgun Gothic",sans-serif;color:var(--ink);background:var(--bg);line-height:1.5}
+  .wrap{max-width:860px;margin:0 auto 32px;padding:0 16px}
+  .card{background:var(--surface);border:1px solid var(--line);border-radius:14px;padding:26px 30px;box-shadow:var(--shadow);margin-bottom:16px}
+  h1{font-size:20px;margin:0 0 4px;color:var(--head);letter-spacing:-.4px}
+  .bar-outer{height:14px;background:var(--soft);border-radius:999px;overflow:hidden;border:1px solid var(--line)}
+  .bar-inner{height:100%;background:var(--accent);border-radius:999px;transition:width .4s}
+  .pct{font-size:13px;font-weight:700;color:var(--accent-ink);margin-top:6px}
+  ol.steps{list-style:none;margin:14px 0 0;padding:0}
+  ol.steps li{display:flex;align-items:center;gap:12px;padding:11px 4px;border-bottom:1px solid var(--soft);font-size:15px;flex-wrap:wrap;row-gap:3px}
+  ol.steps li:last-child{border-bottom:0}
+  .num{width:26px;height:26px;border-radius:8px;display:grid;place-items:center;font-size:13px;font-weight:800;background:var(--soft);color:var(--muted);flex:none}
+  li.done .num{background:var(--accent-soft);color:var(--accent-ink);box-shadow:inset 0 0 0 1px var(--accent)}
+  li.active .num{background:var(--accent-ink);color:var(--bg)}
+  li.done{color:var(--muted)}
+  li.active{font-weight:700;color:var(--head)}
+  .chip{margin-left:auto;font-size:12px;font-weight:800;padding:3px 10px;border-radius:999px;background:var(--soft);color:var(--muted);flex:none}
+  li.done .chip{background:var(--accent-soft);color:var(--accent-ink)}
+  li.active .chip{position:relative;background:var(--accent-ink);color:var(--bg)}
+  .step-detail{flex-basis:100%;margin-left:38px;font-size:12.5px;font-weight:400;color:var(--muted);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .step-detail:empty{display:none}
+  #dz-impl-card:not(:has(#dz-impl-tasks li)){display:none}
+  /* 진행중 단계 행 신호(#dz-steps · #dz-impl-tasks 공통) — 예전에는 이 자리에 정적
+     --accent-soft 가로 밴드 + 좌측 3px 세로 바를 얹어 모션을 꺼도 "지금 이 단계"가
+     스캔되게 했다. 사용자 피드백 두 가지로 뒤집는다(docs/prps/dashboard-hub-signal-tuning.md
+     결정 D1~D7) — 밴드는 li 가 .card{padding:26px 30px} 안쪽 블록이라 좌우 끝이 카드
+     테두리에서 30px 안쪽에서 갑자기 끊겨, 카드 테두리와도 본문 텍스트 열과도 정렬되지
+     않는 제3의 수직선 두 개(좌·우)를 만들었다("어색하게 구분되어" 보인다는 지적의 원인).
+     좌측 바는 모션의 담체가 「막대」라는 것 자체가 과했다 — dashboard-ui-polish-4 PRP 결정
+     D6("움직이는 것은 빛이어야지 막대·링이어서는 안 된다")이 실제로 남긴 것은 하드 링을
+     없앤 허브 쪽뿐이고, 이 파일은 막대를 그라데이션으로 부드럽게 하는 데 그쳤다. 이번
+     변경은 D6 을 뒤집는 것이 아니라 완성하는 것이다 — 담체를 「진행중」 칩(.chip) 둘레의
+     halo 로 옮긴다.
+     ::after 오버레이의 opacity 만 pulse 하는 이유(레이아웃·색 속성은 건드리지 않는다):
+     허브 .card.card-working 이 같은 문제(box-shadow 보간 = 매 프레임 리페인트)를 이미 이
+     방식으로 풀어 뒀다(같은 파일 계열의 기존 관용구). .chip 자신의 background·color 는
+     건드리지 않는다 — li.active .chip 은 --accent-ink 채움에 --bg 글자라, opacity 나
+     background 를 애니메이션하면 글자 대비가 주기적으로 내려간다(WCAG 1.4.3 위반 가능).
+     ::after 는 배경 없이 칩 바깥으로만 그림자를 그리므로 칩 안쪽 픽셀을 바꾸지 않아 대비
+     계산에 영향이 없다. 진폭 .6→1·주기 4s·@keyframes 이름(dz-step-active-pulse)은 유지한다
+     — 허브 glow 와 같은 두 숫자를 공유하는 단일 모션 언어 계약(dashboard-ui-polish-4 PRP
+     결정 D5)은 담체가 아니라 리듬을 약속한 것이라 담체가 바뀌어도 깨지지 않는다.
+     모션을 끈 사용자에게 남는 정적 채널은 밴드 하나가 아니라 다섯이다 — 칩의 텍스트
+     「진행중」(스크린리더에도 읽히는 유일한 정본) · 칩의 반전 채움(--accent-ink 바탕 +
+     --bg 글자) · 번호 사각형 반전(li.active .num) · 행 굵은 글씨 + --head 색(li.active) ·
+     칩의 정적 halo(모션만 꺼지고 opacity:1 로 남는다, 아래 reduced-motion 분기). 모션이
+     유일한 판별 채널이 되는 순간은 없다.
+     glow 기하 0 0 10px -1px 는 실측(Blink, 라이트 테마)에서 최저점(opacity:.6)도 옛 밴드와
+     같은 급(ΔL* 약 6.4 대 5.86)의 신호를 유지하면서 최대점에서는 그 두 배가 되도록 고른
+     값이다 — 더 세게 필요해지면 후보 0 0 8px 0 이 유일한 대안이며 승인 없이 바꾸지
+     않는다(결정 D4).
+     PiP 압축뷰의 body.dz-pip ol.steps li.active{border-radius:8px;padding-left:8px;
+     padding-right:8px} 규칙도 함께 삭제한다 — 밴드의 모양을 다듬기 위해서만 존재했던
+     규칙이라, 밴드가 없어지면 남는 효과는 "진행중 행만 좌우로 8px 밀려난다"는 정렬
+     흔들림뿐이다(결정 D2). 이 파일 최초의 @keyframes·prefers-reduced-motion 이다. */
+  ol.steps li.active .chip::after{content:"";position:absolute;inset:0;border-radius:inherit;
+    pointer-events:none;box-shadow:0 0 10px -1px var(--accent);
+    animation:dz-step-active-pulse 4s ease-in-out infinite}
+  @keyframes dz-step-active-pulse{0%,100%{opacity:.6}50%{opacity:1}}
+  /* 무효화는 끄는 규칙보다 소스 순서상 뒤에 온다(캐스케이드) — 모션만 끄고 칩의 정적
+     halo(opacity:1)는 남긴다. */
+  @media (prefers-reduced-motion:reduce){ol.steps li.active .chip::after{animation:none;opacity:1}}
+  table.matrix{width:100%;border-collapse:collapse;margin:14px 0 0;font-size:14px}
+  .matrix th,.matrix td{border:1px solid var(--line);padding:9px 10px}
+  .matrix thead th{font-size:12px;font-weight:800;background:var(--soft);color:var(--muted);text-align:center}
+  .matrix th.corner{text-align:left}
+  .matrix th.group{text-align:left;font-weight:700;color:var(--head);width:34%}
+  .matrix td.cell{text-align:center;font-size:12px;font-weight:800;background:var(--soft);color:var(--muted)}
+  .matrix td.cell[data-state="done"]{background:var(--accent-soft);color:var(--accent-ink);box-shadow:inset 0 0 0 1px var(--accent)}
+  .matrix td.cell[data-state="active"]{background:var(--accent-ink);color:var(--bg)}
+  .matrix td.cell[data-state="na"]{background:var(--surface);color:var(--line)}
+  .badge{display:inline-flex;align-items:center;line-height:1;font-size:11px;font-weight:800;padding:4px 9px;border-radius:999px;margin-right:6px}
+  .badge.round{background:var(--soft);color:var(--muted)}
+  .badge.impl{background:var(--accent-soft);color:var(--accent-ink)}
+  .badge.pass{background:var(--accent-ink);color:var(--bg)}
+  .badge.fail{background:var(--attention-soft);color:var(--attention);border:1px dashed var(--attention)}
+  .badge.commit{background:var(--soft);color:var(--head);border:1px solid var(--line)}
+  .dzf{position:absolute;opacity:0;pointer-events:none}
+  label[for^="dzf-"]{display:inline-block;font-size:12px;font-weight:700;padding:4px 12px;margin:8px 6px 8px 0;border-radius:999px;background:var(--soft);color:var(--muted);cursor:pointer;border:1px solid var(--line)}
+  .dzf:checked + label{background:var(--accent-ink);color:var(--bg);border-color:var(--accent-ink)}
+  .dzf:focus-visible + label{outline:2px solid var(--accent);outline-offset:2px}
+  #dzf-impl:checked   ~ #dz-log .entry:not([data-kind="impl"]){display:none}
+  #dzf-review:checked ~ #dz-log .entry:not([data-kind="review"]){display:none}
+  ul.log{list-style:none;margin:6px 0 0;padding:0;font-size:13px;color:var(--muted)}
+  .entry{border-bottom:1px solid var(--soft);padding:8px 4px}
+  .entry:last-child{border-bottom:0}
+  .entry summary{cursor:pointer;display:flex;align-items:center;gap:8px;list-style:none}
+  .entry summary::-webkit-details-marker{display:none}
+  .entry summary::marker{content:""}
+  .entry .time{font-size:11px;color:var(--muted);flex:none;width:40px}
+  .entry .lead{flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-weight:600;color:var(--ink)}
+  /* overflow-wrap:anywhere 는 pre-wrap 의 사각지대를 메운다 — pre-wrap 은 "줄바꿈 기회에서"
+     접을 뿐이고, 식별자를 가운뎃점으로 이어 붙인 사슬(예: aFn·bFn·cFn)에는 그 기회가
+     하나도 없어 상자를 그대로 뚫고 나갔다. 허브 상세 패널(폭 550px)에서 실측: 이 요소
+     clientWidth 399 / scrollWidth 504, 문서 전체가 549 대비 603 으로 넘쳐 오른쪽 글자가
+     잘렸다. anywhere 를 주면 문서 넘침이 549 로 사라진다. break-word 가 아니라 anywhere
+     인 이유: break-word 는 min-content 폭 계산에서 이 강제 분리를 빼기 때문에, 좁은
+     상자에서는 여전히 넘칠 수 있다. */
+  .entry .detail{margin:6px 0 0 48px;font-size:12.5px;color:var(--muted);white-space:pre-wrap;overflow-wrap:anywhere}
+  /* 경량 마크업(문단·목록·인라인 코드). 새 선언을 위 규칙 **안에** 넣어야 할 때는 반드시
+     white-space 앞에 둔다 — tests/run.sh T22-128 이 그 규칙이
+     `white-space:pre-wrap;overflow-wrap:anywhere}` 로 끝날 것을 요구한다. */
+  .entry .detail>*{margin:0}
+  .entry .detail>*+*{margin-top:6px}
+  /* 목록 글리프와 들여쓰기를 UA 기본에 맡기지 않고 못 박는다. 중첩 ul 은 UA 기본 스타일시트의
+     `ul ul` 선언값을 갖기 때문에 ul.log{list-style:none} 이 상속되지는 않지만, 그 기본값이
+     브라우저마다 다르고(disc/circle) 우리가 원하는 글리프도 아니다. padding-left:16px 는
+     허브 상세 패널(550px)의 실측 텍스트 폭 399px 에서 383px 를 남긴다 — 위 overflow-wrap
+     규칙 주석의 실측 근거와 같은 상자다. */
+  .entry .detail ul{list-style:disc;padding-left:16px}
+  .entry .detail code{font-family:ui-monospace,monospace;font-size:11.5px;background:var(--soft);border-radius:4px;padding:1px 4px}
+  .log-title,.impl-title{font-size:13px;font-weight:700;color:var(--muted);margin:0 0 10px}
+  .foot{font-size:12px;color:var(--muted);text-align:right}
+  /* 페이지 헤더 — .wrap 과 같은 폭 상자를 써서 카드와 좌우가 정렬된다.
+     .wrap 바깥에 두는 이유는 아래 「왜 .wrap 바깥인가」 절과 같다(PiP 이동 대상 제외). */
+  #dz-page-head{max-width:860px;margin:28px auto 10px;padding:0 16px;
+                display:flex;align-items:center;gap:10px;flex-wrap:wrap;row-gap:6px}
+  .project-name{font-size:15px;font-weight:800;color:var(--head);
+                overflow:hidden;text-overflow:ellipsis;white-space:nowrap;min-width:0;flex:1 1 auto}
+  #dz-top-actions{display:flex;align-items:center;gap:8px;flex:0 0 auto}
+  #dz-pip-btn{font-family:inherit;font-size:12px;font-weight:700;padding:7px 14px;border-radius:999px;border:1px solid var(--line);background:var(--surface);color:var(--head);cursor:pointer;box-shadow:var(--shadow)}
+  #dz-pip-btn:hover{color:var(--accent-ink);border-color:var(--accent)}
+  #dz-pip-btn:focus-visible{outline:2px solid var(--accent);outline-offset:3px}
+  #dz-pip-btn:disabled{color:var(--muted);cursor:not-allowed;box-shadow:none}
+  #dz-pip-hint{flex-basis:100%;font-size:11px;line-height:1.5;color:var(--muted);
+               background:var(--surface);border:1px solid var(--line);border-radius:8px;
+               padding:8px 10px;box-shadow:var(--shadow)}
+  #dz-pip-hint[hidden]{display:none}
+  .icon-btn{width:32px;height:32px;padding:0;color:var(--muted);background:var(--surface);
+            border:1px solid var(--line);border-radius:999px;cursor:pointer;font-family:inherit;font-size:15px;
+            line-height:1;display:inline-flex;align-items:center;justify-content:center;box-shadow:var(--shadow)}
+  .icon-btn:hover{color:var(--accent-ink);border-color:var(--accent)}
+  .icon-btn:focus-visible{outline:2px solid var(--accent);outline-offset:3px}
+  /* 허브 상세 패널(iframe) 안에서 열린 문서는 body.dz-embedded 가 붙는다 — 플로팅은 iframe 안에서
+     구조적으로 깨진다(패널을 닫으면 iframe 이 about:blank 로 가 opener 문서 자체가 파괴된다).
+     테마 토글도 함께 숨긴다 — 테마는 허브가 소유한 localStorage 키를 읽기 전용으로 따라가므로
+     대시보드 안에 별도 토글이 있으면 허브 것과 중복된다. CSS 로만 숨긴다 — DOM 제거는 이
+     파일의 기존 불변식(id="dz-pip-*" 유지)을 어긴다. */
+  body.dz-embedded #dz-pip-btn,body.dz-embedded #dz-pip-hint,body.dz-embedded #dz-theme-toggle{display:none}
+  /* 허브 상세 패널의 헤드가 같은 프로젝트 명을 이미 표시한다(hub_template.html 의 패널 제목) — 8px
+     아래에 또 표시하면 중복이다. 위 컨트롤 단위 나열 규칙과는 역할이 다르므로 별도로 둔다. */
+  body.dz-embedded #dz-page-head{display:none}
+  body.dz-pip .wrap{margin:10px auto;padding:0 10px}
+  body.dz-pip .card{padding:14px 16px;border-radius:10px;margin-bottom:10px}
+  body.dz-pip h1{font-size:16px}
+  body.dz-pip #dz-log-card{display:none}
+  body.dz-pip ol.steps li{padding:9px 4px}
+  body.dz-pip ol.steps li:not(.active) .step-detail{display:none}
+  /* 작업 추적 제목의 말줄임 툴팁(요구 1, 결정 LT1~LT9) — 허브 상세 패널(폭 549px)에서
+     text-overflow:ellipsis 로 잘린 .entry .lead 를 hover 로 읽게 한다. 허브의 .tooltip 을
+     그대로 복사하지 않는다(결정 LT4) — white-space:pre-wrap 은 세션 발췌 프롬프트의 개행을
+     살리려는 용도였는데(허브 쪽 주석 참조) .lead 는 개행 없는 한 줄 제목이라 오히려 앞뒤
+     공백을 그대로 렌더해 손해다. overflow-wrap:anywhere 는 반드시 가져온다 — 가운뎃점으로
+     이은 식별자 사슬이 상자를 뚫고 나간 사고가 이 파일의 .entry .detail 규칙(위 128행 부근
+     주석)에서 실제로 있었고, 툴팁 안에서도 같은 문자열을 렌더한다. max-width 는
+     min(420px,calc(100vw - 32px)) 로 549px 패널을 다 가리지 않는다. z-index:40 은 허브의
+     .tooltip 과 같은 값 — 대시보드에는 경쟁하는 z-index 가 없어 어떤 양수든 되지만, 두
+     파일을 나란히 읽을 때 같은 층위로 읽히도록 맞춘다. */
+  .tooltip{position:fixed;left:0;top:0;z-index:40;max-width:min(420px,calc(100vw - 32px));max-height:calc(100vh - 16px);overflow:hidden;padding:6px 9px;border-radius:8px;font-size:11.5px;line-height:1.45;font-weight:600;color:var(--bg);background:var(--ink);box-shadow:var(--shadow);overflow-wrap:anywhere;visibility:hidden}
+  .tooltip.tooltip-visible{visibility:visible}
+</style>
+<script>
+/* body 파싱 전에 실행돼 첫 페인트부터 확정 테마로 그린다(FOUC 방지).
+   허브 상세 패널(iframe) 안이면 허브가 쓴 키를 읽는다 — 같은 오리진이라 값이 그대로 보인다
+   (허브 상세 패널 iframe 테마 동기화 결정 D). 단독 창이면 자기 키를 읽고, 없으면 시스템 선호를
+   한 번만 읽어 확정해 저장한다. localStorage 는 file:// 나 저장소 차단 환경에서 던질 수
+   있어 통째로 감싼다. */
+try{
+  var embedded = window.self !== window.top;
+  var key = embedded ? 'dzh-theme' : 'dz-theme';
+  var stored = localStorage.getItem(key);
+  var theme = (stored === 'light' || stored === 'dark') ? stored
+            : ((window.matchMedia && matchMedia('(prefers-color-scheme: dark)').matches) ? 'dark' : 'light');
+  document.documentElement.setAttribute('data-theme', theme);
+  if(!embedded && stored !== theme) localStorage.setItem(key, theme);
+}catch(e){}
+</script>
+</head>
+<body>
+<div id="dz-page-head">
+  <span class="project-name" id="dz-project-name">프로젝트</span>
+  <div id="dz-top-actions">
+    <button id="dz-pip-btn" type="button">플로팅</button>
+    <button id="dz-theme-toggle" class="icon-btn" type="button"
+            aria-label="다크 테마로 전환" title="다크 테마로 전환">☾</button>
+  </div>
+  <div id="dz-pip-hint" hidden></div>
+</div>
+<!-- .wrap 앞(#dz-page-head 뒤)에 둔다 — .wrap 은 PiP 진입 시 다른 document 로 이동하므로
+     (아래 <script> 의 wrapReturnAnchor 참조) 그 안에 있으면 PiP 를 열자마자 메인 문서에서
+     사라진다(결정 LT8). .wrap 뒤가 아니라 앞인 이유는 폴링 IIFE 의 wrapReturnAnchor 가
+     `wrap.nextSibling` 으로 PiP 복귀 지점을 잡기 때문 — 뒤에 두면 그 앵커가 이 노드로
+     바뀌어 검증할 것이 하나 늘어난다. 문구는 여기 각인하지 않는다(결정 LT2) — 내용은
+     아래 툴팁 IIFE 가 hover 시점에만 채운다. -->
+<div id="dz-tooltip" class="tooltip" aria-hidden="true"></div>
+<div class="wrap">
+  <div class="card">
+    <h1 id="dz-title">세션 제목</h1>
+    <div class="bar-outer"><div class="bar-inner" id="dz-progress-bar" style="width:0%"></div></div>
+    <div class="pct" id="dz-progress-pct">0/0 · 0%</div>
+    <ol class="steps" id="dz-steps">
+    </ol>
+  </div>
+  <div class="card" id="dz-impl-card">
+    <div class="impl-title">구현 세부 작업 · 디스패치와 결과 보고 시점에만 갱신</div>
+    <div class="pct" id="dz-impl-count">0/0 · 0%</div>
+    <ol class="steps" id="dz-impl-tasks">
+    </ol>
+  </div>
+  <div class="card" id="dz-log-card">
+    <div class="log-title">작업 추적</div>
+    <input type="radio" name="dzf" id="dzf-all" class="dzf" checked><label for="dzf-all">전체</label>
+    <input type="radio" name="dzf" id="dzf-impl" class="dzf"><label for="dzf-impl">구현</label>
+    <input type="radio" name="dzf" id="dzf-review" class="dzf"><label for="dzf-review">검수</label>
+    <ul class="log" id="dz-log" data-owner-token="" data-server-port=""></ul>
+  </div>
+  <div class="foot" id="dz-updated">갱신: -</div>
+</div>
+<script>
+(function(){
+  var POLL_INTERVAL_MS = 60000;         // 로컬 파일 폴링 주기(1분). 포커스·가시성 전환에서
+                                         // 즉시 한 번 더 폴링하므로(아래 리스너) 사람이 보는
+                                         // 순간의 지연은 이 값과 무관하다 — 사용자 요청.
+  var FAILURE_LIMIT = 3;                // 연속 실패 이 횟수부터 사용자에게 알린다
+  var PIP_WIDTH = 420;
+  var PIP_MIN_HEIGHT = 200, PIP_MAX_HEIGHT = 720;
+  // documentPictureInPicture 창의 요청 height 는 콘텐츠 높이가 아니라 outerHeight(제목
+  // 표시줄 포함) 로 해석된다(실측). 그 여백은 OS·브라우저마다 달라 미리 알 수 없다 — 창을
+  // 연 직후 outerHeight-innerHeight 를 재서 다음 열기부터 보정하는 방식도 시도했으나,
+  // .then() 시점엔 창 크기가 아직 안정되지 않아 값이 널뛰어 더 위험했다(실측: 두 번째
+  // 열기에서 요청 높이가 음수로 접혀 200px 바닥으로 떨어짐). 그래서 실측 보정 대신 여러
+  // 환경에서 관찰한 제목 표시줄 여백보다 넉넉한 고정값을 쓴다 — 몇십 px 여백이 남는 것이
+  // 콘텐츠가 잘리는 것보다 안전하다.
+  var PIP_CHROME_ALLOWANCE = 100;
+  var PIP_CONTENT_PADDING = 24;         // 콘텐츠 하단 여백(카드 그림자·라운딩 여유)
+
+  var wrap = document.querySelector('.wrap');
+  // .wrap 은 PiP 창으로 '이동'하므로 돌아올 자리를 미리 잡아 둔다. pipButton 을 앵커로 쓰면
+  // 안 된다 — #dz-top-actions 의 자식이라 document.body.insertBefore 가 NotFoundError 를 던진다.
+  var wrapReturnAnchor = wrap.nextSibling;
+  var pipButton = document.getElementById('dz-pip-btn');
+  var pipHint = document.getElementById('dz-pip-hint');
+  var isServed = location.protocol === 'http:' || location.protocol === 'https:';
+  var hasPipSupport = 'documentPictureInPicture' in window;
+  var pipWindow = null;
+  var lastHtml = '';
+  var busy = false;
+  var failureCount = 0;
+  var reasonHint = '';            // 버튼이 비활성인 영구 사유. 해소되기 전까지 유지된다
+
+  // 허브 상세 패널(iframe) 로 열렸는지 판정(R1). self !== top 은 WindowProxy 신원 비교라 크로스
+  // 오리진에서도 예외를 던지지 않는다(top.location 을 읽으면 던진다 — 그건 하지 않는다).
+  // 표시(body.dz-embedded)에만 쓰고 폴링·동기화는 분기하지 않는다 — 패널 안 라이브 갱신이
+  // 이 판정으로 죽으면 안 된다.
+  var isEmbedded = window.self !== window.top;
+  if(isEmbedded) document.body.classList.add('dz-embedded');
+
+  function setHint(text){ pipHint.textContent = text || ''; pipHint.hidden = !text; }
+
+  // ── 갱신 경로 A: file:// — Phase 1 방식 그대로. 이 분기는 회귀 금지 대상이다 ──
+  if(!isServed){
+    var reloading = false;
+    var reloadOnce = function(){ if(reloading) return; reloading = true; location.reload(); };
+    document.addEventListener('visibilitychange', function(){ if(document.visibilityState==='visible') reloadOnce(); });
+    window.addEventListener('focus', reloadOnce);
+    pipButton.disabled = true;
+    setHint('플로팅 창은 서버에서만 동작합니다. /hub server start 로 허브를 켠 뒤 그 대시보드 링크로 여세요.');
+    return;
+  }
+
+  // ── 갱신 경로 B: http(s):// — 폴링 + 부분 치환 ──
+  function syncText(fresh, id){
+    var live = wrap.querySelector('#'+id), next = fresh.getElementById(id);
+    if(live && next) live.textContent = next.textContent;
+  }
+  function syncProgressBar(fresh){
+    var live = wrap.querySelector('#dz-progress-bar'), next = fresh.getElementById('dz-progress-bar');
+    if(live && next) live.setAttribute('style', next.getAttribute('style') || '');
+  }
+  function syncVisualization(fresh){
+    // 선형(#dz-steps)과 매트릭스(#dz-matrix)는 한 파일에 하나만 존재한다(불변식 1).
+    var live = wrap.querySelector('#dz-steps,#dz-matrix'), next = fresh.querySelector('#dz-steps,#dz-matrix');
+    if(live && next) live.outerHTML = next.outerHTML;
+  }
+  function syncLog(fresh){
+    var live = wrap.querySelector('#dz-log'), next = fresh.getElementById('dz-log');
+    if(live && next) live.innerHTML = next.innerHTML;
+  }
+  function syncImplCard(fresh){
+    // 이 카드는 .wrap 안이지만 #dz-steps 동기화 대상이 아니다 — 별도 대입이 없으면 영구히 stale 된다.
+    var live = wrap.querySelector('#dz-impl-card'), next = fresh.getElementById('dz-impl-card');
+    if(live && next) live.outerHTML = next.outerHTML;
+  }
+  // 압축 뷰는 작업 추적 카드가 빠져 실제 콘텐츠가 훨씬 짧다 — 여는 시점의 크기를
+  // measureCompactHeight() 로 미리 맞추므로(아래), 이 함수는 열린 뒤 콘텐츠 높이가
+  // 바뀌었을 때(단계 상세 추가 등)의 보정 시도다. pipWindow.resizeTo() 는 Document PiP 창에서
+  // 사용자 제스처(transient activation)를 요구한다(Chrome 실측: NotAllowedError). 이 함수는
+  // rAF·폴링에서 호출되므로 제스처가 이미 소진된 뒤라 대개 조용히 실패한다 — 브라우저 API
+  // 한계이며 무해하게 catch 된다.
+  function resizePipToFit(){
+    if(!pipWindow) return;
+    var h = Math.ceil(wrap.getBoundingClientRect().height) + PIP_CONTENT_PADDING;
+    try{ pipWindow.resizeTo(PIP_WIDTH, Math.max(PIP_MIN_HEIGHT, Math.min(PIP_MAX_HEIGHT, h))); }
+    catch(e){ /* 리사이즈 불가 환경이어도 폴링·동기화는 계속돼야 한다 */ }
+  }
+  // .wrap 은 아직 메인 문서(body.dz-pip 아님)에 있다 — 압축 뷰 클래스를 순간적으로 얹어
+  // 실제 렌더 높이를 재고 즉시 되돌린다. 읽기와 되돌리기가 같은 동기 구간 안에서 끝나므로
+  // 브라우저가 그 사이의 레이아웃을 페인트할 기회가 없어 화면 깜빡임이 없다. PiP 창을 여는
+  // 호출은 열린 뒤의 resizeTo() 와 달리 사용자 제스처를 그대로 쓸 수 있으므로, 크기는 여기서
+  // "처음부터 맞게" 정한다 — resizePipToFit() 의 사후 보정에 기대지 않는다.
+  // 메인 창은 보통 .wrap 의 max-width(860px)만큼 넓어 PIP_WIDTH(420)보다 훨씬 넓게 렌더링된다
+  // — 폭을 강제하지 않으면 실제 PiP 창에서 줄바꿈되는 텍스트(제목·단계 상세 등)가 측정
+  // 시점엔 한 줄로 남아 높이를 과소평가한다. 그래서 측정 동안만 .wrap 폭도 함께 좁힌다.
+  function measureCompactHeight(){
+    document.body.classList.add('dz-pip');
+    wrap.style.width = PIP_WIDTH + 'px';
+    var h = Math.ceil(wrap.getBoundingClientRect().height) + PIP_CONTENT_PADDING + PIP_CHROME_ALLOWANCE;
+    wrap.style.width = '';
+    document.body.classList.remove('dz-pip');
+    return Math.max(PIP_MIN_HEIGHT, Math.min(PIP_MAX_HEIGHT, h));
+  }
+  function apply(html){
+    if(html === lastHtml) return;
+    lastHtml = html;
+    var fresh = new DOMParser().parseFromString(html, 'text/html');
+    // 라디오와 <style> 은 치환 대상이 아니다(사용자가 고른 필터가 날아간다).
+    syncText(fresh,'dz-title');
+    syncText(fresh,'dz-progress-pct'); syncText(fresh,'dz-updated');
+    syncProgressBar(fresh); syncVisualization(fresh); syncImplCard(fresh); syncLog(fresh);
+    resizePipToFit();
+  }
+  function poll(){
+    if(busy) return;
+    busy = true;
+    fetch(location.pathname, {cache:'no-store'})
+      .then(function(res){ if(!res.ok) throw new Error(res.status); return res.text(); })
+      .then(function(html){ failureCount = 0; if(!pipWindow) setHint(reasonHint); apply(html); })
+      .catch(function(){
+        if(++failureCount >= FAILURE_LIMIT)
+          setHint('대시보드를 읽지 못했습니다. /hub server start 로 허브가 켜져 있는지 확인하세요.');
+      })
+      .then(function(){ busy = false; });
+  }
+  setInterval(poll, POLL_INTERVAL_MS);
+  document.addEventListener('visibilitychange', function(){ if(document.visibilityState==='visible') poll(); });
+  window.addEventListener('focus', poll);
+
+  // 허브 상세 패널(iframe)이 즉시 갱신 3종(새로고침 버튼·포커스 복귀·탭 복귀)에서 호출하는
+  // 훅이다(docs/prps/hub-panel-immediate-refresh.md 결정 IR4). poll 을 그대로 대입한다 —
+  // 래퍼를 두면 "훅이 하는 일"이 poll() 과 갈라질 여지가 생긴다. 연속 호출은 poll() 의
+  // busy 가드가 흡수한다(멱등). 위치가 필수다 — 트리거 리스너(바로 위) 뒤 · PiP 기능 감지
+  // (바로 아래) 앞이어야 한다. 뒤로 옮기면 Document PiP 미지원 브라우저(Safari·Firefox)에서
+  // 이 훅이 영영 노출되지 않는다.
+  window.dzRequestRefresh = poll;
+
+  // ── 플로팅(Document PiP) — 반드시 사용자 제스처로만 진입한다 ──
+  if(!hasPipSupport){
+    pipButton.disabled = true;
+    reasonHint = '이 브라우저는 Document Picture-in-Picture 를 지원하지 않습니다 (Chrome·Edge 에서 동작).';
+    setHint(reasonHint);
+    return;
+  }
+  pipButton.addEventListener('click', function(){
+    if(pipWindow){ pipWindow.close(); return; }
+    window.documentPictureInPicture.requestWindow({width:PIP_WIDTH, height:measureCompactHeight()})
+      .then(function(win){
+        pipWindow = win;
+        var pipDocument = win.document;
+        pipDocument.title = document.title;
+        // PiP 창은 opener 의 CSS 를 상속하지 않는다(실측) — <style> 전문을 복사한다.
+        Array.prototype.forEach.call(document.querySelectorAll('style'), function(source){
+          var copy = pipDocument.createElement('style');
+          copy.textContent = source.textContent;
+          pipDocument.head.appendChild(copy);
+        });
+        // <style> 은 복사되지만 data-theme 속성은 따라가지 않는다 — 여기서 직접 옮긴다.
+        var currentThemeAttribute = document.documentElement.getAttribute('data-theme');
+        if(currentThemeAttribute) pipDocument.documentElement.setAttribute('data-theme', currentThemeAttribute);
+        pipDocument.body.className = 'dz-pip';
+        // 복제가 아니라 '이동'이다 — 폴링이 계속 같은 노드를 갱신하므로 동기화 코드가 하나로 유지된다.
+        pipDocument.body.appendChild(wrap);
+        // 숨은 탭의 타이머 스로틀링(최대 1분)을 보완한다: 창에 커서를 올리면 즉시 갱신.
+        pipDocument.body.addEventListener('pointerenter', poll);
+        // 이동 직후엔 새 문서가 아직 레이아웃을 못 잡았을 수 있어 프레임을 한 번 넘기고 잰다.
+        requestAnimationFrame(function(){ requestAnimationFrame(resizePipToFit); });
+        pipButton.textContent = '플로팅 닫기';
+        reasonHint = '';
+        setHint('플로팅 창에서 보는 중입니다. 창을 닫으면 여기로 돌아옵니다.');
+        win.addEventListener('pagehide', function(){
+          pipWindow = null;
+          document.body.insertBefore(wrap, wrapReturnAnchor);   // ← pipButton 이 아니다
+          pipButton.textContent = '플로팅';
+          setHint(reasonHint);
+          poll();
+        });
+      })
+      .catch(function(err){
+        // 자동 재시도하지 않는다 — 창 열기는 사용자 제스처가 있어야만 허용된다.
+        reasonHint = '플로팅 창을 열 수 없습니다 (' + ((err && err.name) || 'error') + '). Claude 내장 브라우저 대신 Chrome 에서 열어 보세요.';
+        setHint(reasonHint);
+      });
+  });
+})();
+
+(function(){
+  // 다크 모드 토글 — 반드시 위 폴링/PiP IIFE 와 **별도**로 둔다. 저 IIFE 는 file:// 나 PiP
+  // 미지원 환경에서 조기 return 하므로, 테마 코드를 그 안에 두면 그 경로들에서 테마가 죽는다.
+  // <head> 인라인 스크립트가 첫 페인트 전에 이미 테마를 1회 확정해 두므로(FOUC 방지),
+  // 여기서는 그 값을 읽고 바꾸기만 한다.
+  var THEME_STORAGE_KEY = 'dz-theme';
+  var HUB_THEME_STORAGE_KEY = 'dzh-theme';
+  var THEME_CYCLE = ['light', 'dark'];
+  // 글리프·라벨은 "지금" 이 아니라 "전환될 대상"을 가리킨다 — 라이트일 때 ☾(다크로 전환),
+  // 다크일 때 ☀(라이트로 전환).
+  var THEME_GLYPH = {light:'☾', dark:'☀'};
+  var THEME_ACTION_LABEL = {light:'다크 테마로 전환', dark:'라이트 테마로 전환'};
+  // 허브 상세 패널(iframe) 안이면 허브가 소유한 키를 읽는다 — 대시보드는 이 키를 절대 쓰지
+  // 않는다(읽기 전용 계약). 같은 오리진이라 값이 그대로 보이고, 허브가 값을 바꾸면 아래
+  // storage 리스너가 즉시 따라간다.
+  var embedded = window.self !== window.top;
+  var storageKey = embedded ? HUB_THEME_STORAGE_KEY : THEME_STORAGE_KEY;
+  var themeToggleButton = document.getElementById('dz-theme-toggle');
+
+  // 시스템 선호를 읽는다. matchMedia 가 없는 극단적 환경이면 라이트로 낙착한다.
+  function resolveSystemTheme(){
+    try{
+      return (window.matchMedia && matchMedia('(prefers-color-scheme: dark)').matches) ? 'dark' : 'light';
+    }catch(e){
+      return 'light';
+    }
+  }
+
+  /** 지금 유효한 테마를 돌려준다. 저장값이 light/dark 가 아니면 시스템 선호로 낙착한다. */
+  function currentTheme(){
+    try{
+      var stored = localStorage.getItem(storageKey);
+      return (stored === 'light' || stored === 'dark') ? stored : resolveSystemTheme();
+    }catch(e){
+      return resolveSystemTheme();
+    }
+  }
+
+  /** 지금 갱신해야 할 문서 목록 — 메인 문서 + (열려 있으면) PiP 문서. 표준 API 로 PiP 창을
+      찾으므로 위 폴링 IIFE 의 pipWindow 지역 변수를 공유하지 않는다(두 IIFE 사이에 새 결합을
+      만들지 않기 위해서). */
+  function themeDocuments(){
+    var docs = [document];
+    var pip = window.documentPictureInPicture && window.documentPictureInPicture.window;
+    if(pip && pip.document) docs.push(pip.document);
+    return docs;
+  }
+
+  /** data-theme 속성·글리프·aria-label·title 을 한꺼번에 맞춘다. 열려 있는 PiP 창까지 포함한다. */
+  function applyTheme(theme){
+    themeDocuments().forEach(function(doc){
+      doc.documentElement.setAttribute('data-theme', theme);
+    });
+    if(themeToggleButton){
+      themeToggleButton.textContent = THEME_GLYPH[theme];
+      themeToggleButton.setAttribute('aria-label', THEME_ACTION_LABEL[theme]);
+      themeToggleButton.setAttribute('title', THEME_ACTION_LABEL[theme]);
+    }
+  }
+
+  if(themeToggleButton){
+    // 저장은 클릭에서만 한다. 임베드 상태에서는 버튼이 display:none 이라 CSS 만으로도
+    // 클릭이 닿지 않지만, storageKey 가 이 시점엔 이미 'dzh-theme'(허브 소유 키)로 바인딩돼
+    // 있으므로 그 CSS 규칙에만 기대지 않고 여기서도 명시적으로 막는다 — head 스크립트의
+    // setItem 가드(embedded 체크)와 방어 수준을 맞춘다(안 D 계약: 허브 키는 읽기 전용).
+    themeToggleButton.addEventListener('click', function(){
+      if(embedded) return;
+      var next = THEME_CYCLE[(THEME_CYCLE.indexOf(currentTheme()) + 1) % THEME_CYCLE.length];
+      try{ localStorage.setItem(storageKey, next); }
+      catch(e){ /* 저장 실패 — 이번 페이지 로드 동안만 토글이 적용된다 */ }
+      applyTheme(next);
+    });
+  }
+
+  // 같은 오리진의 다른 문서가 저장소 키를 바꾸면 발화한다 — 허브가 테마를 바꾸면(임베드 시)
+  // 또는 단독 탭을 두 개 열어 한쪽에서 토글하면(단독 시) 이 경로로 실시간 추종한다.
+  window.addEventListener('storage', function(event){
+    if(event.key === storageKey) applyTheme(currentTheme());
+  });
+
+  applyTheme(currentTheme());
+})();
+
+(function(){
+  // 상호작용 잠금(요구 2, 결정 IL1~IL7) — 우클릭 네이티브 메뉴를 막는다. 선택 차단은 위
+  // <style> 의 html{...user-select...} 규칙이 이미 맡고 있어(CSS 라 PiP 문서에도 <style>
+  // 복사로 자동 승계된다, 전제 6) 이 IIFE 는 CSS 로 못 막는 우클릭만 담당한다.
+  // 테마 IIFE 뒤·폴링 IIFE 밖에 두는 이유는 위 폴링 IIFE 머리의 주석과 같다 — 그 IIFE 는
+  // file:// 과 PiP 미지원에서 조기 return 하므로(전제 9) 안에 넣으면 두 환경에서 잠금이
+  // 죽는다. 결정 LT9 가 툴팁 IIFE 와 이 IIFE 둘 다에 같은 배치를 요구한다(T22-153 이 아래
+  // 'enter' 리스너 줄이 THEME_STORAGE_KEY 보다 뒤임을 검사해 그 배치를 강제한다).
+  // 우회 예외(user-select:text 등)는 만들지 않는다 — 사용자가 "일부 영역만 복사 허용"을
+  // 명시적으로 거부했다(결정 IL7, 승인 항목 3). 되돌리려면 셀렉터 1개면 충분하다(R6).
+  //
+  // 실측(2026-08-26, Claude Code 내장 브라우저/Chromium 기반, 뷰포트 1280px, 허브 상세 패널
+  // .detail-panel 550px/iframe 549px, M4) — 단독 대시보드 탭·패널 iframe 안 대시보드 두
+  // 문서에서: html/body/자손 모두 user-select 계산값이 none, 실제 우클릭에 네이티브 메뉴가
+  // 뜨지 않았고, 합성 contextmenu 이벤트는 defaultPrevented=true·cancelBubble=false 로
+  // 도달했다(결정 IL3 — 전파를 멈추지 않는다 — 이 실측대로 지켜졌다). 드래그 선택 결과는
+  // 0자(패널 iframe 케이스는 부모 문서 선택도 0자). 네 번째 문서인 허브 자체는
+  // hub_template.html 의 같은 IIFE 주석에 남긴다.
+  // PiP 창은 이 환경에서는 미실측이다 — Claude 내장 브라우저의 documentPictureInPicture
+  // 창 열기 요청이 InvalidStateError 로 거부돼(대시보드가 그 사유를 안내 문구로 그대로
+  // 보여준다) 창을 열 수 없었다. CSS 는 <style> textContent 복사로 자동 승계되므로 선택
+  // 차단은 구조상 이미 승계되지만, contextmenu 배선은 'enter' 이벤트 발화에 의존하고
+  // 그 경로는 2026-08-26 시점에 실제 Chrome 에서 확인되지 않았다 — 별도 실측이 필요하다.
+
+  /** 네이티브 컨텍스트 메뉴를 막는다. 전파는 멈추지 않는다(결정 IL3) — stopPropagation 을
+      부르면 미래에 우클릭을 쓰려는 코드가 설명 없이 죽는다. capture:true 도 쓰지 않는다 —
+      이 문서 어디에도 contextmenu 리스너가 없어(전수 grep) 막을 전파가 없다. */
+  function preventNativeContextMenu(event){ event.preventDefault(); }
+
+  document.addEventListener('contextmenu', preventNativeContextMenu);
+
+  // PiP 문서 배선 — .wrap 이 PiP 창으로 이동하면(위 폴링 IIFE) 그 서브트리는 별도 document
+  // 소속이 되어 방금 등록한 리스너가 닿지 않는다(전제 6). documentPictureInPicture 의
+  // 'enter' 이벤트로 창이 열릴 때마다 새로 배선한다 — 폴링 IIFE 의 PiP 진입 콜백(위
+  // pipButton 클릭 리스너의 .then 절) 안에 한 줄 끼워 넣지 않는다: 그 IIFE 는 이미 "두
+  // IIFE 사이에 새 결합을 만들지 않는다"는 원칙을 코드 주석으로 갖고 있고(위 465~473행
+  // 부근), 테마 IIFE 가 pipWindow 지역 변수 대신 표준 API 를 쓰는 것과 같은 패턴을
+  // 재사용한다(결정 IL4).
+  // 기능 감지 없이 바로 addEventListener 를 부르면 Safari·Firefox 에서 대상이 undefined 라
+  // 던져 이 IIFE 전체가 죽는다 — 그러면 위 document 리스너 등록 이후에 실행되는 코드가
+  // 없다는 점이 중요하다(GOTCHA 8): document 리스너를 먼저 등록해 뒀으므로 이 블록이 던져도
+  // 메인 문서의 우클릭 차단은 이미 살아 있다.
+  if('documentPictureInPicture' in window){
+    window.documentPictureInPicture.addEventListener('enter', function(){
+      // enter 시점엔 window.documentPictureInPicture.window 가 이미 설정돼 있다(결정 IL4).
+      window.documentPictureInPicture.window.document
+        .addEventListener('contextmenu', preventNativeContextMenu);
+    });
+  }
+})();
+
+(function(){
+  // 작업 추적 제목의 말줄임 툴팁(요구 1, 결정 LT1~LT9) — 허브의 속성 기반 트리거 싱글턴과
+  // 같은 종류의 코드지만(결정 LT3, 코드 중복은 두 템플릿이 각각 단독 파일로 배포돼야 하는
+  // 제약의 결과다) 트리거가 `.entry .lead` 하나뿐이라 훨씬 작다: 허브의 속성 트리거 시스템·
+  // aria-describedby 배선(결정 LT5)·focusin 트리거(결정 LT7)·click 숨김(결정 LT9)이 전부
+  // 없다. 마크업에 문구를 각인하지 않는다(결정 LT2, GOTCHA 6 — 이 파일에는 각인 방식의
+  // 속성 이름조차 문자열로 넣지 않는다, 회귀 검사 T22-150) — hover 시점에 실제 레이아웃을
+  // 재서 잘렸을 때만 띄운다(결정 LT6).
+  var TOOLTIP_SHOW_DELAY_MS = 120;          // hover-intent. 허브 결정 T3 과 같은 값·같은 이유
+  var TOOLTIP_GAP_PX = 8;                   // 트리거와 툴팁 사이 간격
+  var TOOLTIP_VIEWPORT_MARGIN_PX = 8;       // 뷰포트 경계 최소 여백. CSS 의 calc(100vh - 16px) 이 이 값의 2배다
+  var TOOLTIP_OVERFLOW_TOLERANCE_PX = 1;    // flex 소수점 폭의 정수 반올림 오차에 대한
+                                             // 예방(결정 LT6). 실측(2026-08-26, Claude Code
+                                             // 내장 브라우저/Chromium 기반, 뷰포트 1280px,
+                                             // 허브 상세 패널 iframe 549px, M1): 잘린 두
+                                             // 항목은 clientWidth 348 대 scrollWidth
+                                             // 372·425(overflow 24·77)로 툴팁이 떴고, 실측용
+                                             // 임시 삽입한 짧은 제목 항목은 overflow 0 으로
+                                             // 안 떴다(class="tooltip" 유지,
+                                             // visibility:hidden). 단독 탭(.wrap 860px)의
+                                             // 같은 두 항목은 overflow 0 으로 안 떴다가,
+                                             // .wrap 을 420px 로 좁히자 overflow 가 각각
+                                             // 153·206 으로 늘며 떴다 — 같은 문자열이 렌더
+                                             // 폭에 따라 잘리기도 안 잘리기도 한다는 결정 LT2
+                                             // 의 전제가 실측으로 확인됐다. 관측된 overflow
+                                             // 는 0 이거나 24 이상이었고 이 허용 오차 1px
+                                             // 구간에 걸리는 사례는 이번 실측에 없었다 — 이
+                                             // 상수는 여전히 flex 소수점 반올림에 대한
+                                             // 예방으로 남는다(목격된 오차 사례가 아니다).
+  var TOOLTIP_VISIBLE_CLASS = 'tooltip-visible';
+  var LEAD_TRIGGER_SELECTOR = '.entry .lead';   // 작업 추적 항목 제목만 트리거다(결정 LT2)
+
+  // id 문자열을 상수로 따로 두지 않는다 — 아래 두 곳(조회·hoverable 판정)에 리터럴로 그대로
+  // 적어 회귀 검사(폴링 IIFE 밖에 있음의 대리 판정)가 문자열 검색만으로 이 줄을 찾게 한다.
+  var tooltipEl = document.getElementById('dz-tooltip');
+  if(!tooltipEl) return;
+  var currentTrigger = null;                // 표시 중인 트리거(없으면 null)
+  var showTimerId = null;
+
+  /** 트리거 사각형·툴팁 크기·뷰포트로 {left, top} 을 계산한다. 순수 함수 — DOM 에 닿지 않는다.
+      실측(2026-08-26, Claude Code 내장 브라우저/Chromium 기반, 뷰포트 1280px, 허브 상세
+      패널 .detail-panel 550px/iframe 549px, M2) — 패널 최하단 항목(프레임 하단 40px 위)에
+      hover: lead top 602 · 프레임 높이 642 로 아래 공간이 부족해 위로 뒤집혔다(툴팁 bottom
+      593 ≤ lead top 602). 좌우는 left 127px · 오른쪽 여백 28px 로 둘 다
+      TOOLTIP_VIEWPORT_MARGIN_PX(8) 이상을 유지해 클램프가 정상 동작했다. 툴팁 폭
+      394px(max-width 계산값 420px 이하) · 높이 29px(1줄). 계산 스타일도 확인:
+      max-width:420px · overflow-wrap:anywhere · white-space:normal(결정 LT4 대로
+      pre-wrap 이 아니다). */
+  function tooltipPosition(triggerRect, tooltipWidth, tooltipHeight, viewportWidth, viewportHeight){
+    var left = triggerRect.left + triggerRect.width / 2 - tooltipWidth / 2;
+    left = Math.max(TOOLTIP_VIEWPORT_MARGIN_PX, Math.min(left, viewportWidth - tooltipWidth - TOOLTIP_VIEWPORT_MARGIN_PX));
+    var below = triggerRect.bottom + TOOLTIP_GAP_PX;
+    var above = triggerRect.top - tooltipHeight - TOOLTIP_GAP_PX;
+    var top = (below + tooltipHeight + TOOLTIP_VIEWPORT_MARGIN_PX <= viewportHeight) ? below : above;
+    top = Math.max(TOOLTIP_VIEWPORT_MARGIN_PX, Math.min(top, viewportHeight - tooltipHeight - TOOLTIP_VIEWPORT_MARGIN_PX));
+    return {left: left, top: top};
+  }
+
+  /** 말줄임으로 실제로 잘렸는지 판정한다. 반올림 오차 TOOLTIP_OVERFLOW_TOLERANCE_PX 를
+      허용한다(결정 LT6) — .lead 는 flex:1 인 flex 아이템이라 소수점 폭을 갖고,
+      scrollWidth·clientWidth 는 정수로 반올림된다. */
+  function isLeadTruncated(element){
+    return element.scrollWidth - element.clientWidth > TOOLTIP_OVERFLOW_TOLERANCE_PX;
+  }
+
+  /** 표시를 끄고 지연 타이머를 취소한다. 언제 불려도 안전하다. */
+  function hideTooltip(){
+    if(showTimerId !== null){ clearTimeout(showTimerId); showTimerId = null; }
+    tooltipEl.classList.remove(TOOLTIP_VISIBLE_CLASS);
+    currentTrigger = null;
+  }
+
+  /** 문구를 채우고 위치를 잡아 표시한다. */
+  function showTooltip(trigger){
+    if(showTimerId !== null){ clearTimeout(showTimerId); showTimerId = null; }
+    tooltipEl.textContent = trigger.textContent;   // innerHTML 이 아니다 — 로그 제목에는
+                                                    // 이스케이프된 코드 조각이 들어올 수 있어
+                                                    // innerHTML 로 넣으면 이중 해석된다
+    tooltipEl.style.left = '0px';
+    tooltipEl.style.top = '0px';                    // 측정 전 좌표 리셋 — 이전 위치가 남아
+                                                     // 있으면 offsetWidth 가 클램프된 값으로
+                                                     // 측정돼 위치가 어긋난다(허브 GOTCHA 3)
+    var tooltipWidth = tooltipEl.offsetWidth;
+    var tooltipHeight = tooltipEl.offsetHeight;
+    var position = tooltipPosition(
+      trigger.getBoundingClientRect(), tooltipWidth, tooltipHeight,
+      window.innerWidth, window.innerHeight
+    );
+    tooltipEl.style.left = position.left + 'px';
+    tooltipEl.style.top = position.top + 'px';
+    tooltipEl.classList.add(TOOLTIP_VISIBLE_CLASS);
+    currentTrigger = trigger;
+  }
+
+  /** 표시 요청. 이미 다른 트리거를 보여주는 중이면 지연 없이 즉시 교체한다. */
+  function requestTooltip(trigger){
+    if(trigger === currentTrigger) return;
+    if(showTimerId !== null){ clearTimeout(showTimerId); showTimerId = null; }
+    if(currentTrigger){ showTooltip(trigger); return; }
+    showTimerId = setTimeout(function(){ showTimerId = null; showTooltip(trigger); }, TOOLTIP_SHOW_DELAY_MS);
+  }
+
+  // 이벤트 배선 — 전부 document 위임이다. 1분 폴링이 #dz-log 의 자식을 통째로 교체하므로
+  // (전제 2) 개별 .lead 에 리스너를 붙이면 그 재동기화 이후 전부 죽는다.
+  document.addEventListener('mouseover', function(event){
+    var trigger = event.target.closest(LEAD_TRIGGER_SELECTOR);
+    if(trigger && isLeadTruncated(trigger)){ requestTooltip(trigger); return; }
+    if(trigger){
+      // 잘리지 않은 항목도 트리거 셀렉터(.entry .lead)에는 똑같이 걸린다 — 마크업에 잘림을
+      // 각인하지 않으므로(결정 LT2) 당연하다. 여기서 그냥 return 하면(과거 버전의 결함) 두
+      // 사고가 난다: ① 잔상 — 잘린 항목 A 의 툴팁이 떠 있는 채로 안 잘린 항목 B 로 넘어가도
+      // A 의 툴팁이 지워지지 않고 B 위에 그대로 남는다. ② 지연 팝업 — A 에 올린 지
+      // TOOLTIP_SHOW_DELAY_MS 가 지나기 전에 B 로 넘어가도 대기 타이머(showTimerId)가
+      // 취소되지 않아, 타이머가 만료되는 순간 포인터가 이미 B 위인데 A 의 툴팁이 뒤늦게
+      // 뜬다. 두 사고 모두 재현에 특별한 조건이 필요 없다 — .entry 간격이 좁아(padding:8px
+      // 4px + border-bottom:1px) 짧은 제목과 긴 제목이 섞인 로그를 위아래로 훑기만 해도
+      // 마우스가 두 .lead 사이 여백을 거치지 않고 곧장 넘어간다. hideTooltip() 은 표시 중인
+      // 툴팁과 대기 타이머를 한 번에 정리한다 — 결정 LT6 이 "왜 안 띄우는가"를 답한다면,
+      // 이 호출은 "왜 숨기기까지 해야 하는가"를 답한다.
+      hideTooltip();
+      return;
+    }
+    if(event.target.closest('#dz-tooltip')) return;            // hoverable(WCAG 1.4.13)
+    hideTooltip();
+  });
+  document.addEventListener('mouseleave', function(){ hideTooltip(); });   // 포인터가 창 밖으로 나가면 mouseover 가 더 안 온다
+  document.addEventListener('keydown', function(event){
+    if(event.key === 'Escape') hideTooltip();                  // dismissible(WCAG 1.4.13)
+  });
+  document.addEventListener('scroll', function(){ hideTooltip(); }, {capture: true, passive: true});
+  window.addEventListener('resize', function(){ hideTooltip(); });
+  // click 에서는 숨기지 않는다(허브와 다른 점) — .lead 아래의 유일한 클릭 대상은 <summary>
+  // 토글이고, 그것은 .lead 의 폭도 텍스트도 바꾸지 않는다(결정 LT9 부기).
+
+  // 1분 폴링이 #dz-log 의 자식을 통째로 교체한다(전제 2) — 트리거 노드가 파괴되는데 포인터가
+  // 멈춰 있으면 마우스 이벤트가 안 와 낡은 문구가 남는다(허브 결정 T6 이 기록한 사고와 같은
+  // 형태). #dz-log 노드 자신은 살아남으므로(innerHTML 대입은 컨테이너를 바꾸지 않는다) 한
+  // 번만 observe 하면 된다(결정 LT9).
+  // 실측(2026-08-26, Claude Code 내장 브라우저/Chromium 기반, 뷰포트 1280px, M3) — 툴팁을
+  // 띄운 채 파일의 #dz-updated 를 12:21→12:22 로 바꾸고 window.dzRequestRefresh() 로 폴링을
+  // 강제: 전 class="tooltip tooltip-visible"·visibility:visible → 후 class="tooltip"·
+  // visibility:hidden, #dz-updated 도 12:22 로 갱신됨을 확인했다. 부수 관측 — 실측 도중
+  // 60초 자연 폴링이 돌아 툴팁이 사라진 장면도 우연히 관측됐다: 이 경로는 합성이 아니라
+  // 실제 주기 폴링에서도 그대로 발화한다.
+  var logElForTooltipObserver = document.getElementById('dz-log');
+  if(logElForTooltipObserver){
+    new MutationObserver(function(){ hideTooltip(); })
+      .observe(logElForTooltipObserver, {childList: true});
+  }
+})();
+</script>
+</body>
+</html>
