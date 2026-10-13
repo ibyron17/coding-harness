@@ -105,7 +105,7 @@ scope 는 대상 프로젝트의 `./CLAUDE.md` 를 건드리지 않고, user sco
 `~/.claude/CLAUDE.md` 를 안전하게 은퇴시킨다. 판정 규칙은 아래
 「`~/.claude/CLAUDE.md` 은퇴」 절 참고.)
 
-상시 컨텍스트를 차지하는 것은 **CLAUDE.md 1개 + rules 16개 = 17개(실측 54,660B)** 뿐이다.
+상시 컨텍스트를 차지하는 것은 **CLAUDE.md 1개 + rules 16개 = 17개(실측 54,892B)** 뿐이다.
 이 수치는 `tests/run.sh` 의 T26 이 예산 상한으로 강제한다(래칫 — 내리는 것은 자유, 올리려면
 그 값을 고치는 커밋에 근거를 남겨야 한다).
 나머지는 조건이 맞을 때(rules 30개) 또는 호출할 때(agents 4개, commands 8개)만 로드된다.
@@ -236,7 +236,7 @@ scope 는 대상 프로젝트의 `./CLAUDE.md` 를 건드리지 않고, user sco
 | react-native/ | 8 | **조건부** | React Native/Expo 확장 (accessibility·production-readiness 포함) |
 | python/ | 5 | **조건부** | `paths`(py/pyi) 매칭 시 로드 |
 
-**항상 로드되는 rules**: 16개 (CLAUDE.md 포함 시 17개, 실측 54,660B — `tests/run.sh` T26 예산 상한으로 강제)
+**항상 로드되는 rules**: 16개 (CLAUDE.md 포함 시 17개, 실측 54,892B — `tests/run.sh` T26 예산 상한으로 강제)
 
 `common/karpathy-guidelines.md` 는 Andrej Karpathy의 관찰에서 파생된, LLM 코딩의 흔한 실패(추측성
 코드·과잉 수정·불명확한 목표)를 줄이기 위한 행동 지침이며, `paths` frontmatter가 없어 **설치된
@@ -264,6 +264,43 @@ manifest 를 갱신한다. **레포는 최신인데 설치본만 낡은 경우**
   이 머신에서 의도적으로 커스터마이징한 것으로 보이는 파일만 이름을 짚어 물어본다.
 - **멱등**: 같은 명령을 여러 번 실행해도 안전하다. 이미 최신이면 그대로 종료하고, 재설치가
   필요해도 배포 파일만 다시 복사해 부작용이 없다.
+
+## 버전
+
+하네스의 릴리스 번호는 저장소 맨 위 `VERSION` 파일(SemVer `X.Y.Z` 한 줄)이 정본이다. 설치 기록의
+`harness_version` · 설치 출력 첫 줄(`coding-harness 1.0.0 설치`) · `/harness-update` 보고에 이 번호가
+찍힌다. 설치 기록의 `version`(3)은 기록 파일의 **형식 번호**이고 릴리스 번호와 무관하다.
+
+- **확인 방법**: 저장소에서 `cat VERSION`, 설치본은 `~/.claude/.coding-harness.json` 의 `harness_version`
+  (`unknown` 이면 `VERSION` 이 없거나 형식이 틀린 사본에서 설치한 것이다. 버전 도입 이전 설치는
+  `harness_version` 필드 자체가 없다 — 같은 의미다). 릴리스 사이의 `develop` 을
+  설치하면 번호는 직전 릴리스인데 내용은 그보다 앞서 있다 — 그래서 `/harness-update` 보고에 짧은
+  커밋 해시를 함께 적는다.
+- **올리는 때**: 릴리스할 때만 올리고 같은 커밋에 태그 `vX.Y.Z`(주석 태그)를 단다. 평소 커밋은
+  `VERSION` 을 건드리지 않는다 — 동시 세션 병합 충돌과 새 버전 알림 남발을 막으려는 규칙이다.
+  원격에 태그를 올리는 것(태그 푸시)이 곧 릴리스 공표다. GitHub 릴리스 페이지는 만들지 않는다(태그만).
+- **무엇을 올리나**: 팀원 머신에 실제로 닿는 것(`rules/` · `agents/` · `commands/` · 허브 코드 ·
+  `install.sh` · `removals.txt`)이 바뀐 경우만 릴리스 사유다. `docs/` · `tests/` · `README.md` ·
+  `CLAUDE.md` 만 바뀌었으면 릴리스하지 않는다.
+
+  | 수준 | 언제 | 예 |
+  |------|------|-----|
+  | MAJOR | 팀원이 손으로 무언가 해야 하거나 옛 사용법이 통하지 않는 변경 | 커맨드·에이전트 삭제·개명, `install.sh` 옵션 삭제·의미 변경, 옛 `/harness-update` 가 못 읽는 설치 기록 형식 변경, 허브 `config.json` 키 삭제·의미 변경, 허브 포트 변경, 요구 python 최소 버전 상향 |
+  | MINOR | 하위 호환 기능 추가 | 새 커맨드·에이전트·규칙, 허브 새 기능, 새 설정 키, 새 `install.sh` 옵션 |
+  | PATCH | 하위 호환 수정 | 결함 수정, 규칙·커맨드 문구 수정, 성능 개선, 리팩토링 |
+
+  여러 수준이 섞이면 가장 높은 것을 쓴다. 커밋 접두(`feat:` · `fix:`)는 참고일 뿐이고 MAJOR 는
+  위 표로 판정한다.
+- **릴리스 절차** (`main` 은 릴리스 브랜치, 작업은 `develop` — `CLAUDE.md` §5 「브랜치」):
+  1. `git log --oneline v<직전>..develop -- rules agents commands <허브 코드 폴더> install.sh removals.txt`
+     — 비어 있으면 릴리스하지 않는다.
+  2. 위 표로 수준을 정해 `develop` 의 `VERSION` 을 고친다.
+  3. `bash tests/run.sh --only T41` 통과 확인 후 커밋(`chore: 버전을 X.Y.Z 로 올린다`).
+  4. `git switch main && git merge --ff-only develop` 로 `main` 에 반영하고
+     `git tag -a vX.Y.Z -m "coding-harness X.Y.Z"` (로컬).
+  5. **사용자 확인 뒤** `git push origin main develop` · `git push origin vX.Y.Z`.
+- **허브 알림**: 허브 서버가 켜져 있으면 새 릴리스 태그가 올라왔을 때 화면에 알림 버튼이 뜬다 —
+  허브 설명서의 「새 버전 알림」.
 
 ## 안전장치
 
@@ -319,6 +356,7 @@ version ≥ 3 → skip" 규칙이 먼저 이겨 안내 없이 조용히 넘어�
 coding-harness/
 ├── README.md                      # 이 파일
 ├── install.sh                     # 배포 스크립트 (순수 bash, 외부 의존 없음)
+├── VERSION                        # 릴리스 번호 정본(SemVer 한 줄) — 릴리스할 때만 올린다 (배포 대상 아님)
 ├── CLAUDE.md                      # 프로젝트 지침(배포 대상 아님) — coding-harness 자신의 아키텍처·검증 명령
 ├── removals.txt                   # 툼스톤 목록 — 레포에서 제거된 관리 파일의 대상측 삭제 대상 (배포 대상 아님)
 ├── rules/                         # 46개 규칙 (JS/TS·React·웹·RN/Expo·Python 스택 큐레이션 + workflow)
@@ -346,7 +384,7 @@ coding-harness/
 │   └── hub.md
 ├── hub/                            # 통합 허브 — 별도 설치(hub/README.md). 진행 기록(대시보드)
 │                                   #   자산도 이 안에서 배포된다(hub/bin·hub/rules)
-├── docs/prps/                      # 설계·조사 문서 85개 — coding-harness.md·hub-dashboard.md·
+├── docs/prps/                      # 설계·조사 문서 86개 — coding-harness.md·hub-dashboard.md·
 │   │                               #   dashboard-rationale.md 등
 │   └── ab-artifacts/               # 모델×스캐폴딩 A/B 실험 원본 6건 — 승인된 설계가 아니다
 ├── docs/images/                    # hub/README.md 의 스크린샷 3장 — 허브 화면 2장은 가상 데이터, 진행 기록 화면 1장은 이 저장소 자신의 작업 기록

@@ -73,7 +73,7 @@ Code 프로젝트**의 진행 상황(프로젝트/세션/단계)을
 hub/install.sh
 ```
 
-`~/.claude/hub/bin/` 에 33개 파일을, `~/.claude/rules/hub/` 에 규칙 1개(허브 사용자만 받는
+`~/.claude/hub/bin/` 에 35개 파일을, `~/.claude/rules/hub/` 에 규칙 1개(허브 사용자만 받는
 진행 기록 지침, [`rules/dashboard-recording.md`](rules/dashboard-recording.md))를 설치한다.
 `--scope` 인자가 없다 — 설치 위치는 이 둘뿐이며, 머신 전역 자산이라 프로젝트마다 사본을
 두지 않는다.
@@ -208,6 +208,13 @@ hub/install.sh --force      # 1. 설치본 갱신
 - **`usage_api_enabled: true`** 는 macOS Keychain 의 Claude Code OAuth 자격증명을 읽어 비공개 usage API 를
   호출한다(`hub_usage_fetch.py` 가 유일한 접점). 자격증명은 그 파일의 지역 변수로만 존재하고 로그·파일·화면
   어디에도 남지 않는다. 기본값은 **off** 다.
+- **서버가 켜져 있으면 6시간마다 새 릴리스 태그를 확인한다(기본 켜짐).** coding-harness 저장소 폴더(설치 기록
+  `~/.claude/.coding-harness.json` 의 `repo_path`)에서 `git ls-remote --tags --refs origin` 을 한 번 실행한다 —
+  `git fetch` 와 같은 상대(`origin`)에게 보내는 같은 종류의 요청이고, 저장소의 브랜치·태그·작업 트리는 바꾸지 않는다.
+  보내는 것은 git 이 원격에 하는 일반 요청뿐이고 허브가 덧붙이는 정보는 없다(원격에는 이 머신의 IP 와 저장소를 확인했다는
+  사실이 보인다). 결과(`release_check.json`)에는 시각·최신 버전·실패 사유만 남는다. 끄는 수단은 `config.json` 의
+  `update_check_enabled: false` 이고, 끄면 스레드를 띄우지 않으며 이미 남은 기록도 읽지 않는다(설치된 버전 표기는 로컬 정보라
+  계속 보인다). 서버가 꺼져 있으면 확인하지 않는다 — `/hub`(인자 없음)의 1회 수집은 네트워크를 쓰지 않는다. 아래 「새 버전 알림」.
 - **세션 카드의 모델·effort 와 한도 중단 판정을 위해** `~/.claude/projects/<인코딩>/<session_id>.jsonl`
   (Claude Code 의 transcript 파일)의 **꼬리 128KiB** 를 수집 때마다 읽는다. 읽는 값은 위 프롬프트 줄과 그 줄의
   `model`·`effort`·`type`·`isSidechain`·`isMeta`·`isApiErrorMessage`·`error`·`timestamp`·`quotaLimits.resetsAt`
@@ -584,6 +591,26 @@ Claude Code 와 같은 규칙이다: 영문자·숫자가 아닌 글자(`/`·`.`
 넘으면 앞 200자 뒤에 `-` 와 원래 경로의 해시를 붙인다. 매칭되지 않은 이름은 스냅샷의 `unresolved_dir_names` 에
 남지만 **화면에는 표시하지 않는다**.
 
+## 새 버전 알림
+
+coding-harness 의 릴리스 번호(저장소 루트 `VERSION`, 루트 [`README.md`](../README.md) 「버전」)를 허브 화면에 보인다.
+
+- **설치된 버전**: 제목 옆에 `v1.0.0` 이 작게 보인다(마우스를 올리면 짧은 커밋 해시와 설치 시각). 출처는 `~/.claude/.coding-harness.json`
+  의 `harness_version` 이고 **user scope 설치 기록만** 읽는다 — project scope 설치는 대상 밖이고, 설치 기록이 없는 허브 단독 설치에서는
+  표기도 알림도 없다(지금 화면 그대로).
+- **새 버전 알림**: 원격에 새 릴리스 태그(`vX.Y.Z`)가 올라오고 설치된 버전보다 크면 오른쪽 위에 파란 알림 버튼(`새 버전 1.1.0`)이
+  뜬다. **누르면 `/harness-update` 가 클립보드에 복사될 뿐 업데이트를 실행하지 않는다** — Claude Code 에 붙여 넣어 실행한다(허브는
+  읽기 전용이고 서버에는 쓰기 경로가 없다). 클립보드를 쓸 수 없는 환경에서는 「/harness-update 를 입력하세요」가 뜨고 툴팁에도
+  명령이 적혀 있다. 도입 이전 설치(버전 필드 없음)는 어떤 릴리스보다 오래된 것으로 본다. 설치된 버전이 최신 태그보다 크면
+  (태그 푸시 전에 설치한 관리자) 알림이 없다.
+- **언제 확인하나**: 서버가 켜져 있는 동안 6시간에 한 번(서버를 자주 재시작해도 이 간격은 `release_check.json` 의 마지막 시도 시각으로
+  지켜진다). 비교는 매 수집마다 "설치 기록(새로 읽음) vs 캐시된 최신 버전"으로 하므로 `/harness-update` 가 끝나면 다음 수집에서
+  알림이 사라진다. 확인이 실패해도(오프라인·인증 등) 직전에 알아낸 최신 버전은 지우지 않고 화면에 경고도 띄우지 않는다 — 사유는
+  `/hub status` 의 `release_check.last_failure_reason` 에서만 보인다.
+- **끄기**: `config.json` 의 `update_check_enabled: false`(기본 `true`). 위 「프라이버시 고지」에 호출 내용이 있다.
+- **한계**: 허브 자신의 버전은 따로 추적하지 않는다 — 알림의 뜻은 "coding-harness 설치가 최신 릴리스보다 뒤처졌다"이고, 해결책
+  `/harness-update` 가 허브까지 함께 맞춘다. 360px 같은 좁은 폭에서는 제목 줄이 두 줄로 접힌다.
+
 ## 설정 — `~/.claude/hub/config.json` (선택, 없으면 전부 기본값)
 
 | 필드 | 기본값 | 뜻 |
@@ -599,6 +626,7 @@ Claude Code 와 같은 규칙이다: 영문자·숫자가 아닌 글자(`/`·`.`
 | `show_usage_panel` | `true` | `false` 면 사용량 패널을 끈다 — 캡처 파일(`rate_limits.json`)을 아예 읽지 않는다 |
 | `show_account_info` | `true` | `false` 면 사용량 패널의 계정 줄(요금제·조직·이메일)을 끈다 — `~/.claude.json` 을 아예 읽지 않는다. `show_usage_panel: false` 면 이 값과 무관하게 읽지 않는다 |
 | `usage_api_enabled` | `false` | `true` 면 상주 서버가 macOS Keychain 자격증명으로 사용량 API 를 폴링한다(옵트인, macOS 전용). `show_usage_panel` 도 함께 `true` 여야 폴링이 실제로 일어난다 |
+| `update_check_enabled` | `true` | `false` 면 새 릴리스 태그 확인(`git ls-remote --tags`, 6시간마다)을 하지 않는다 — 스레드를 띄우지 않고 기록(`release_check.json`)도 읽지 않아 알림이 뜨지 않는다. 설치된 버전 표기는 로컬 정보라 계속 보인다. 「새 버전 알림」 참조 |
 | `usage_api_poll_interval_seconds` | `300` | 사용량 API 폴링 기본 주기(초). 연속 실패마다 2배씩 늘어 최대 60분까지 늦춰진다. 하한 **60초**(그 미만은 60초로 올라간다) |
 
 ## 제거
@@ -617,12 +645,13 @@ hub/install.sh --uninstall
 
 ```
 ~/.claude/hub/
-├── bin/                        # hub/install.sh 가 배포하는 실행 코드 33개 파일(`hub_live_session.py` 등)
+├── bin/                        # hub/install.sh 가 배포하는 실행 코드 35개 파일(`hub_live_session.py` 등)
 ├── config.json                 # 선택
 ├── rate_limits.json             # statusLine 등록 또는 usage_api_enabled 폴링이 채우는 한도 캡처
 ├── session_costs/<session_id>.json  # statusLine 등록이 채우는 세션별 비용·컨텍스트 캡처(세션당 파일 하나)
 ├── last_collect_error.json      # 마지막 수집 실패(시각·사유) — 다음 수집이 성공하면 지워진다
 ├── last_usage_api_error.json    # 사용량 API 폴링 마지막 실패(있는 경우)
+├── release_check.json           # 새 릴리스 태그 확인의 마지막 시도·성공 시각·최신 버전·실패 사유(서버 스레드만 쓴다)
 ├── server.json                  # 서버가 bind 직후 1회 쓰는 PID·포트·기동 시각·기동 경로
 ├── server_heartbeat             # 유지보수 티커가 매 사이클 touch — 생존 판정의 정본
 ├── last_collect_success         # 마지막 수집 성공 시각 — 수집 건강 판정의 정본
@@ -640,4 +669,5 @@ hub/install.sh --uninstall
 `../docs/prps/` 아래)는 진행 기록 `dashboard-native-data-source.md`·`dashboard-into-hub.md`, 프롬프트 발췌·서브에이전트
 실행 줄 `hub-agent-runs-and-prompt-source.md`·`hub-agent-title-and-excerpt-freshness.md`, 백그라운드 대기
 `hub-subagent-background-pause.md`, 활동 표시 `hub-live-activity.md`, 계정 줄 `hub-usage-panel-account.md`, 한도로
-멈춘 세션 `hub-rate-limit-interruption.md`, 트리·카드 상세보기 `hub-ui-4-issues.md` 다.
+멈춘 세션 `hub-rate-limit-interruption.md`, 트리·카드 상세보기 `hub-ui-4-issues.md`, 새 버전 알림
+`harness-versioning.md` 다.

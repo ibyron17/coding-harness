@@ -41,6 +41,7 @@ import hub_live_session_read
 import hub_model
 import hub_parse
 import hub_project
+import hub_release_read
 import hub_session_cost
 import hub_session_facts
 import hub_subagent
@@ -654,9 +655,7 @@ def collect_snapshot(now_ms: int) -> hub_model.HubSnapshot:
     )
     tier3_by_path = {resolved[name]: mtime for name, mtime in tier3_by_encoded_name.items() if name in resolved}
 
-    warnings: list[str] = [
-        *config_warnings, *event_read_warnings, *tier1_read_warnings, *tier3_warnings,
-    ]
+    warnings: list[str] = [*config_warnings, *event_read_warnings, *tier1_read_warnings, *tier3_warnings]
     stale_after_ms = config.stale_after_minutes * 60 * 1000
     (
         tail_by_session_id, workflow_by_session_id, subagent_meta_by_agent_id,
@@ -670,15 +669,17 @@ def collect_snapshot(now_ms: int) -> hub_model.HubSnapshot:
         live_roster, live_activity, _prune_and_read_session_costs(sessions_by_path, now_ms, config),
     )
     usage, rate_limit_resets, account, panel_warnings = _usage_panel_for_snapshot(now_ms, config)
+    harness_version, harness_version_warnings = hub_release_read.read_harness_version_view(config)
     return hub_model.HubSnapshot(
         collected_at_ms=now_ms,
         projects=projects,
         unresolved_dir_names=unresolved,
-        warnings=(*warnings, *panel_warnings),
+        warnings=(*warnings, *panel_warnings, *harness_version_warnings),
         usage=usage,
         rate_limit_resets=rate_limit_resets,
         account=account,
         template_stamp=read_template_stamp(),
+        harness_version=harness_version,
     )
 
 

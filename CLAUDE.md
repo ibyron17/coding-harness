@@ -54,4 +54,6 @@ bash -n install.sh && bash -n hub/install.sh
   프로젝트 우선 적용이다(project CLAUDE.md 가 user-level rules 보다 우선순위가 높다).
 - 레포에서 관리 파일(rules/agents/commands)을 지우거나 개명하는 커밋은 `removals.txt`
   에 옛 경로를 추가한다(툼스톤 — 대상 머신의 낡은 사본을 청소하는 영구 메커니즘).
+- **버전**: 루트 VERSION(SemVer)이 정본이다. 릴리스 때만 올리고 그 커밋에 태그 vX.Y.Z 를 단다(평소
+  커밋은 건드리지 않는다). 태그 푸시는 사용자 확인 뒤. 규칙: README 「버전」.
 - 설계 문서(PRP)는 `docs/prps/{기능명}.md` 에 쓴다.

@@ -6,7 +6,9 @@
 수집 상한 보장만 도는 유지보수 티커(`_maintenance_loop`)와, 사용량 API 폴링 전용 스레드
 (`_usage_api_poll_loop`, 결정 AR5). 원래는 폴링도 유지보수 티커가 겸했으나, 원격 호출
 (최악 15초 블로킹, hub_usage_fetch.py)이 하트비트와 같은 스레드에 있으면 하트비트 TTL(15초)
-산술이 성립하지 않아(감사 B-2) 전용 스레드로 분리했다.
+산술이 성립하지 않아(감사 B-2) 전용 스레드로 분리했다. 설치된 하네스의 새 릴리스 태그를 확인하는
+전용 스레드(`_release_check_loop`, docs/prps/harness-versioning.md 결정 UN2)가 하나 더 있고,
+`update_check_enabled` 가 꺼지면 뜨지 않는다.
 이 모듈은 I/O 다(HTTP 소켓·파일·시그널) — 순수 로직은 hub_model.py·hub_server_state.py·
 hub_usage.py 의 관련 함수들에 있다. 프로젝트 대시보드 경로(`_serve_project_dashboard`)는
 docs/prps/dashboard-into-hub.md M2(HD5)부터 레지스트리 값(.jsonl)을 읽어 hub_parse·
@@ -30,6 +32,8 @@ import hub_dashboard_render
 import hub_model
 import hub_parse
 import hub_project
+import hub_release
+import hub_release_read
 import hub_server_state
 import hub_server_state_read
 import hub_usage
@@ -442,8 +446,52 @@ def _usage_api_poll_loop(config: hub_model.HubConfig, stop_event: threading.Even
         stop_event.wait(config.server_heartbeat_interval_seconds)
 
 
+def _run_release_check_gate(now_ms: int, last_attempt_at_ms: int | None) -> int | None:
+    """새 릴리스 태그 확인 게이트 1사이클(docs/prps/harness-versioning.md 결정 UN2).
+
+    주기(6시간)가 안 지났으면 아무것도 하지 않고 이전 시도 시각을 그대로 돌려준다. 시도했으면 — 사이클이
+    예외로 끝났더라도 — 그 시각을 돌려준다: 시도 시각 갱신이 예외로 무산되면 다음 깨우기가 같은 예외를
+    하트비트 주기마다 반복한다(AR4·감사 B-1 이 사용량 폴링에서 실측한 결함). run_release_check_cycle 은
+    예외를 올리지 않는 계약이지만 그 계약 밖에서 새는 예외까지 여기서 잡아 stderr 에 남긴다.
+    """
+    if not hub_release.should_attempt_release_check(now_ms, last_attempt_at_ms, hub_release.RELEASE_CHECK_INTERVAL_MS):
+        return last_attempt_at_ms
+    try:
+        hub_release_read.run_release_check_cycle(now_ms)
+    except Exception as error:
+        print(f"릴리스 확인 사이클에서 분류되지 않은 예외: {error}", file=sys.stderr)
+    return now_ms
+
+
+def _release_check_loop(config: hub_model.HubConfig, stop_event: threading.Event) -> None:
+    """새 릴리스 태그 확인 전용 데몬 스레드(결정 UN2). 원격 호출(최악 15초 블로킹)을 하트비트 티커에 태우지
+    않으려고 사용량 API 폴링(`_usage_api_poll_loop`)처럼 스레드를 따로 둔다(결정 AR5 선례).
+
+    하트비트 주기로 깨어 게이트(`_run_release_check_gate`)만 본다 — 실제 확인 간격은 게이트가 정하므로
+    새 설정 키를 만들지 않는다(YAGNI). 시작할 때 기록의 마지막 시도 시각을 이어받아, 서버를 자주 재시작해도
+    6시간에 한 번을 넘지 않는다. 스레드 사망 = 확인 영구 정지라 최후선은 stderr 만 남긴다(AR4·AR5 선례).
+    """
+    previous_record = hub_release_read.read_release_check_record()
+    last_attempt_at_ms = previous_record.last_attempt_at_ms if previous_record else None
+    while not stop_event.is_set():
+        try:
+            last_attempt_at_ms = _run_release_check_gate(int(time.time() * 1000), last_attempt_at_ms)
+        except Exception as error:
+            print(f"릴리스 확인 루프에서 처리되지 않은 예외: {error}", file=sys.stderr)
+        stop_event.wait(config.server_heartbeat_interval_seconds)
+
+
+def _start_release_check_thread(config: hub_model.HubConfig, stop_event: threading.Event) -> threading.Thread | None:
+    """`update_check_enabled` 가 참일 때만 확인 스레드를 띄운다(결정 UN4 — 꺼지면 스레드 자체가 없다)."""
+    if not config.update_check_enabled:
+        return None
+    release_check_thread = threading.Thread(target=_release_check_loop, args=(config, stop_event), daemon=True)
+    release_check_thread.start()
+    return release_check_thread
+
+
 def run_server(config: hub_model.HubConfig) -> int:
-    """HTTP 서버(메인) + 유지보수 티커·사용량 API 폴링(데몬 스레드 2개)을 띄우고 블로킹한다.
+    """HTTP 서버(메인) + 유지보수 티커·사용량 API 폴링·새 릴리스 확인(데몬 스레드 2~3개)을 띄우고 블로킹한다.
 
     bind 성공 직후 server.json 을 쓰고, SIGTERM 을 받으면 상태 파일을 정리하고 종료한다.
     """
@@ -493,6 +541,8 @@ def run_server(config: hub_model.HubConfig) -> int:
         target=_usage_api_poll_loop, args=(config, stop_event), daemon=True
     )
     usage_api_poll_thread.start()
+
+    _start_release_check_thread(config, stop_event)
 
     httpd.serve_forever()
     return 0

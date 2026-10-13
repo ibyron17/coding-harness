@@ -314,7 +314,11 @@ trap suite_exit_guard EXIT
 # main 을 릴리스 브랜치로 두고 작업은 develop 위 브랜치에서 한다. 같은 저장소의 여러 세션이 main
 # 체크아웃의 미커밋 작업과 부딪히지 않게 하려는 규칙이라 모든 세션이 읽는 상시 컨텍스트에 둔다.
 # 이 값도 추정이 아니라 편집 후 재측정한 실측치다.
-readonly ALWAYS_ON_CONTEXT_BUDGET_BYTES=54660
+# 54660 → 54892(+232B, docs/prps/harness-versioning.md HV10): CLAUDE.md §5 컨벤션에 「버전」 1항목(2줄)을 더했다.
+# VERSION 파일을 본 세션이 feat: 커밋마다 번호를 올리는 것이 가장 그럴듯한 실패이고, 그 실패는 동시 세션 병합
+# 충돌과 새 버전 알림 남발(HV4)을 직접 깬다 — 규칙 전문은 README 「버전」에 두고 상시 컨텍스트에는 포인터만 둔다
+# (T41-7c 가 그 포인터를 잠근다). 이 값도 편집 후 재측정한 실측치다(PRP 추정 약 250B).
+readonly ALWAYS_ON_CONTEXT_BUDGET_BYTES=54892
 
 # 허브 진행 기록 규칙 파일 증분 상한 래칫(T40-5, docs/prps/dashboard-into-hub.md HD2·HD10).
 # 옛 DASHBOARD_MD_BUDGET_BYTES(T22-163, dashboard.md 대상)를 승계한다 — dashboard.md 자체가
@@ -578,7 +582,15 @@ readonly MUTATION_HARNESS_GROUP="T37"
 # 108 → 114 로 올린 이유(hub-live-activity.md, 결정 LA1~LA14): 신규 가드 T25-269(읽기 화이트리스트)·T25-270(출력 구조)·
 # T25-271(지금 시각 없음)·T25-272(배선)·T25-273(README↔상수)·T25-274(템플릿)의 변조행 6건을 붙였다. 개정한 T25-104·T25-149 는
 # 원래 변조행이라 같은 ID 로 변조 sed 만 바꿨다(31→32), T99-6 은 이 상수 인용을 바꾼 수정에 맞춰 sed 리터럴을 옮겼다. 순증가 6.
-readonly LEDGER_MUTATION_ROW_FLOOR=114
+#
+# 114 → 129 로 올린 이유(harness-versioning.md, 결정 HV1~HV10·UN1~UN10): 신규 가드 T41-1·T41-2·T41-3·T41-4·T41-5·T41-7a·T41-7b·
+# T41-7c·T41-8·T41-8b(버전 체계 10종)와 T25-275~T25-279(새 릴리스 확인 5종)의 변조행 15건을 붙였다. T41-6(레포의 실제 git 태그를
+# 읽어 사본 변조로 재현할 수 없다)은 면제행이라 이 하한에 닿지 않는다. 개정한 T25-104·T25-149 는 원래 변조행이라 같은 ID 로 변조 sed
+# 만 바꿨고(33→35), T99-6 은 이 상수 인용을 바꾼 수정에 맞춰 sed 리터럴을 옮겼다. 순증가 15.
+#
+# 129 → 131(harness-versioning.md 2회차 검수 Major·Minor): 신규 가드 T41-4b(VERSION 읽기 오류 stderr 누수)·T41-9(저장소와 허브의
+# VERSION 숫자 자릿수 경계 일치)의 변조행 2건을 붙였다. T99-6 은 이 상수 인용을 바꾼 수정에 맞춰 sed 리터럴을 옮겼다. 순증가 2.
+readonly LEDGER_MUTATION_ROW_FLOOR=131
 
 # 원장 면제행 수의 상한 래칫(T37-14 가 실행마다 검사, PRP §12 「면제행이 영구 도피처가
 # 된다」의 두 번째 완화). 착지 시점 실측 390. 신규 가드를 기존 공통 사유로 면제 등록하면
@@ -910,7 +922,14 @@ readonly LEDGER_EXEMPT_ROW_RATCHET=372
 # 증거 계약 토큰). 순증가 2. 이 하한이 편집 전 실측(537)과 같아 두 ID 를 올리지 않으면 여유 2칸이 남고, 남기면 다음 회차의
 # ID 삭제 둘이 조용히 통과한다 — 이 회차가 만든 여유이므로 회수한다. collect_guard_ids 를 그대로 재현해 편집 전(537)·후(539)
 # 두 번 재측정했다. 원장에는 변조행이 아니라 면제행 2건으로 등록했다(사용자 결정 2026-10-08, 전체 검사 시간 보호).
-readonly SOURCE_GUARD_ID_FLOOR=539
+#
+# 539 → 555(harness-versioning.md): 신설 16건 — T41-1·T41-2·T41-3·T41-4·T41-5·T41-6·T41-7a·T41-7b·T41-7c·T41-8·T41-8b(버전 체계 11종)와
+# T25-275·T25-276·T25-277·T25-278·T25-279(새 릴리스 확인 5종). 순증가 16. 개정한 T25-10·T25-22·T25-104·T25-149 는 같은 ID 라 개수에
+# 닿지 않는다. collect_guard_ids 를 그대로 재현해 편집 전(539)·후(555) 두 번 재측정했고 차집합이 정확히 +16 이다.
+#
+# 555 → 557(harness-versioning.md 2회차 검수): 신설 2건 T41-4b·T41-9. 순증가 2. 개정한 T41-1·T41-4 는 같은 ID 라 개수에 닿지 않는다.
+# collect_guard_ids 를 그대로 재현해 편집 전(555)·후(557) 재측정한다.
+readonly SOURCE_GUARD_ID_FLOOR=557
 
 # 배포 트리(rules/·agents/·commands/)에 남는 "파일명:줄번호" 형태 인용 수의 상한
 # 래칫(T39-4). 배포되는 문서가 다른 파일의 줄 번호를 인용하면, 그 파일을 고치는 수정이
@@ -4139,7 +4158,7 @@ read_python_product_constant() {
 test_hub_docs_and_constants() {
   group_failures=()   # 앞 그룹이 조기 return 했을 때의 잔여물 제거
   local test_name="T25"
-  local test_desc="허브 문서·상수 정합성 (T25-1~T25-274)"
+  local test_desc="허브 문서·상수 정합성 (T25-1~T25-279)"
   log_test_name "$test_name" "$test_desc"
 
   local hub_settings_file="$REPO_ROOT/hub/bin/hub_settings.py"
@@ -4292,9 +4311,10 @@ test_hub_docs_and_constants() {
   # 편입(dashboard-into-hub PRP M1 로 hub_dashboard_render.py 경로 재조준); +
   # docs/prps/hub-live-session-native-source.md 결정 LS2 — hub_live_session.py 편입; +
   # docs/prps/hub-subagent-background-pause.md 결정 BW11(M1) — hub_session.py 에서 분리된
-  # hub_session_facts.py 편입; + docs/prps/hub-live-activity.md 결정 LA14 — hub_activity.py 편입):
+  # hub_session_facts.py 편입; + docs/prps/hub-live-activity.md 결정 LA14 — hub_activity.py 편입; +
+  # docs/prps/harness-versioning.md 단계 B — hub_release.py 편입):
   # hub_model.py·hub_parse.py·hub_usage.py·hub_session.py·hub_session_facts.py·hub_project.py·
-  # hub_server_state.py·hub_config.py·hub_dashboard_render.py·hub_live_session.py·hub_activity.py 에
+  # hub_server_state.py·hub_config.py·hub_dashboard_render.py·hub_live_session.py·hub_activity.py·hub_release.py 에
   # 파일시스템 접근이 없다(순수 레이어 경계의 기계적 강제). dashboard_render.py 는 ★순수 마커를 자체
   # 선언하고도 이 목록에 없었다(구현 시점 누락). hub_atomic_write.py 는 tempfile·os.fdopen 을
   # 쓰므로 이 목록에 넣지 않는다.
@@ -4302,7 +4322,7 @@ test_hub_docs_and_constants() {
   for pure_file in "$REPO_ROOT/hub/bin/hub_model.py" "$REPO_ROOT/hub/bin/hub_parse.py" "$REPO_ROOT/hub/bin/hub_usage.py" \
       "$hub_session_file" "$hub_session_facts_file" "$hub_project_file" "$hub_server_state_file" "$hub_config_file" \
       "$REPO_ROOT/hub/bin/hub_dashboard_render.py" "$REPO_ROOT/hub/bin/hub_live_session.py" \
-      "$REPO_ROOT/hub/bin/hub_activity.py"; do
+      "$REPO_ROOT/hub/bin/hub_activity.py" "$REPO_ROOT/hub/bin/hub_release.py"; do
     if grep -qE 'open\(|Path\(|os\.' "$pure_file"; then
       record_failure "$test_name" "T25-10: $pure_file 에 파일시스템 접근 흔적(open(/Path(/os.)이 있음"
       return 1
@@ -6213,12 +6233,16 @@ PYEOF
   # 분리해 나온 hub_session_facts.py 를 더해 29 → 30 으로, docs/prps/hub-usage-panel-account.md
   # 결정 AC8 이 hub_account.py 를 더해 30 → 31 로, docs/prps/hub-live-activity.md 결정 LA14 가
   # hub_activity.py 를 더해 31 → 32 로, docs/prps/harness-benchmark-adoption.md ⑨ 가
-  # hub_session_cost.py 를 더해 32 → 33 으로 다시 바꿨다, T25-149 참조):
-  # hub/README.md 가 33개 파일을 고지하고, hub-dashboard.md 모듈 구성표가 hub_session.py·
+  # hub_session_cost.py 를 더해 32 → 33 으로, docs/prps/harness-versioning.md 단계 B 가
+  # hub_release.py·hub_release_read.py 를 더해 33 → 35 로 다시 바꿨다, T25-149 참조):
+  # hub/README.md 가 35개 파일을 고지하고, hub-dashboard.md 모듈 구성표가 hub_session.py·
   # hub_session_facts.py·hub_live_session.py 를 안다. 역방향 — 옛 "12개 파일" 고지가 남아
   # 있으면 안 된다.
-  if ! grep -qF "33개 파일" "$hub_readme_file"; then
-    note_failure "T25-104: hub/README.md 에 33개 파일 고지가 없음"
+  if ! grep -qF "35개 파일" "$hub_readme_file"; then
+    note_failure "T25-104: hub/README.md 에 35개 파일 고지가 없음"
+  fi
+  if grep -qF "33개 파일" "$hub_readme_file"; then
+    note_failure "T25-104: hub/README.md 에 옛 33개 파일 고지가 남아 있음"
   fi
   if grep -qF "32개 파일" "$hub_readme_file"; then
     note_failure "T25-104: hub/README.md 에 옛 32개 파일 고지가 남아 있음"
@@ -7282,19 +7306,20 @@ PYEOF
   # 29로, docs/prps/hub-subagent-background-pause.md 결정 BW11(M1) 이 hub_session_facts.py
   # 를 더해 30으로, docs/prps/hub-usage-panel-account.md 결정 AC8 이 hub_account.py 를 더해
   # 31로, docs/prps/hub-live-activity.md 결정 LA14 가 hub_activity.py 를 더해 32로,
-  # docs/prps/harness-benchmark-adoption.md ⑨ 가 hub_session_cost.py 를 더해 33으로 갱신):
-  # hub/install.sh 의 HUB_FILE_COUNT 가 33 이다. T25-1 은
+  # docs/prps/harness-benchmark-adoption.md ⑨ 가 hub_session_cost.py 를 더해 33으로,
+  # docs/prps/harness-versioning.md 단계 B 가 hub_release.py·hub_release_read.py 를 더해 35로 갱신):
+  # hub/install.sh 의 HUB_FILE_COUNT 가 35 이다. T25-1 은
   # "선언값==실제 파일 수"라는 일반 교차 검사라, 값이 이전 수에 머문 채 실제 파일 수도
   # 우연히 그 수로 되돌아가면(새 파일을 추가하며 다른 파일을 실수로 지운 경우) 잡지 못하는
-  # 사각이 있다 — 이 값 자체를 33으로 고정해 그 사각을 없앤다. hub/README.md 「파일 배치」의
-  # 파일 수 서술도 함께 33으로 갱신됐는지 본다.
+  # 사각이 있다 — 이 값 자체를 35로 고정해 그 사각을 없앤다. hub/README.md 「파일 배치」의
+  # 파일 수 서술도 함께 35로 갱신됐는지 본다.
   local declared_hub_file_count
   declared_hub_file_count=$(grep -oE '^readonly HUB_FILE_COUNT=[0-9]+' "$hub_install_file" | grep -oE '[0-9]+$')
-  if [[ "$declared_hub_file_count" -ne 33 ]]; then
-    note_failure "T25-149: hub/install.sh 의 HUB_FILE_COUNT=$declared_hub_file_count(기대 33)"
+  if [[ "$declared_hub_file_count" -ne 35 ]]; then
+    note_failure "T25-149: hub/install.sh 의 HUB_FILE_COUNT=$declared_hub_file_count(기대 35)"
   fi
-  if ! grep -qF '33개 파일' "$hub_readme_file"; then
-    note_failure "T25-149: hub/README.md 「파일 배치」에 '33개 파일' 서술이 없음"
+  if ! grep -qF '35개 파일' "$hub_readme_file"; then
+    note_failure "T25-149: hub/README.md 「파일 배치」에 '35개 파일' 서술이 없음"
   fi
 
   # T25-150(정+역, 결정 FT7·GOTCHA 8 — 갱신: docs/prps/hub-subagent-background-pause.md 결정
@@ -10419,6 +10444,82 @@ PYEOF
   fi
   if ! grep -qF 'renderAgentRunActivity(' <<< "$render_agent_run_row_body_274"; then
     note_failure "T25-274: renderAgentRunRow() 가 renderAgentRunActivity( 를 부르지 않음(결정 LA9 위반 — 활동 줄이 실행 줄에 붙지 않는다)"
+  fi
+
+  # T25-275(신설, docs/prps/harness-versioning.md 결정 UN1): 새 릴리스 확인(hub_release_read.py)의 git 실행이 ① argv 리스트다 —
+  # subprocess.Popen( 바로 다음 줄이 `[` 로 시작하는 리스트 리터럴이다(셸 문자열 조립 금지, rules/python/security.md) ② shell= 인자가
+  # 어디에도 없다 ③ stdin 을 닫고(DEVNULL) 대화형 질문을 막는다(GIT_TERMINAL_PROMPT_ENV_NAME 에 "0") ④ 원격에 쓰기를 하는 git 하위
+  # 명령(fetch·pull·push·clone)을 부르지 않는다 — 저장소를 바꾸지 않는 ls-remote 한 가지만 쓴다는 설계(UN1)의 기계적 강제. T25-61·
+  # T25-114 와 같은 정적 계열이다. 원장 행은 ① 만 문다(argv 를 셸 문자열로 바꾸는 변조).
+  local hub_release_read_file_275="$REPO_ROOT/hub/bin/hub_release_read.py"
+  local popen_next_lines_275
+  popen_next_lines_275=$(grep -A1 'subprocess\.\(Popen\|run\|call\|check_output\)(' "$hub_release_read_file_275" | grep -v 'subprocess\.' | grep -v '^--$' || true)
+  if [[ -z "$popen_next_lines_275" ]] || grep -qvE '^[[:space:]]*\[' <<< "$popen_next_lines_275"; then
+    note_failure "T25-275: hub_release_read.py 의 subprocess 호출 인자가 argv 리스트 리터럴이 아님(셸 문자열 조립 의심)"
+  fi
+  if grep -qE 'shell[[:space:]]*=' "$hub_release_read_file_275"; then
+    note_failure "T25-275: hub_release_read.py 에 shell= 인자가 있음(셸 경유 금지)"
+  fi
+  if ! grep -qF 'stdin=subprocess.DEVNULL' "$hub_release_read_file_275" || ! grep -qE 'GIT_TERMINAL_PROMPT_ENV_NAME: "0"' "$hub_release_read_file_275"; then
+    note_failure "T25-275: hub_release_read.py 가 stdin 을 닫지 않거나 GIT_TERMINAL_PROMPT=0 을 걸지 않음(서버에는 제어 터미널이 없어 질문이 뜨면 영원히 막힌다)"
+  fi
+  if grep -qE '"(fetch|pull|push|clone)"' "$hub_release_read_file_275"; then
+    note_failure "T25-275: hub_release_read.py 가 저장소를 바꾸는 git 하위 명령을 부름(결정 UN1 위반 — ls-remote 만 쓴다)"
+  fi
+
+  # T25-276(신설, 결정 UN10): hub/README.md 가 원격 확인의 네트워크 호출을 고지하고 끄는 수단을 적는다 — 서버가 6시간마다
+  # git ls-remote --tags 를 실행한다는 사실·스위치 이름(update_check_enabled)·기록 파일(release_check.json)이 문서에 있다.
+  # 코드는 네트워크 호출을 기본으로 켜 두는데(D5) 고지가 없으면 사용자에게 한 약속이 비는 것이다. commands/hub.md 도 /hub status
+  # 필드를 적는다. 원장 행은 스위치 이름을 문다.
+  local release_notice_token_276
+  for release_notice_token_276 in 'update_check_enabled' 'release_check.json' 'git ls-remote --tags'; do
+    if ! grep -qF -- "$release_notice_token_276" "$hub_readme_file"; then
+      note_failure "T25-276: hub/README.md 에 새 버전 알림 고지 토큰(${release_notice_token_276})이 없음(결정 UN10 위반 — 기본 켜짐인 네트워크 호출의 고지와 끄는 수단)"
+    fi
+  done
+  if ! grep -qF 'release_check' "$hub_command_file"; then
+    note_failure "T25-276: commands/hub.md 의 /hub status 필드 설명에 release_check 가 없음(결정 UN10)"
+  fi
+
+  # T25-277(신설, 결정 UN8 — 갱신 불변식 H1⁗ 개정): hub_template.html 맨 위 데이터 계약 주석(DZH:HUB 데이터 계약 ~ 첫 `-->`)이 새
+  # 정적 노드 둘(#dzh-harness-version·#dzh-update)을 폴링이 속성·textContent 단위로만 갱신하는 노드로 등재한다. 등재가 빠지면 다음
+  # 사람이 이 노드를 교체 대상으로 오해해 복사 피드백 상태를 지운다. 원장 행은 #dzh-update 를 문다.
+  local data_contract_comment_277
+  data_contract_comment_277=$(sed -n '/DZH:HUB 데이터 계약/,/^-->/p' "$hub_template_file")
+  if [[ -z "$data_contract_comment_277" ]]; then
+    record_failure "$test_name" "T25-277: hub_template.html 데이터 계약 주석 추출 실패 — 앵커(DZH:HUB 데이터 계약 ~ -->)가 깨졌다"
+    return 1
+  fi
+  if ! grep -qF '#dzh-update' <<< "$data_contract_comment_277" || ! grep -qF '#dzh-harness-version' <<< "$data_contract_comment_277"; then
+    note_failure "T25-277: hub_template.html 데이터 계약 주석(불변식 H1⁗)에 #dzh-harness-version·#dzh-update 등재가 없음(결정 UN8)"
+  fi
+
+  # T25-278(신설, 결정 UN9): 복사 IIFE 가 isServed 가드 바깥에 있다 ① 복사 IIFE 블록(UPDATE_COPIED_CLASS 선언부터 그 IIFE 의 끝까지)의
+  # 코드 줄(주석 제외)에 isServed 가 없다 ② 그 IIFE 의 클릭 리스너가 렌더 IIFE 의 `if(!isServed){` 조기 반환 줄보다 앞에 있다 — 뒤로
+  # 옮기면 file:// 모드에서 복사가 조용히 죽는다(GOTCHA 4 선례). 블록·앵커 추출이 비면 앵커 실패다. 원장 행은 ① 을 문다.
+  local copy_iife_code_278 copy_listener_line_278 first_guard_line_278
+  copy_iife_code_278=$(awk '/var UPDATE_COPIED_CLASS = /{inside=1} inside && /^\}\)\(\);$/{exit} inside{print}' "$hub_template_file" | grep -vE '^[[:space:]]*//' || true)
+  copy_listener_line_278=$(grep -n "updateButton.addEventListener('click'" "$hub_template_file" | head -1 | cut -d: -f1)
+  first_guard_line_278=$(grep -n '^  if(!isServed){$' "$hub_template_file" | head -1 | cut -d: -f1)
+  if [[ -z "$copy_iife_code_278" || -z "$copy_listener_line_278" || -z "$first_guard_line_278" ]]; then
+    record_failure "$test_name" "T25-278: 복사 IIFE·클릭 리스너·렌더 IIFE 의 if(!isServed){ 앵커 추출 실패 — 앵커가 깨졌다"
+    return 1
+  fi
+  if grep -qF 'isServed' <<< "$copy_iife_code_278"; then
+    note_failure "T25-278: 복사 IIFE 의 코드가 isServed 를 참조함(결정 UN9 위반 — file:// 모드에서 복사가 죽는다)"
+  fi
+  if [[ "$copy_listener_line_278" -ge "$first_guard_line_278" ]]; then
+    note_failure "T25-278: 복사 클릭 리스너(${copy_listener_line_278}행)가 렌더 IIFE 의 if(!isServed){ 조기 반환(${first_guard_line_278}행) 뒤에 있음(결정 UN9 위반)"
+  fi
+
+  # T25-279(신설, 결정 UN1·모듈 경계): 새 모듈의 임포트 방향이 지켜진다 ① hub_release.py(★순수 잎)는 어떤 허브 모듈도 임포트하지
+  # 않는다 ② hub_release_read.py 는 hub_collect·hub_server 를 임포트하지 않는다(그 둘이 이 모듈을 부르므로 순환이 된다).
+  # 원장 행은 ② 를 문다.
+  if grep -qE '^(import|from)[[:space:]]+hub' "$REPO_ROOT/hub/bin/hub_release.py"; then
+    note_failure "T25-279: hub_release.py(잎 모듈)가 허브 모듈을 임포트함(순환 방지 계약 위반)"
+  fi
+  if grep -qE '^(import|from)[[:space:]].*hub_(collect|server)\b' "$hub_release_read_file_275"; then
+    note_failure "T25-279: hub_release_read.py 가 hub_collect·hub_server 를 임포트함(순환 의존)"
   fi
 
   finish_group "$test_name"
@@ -15817,6 +15918,195 @@ PYEOF
   finish_group "$test_name"
 }
 
+# T41 픽스처 — VERSION 을 마음대로 바꿔 끼울 수 있는 레포 사본(rules agents commands install.sh
+# removals.txt)을 만든다. 사본에는 .git 이 없어 install.sh 의 installed_from_commit 은 unknown 이 된다.
+make_version_fixture_repo() {
+  local fixture_dir="$1"
+  cp -R "$REPO_ROOT/rules" "$REPO_ROOT/agents" "$REPO_ROOT/commands" \
+    "$REPO_ROOT/install.sh" "$REPO_ROOT/removals.txt" "$fixture_dir/"
+}
+
+# T41(신설, docs/prps/harness-versioning.md HV1~HV10): 버전 체계 — 루트 VERSION 이 SemVer 한 줄이고,
+# install.sh 가 그 값을 설치 기록(harness_version)과 설치 출력 첫 줄에 싣고, 스키마 번호(version 3)에
+# 간섭하지 않고, VERSION 이 없거나 틀리면 unknown + WARN 으로 설치를 계속하고, 로컬 태그가 VERSION 과
+# 같고, 문서 3종이 규칙을 가리키는지 본다.
+#
+# 모든 설치는 샌드박스(mktemp -d, 진입부의 HOME 치환)에서만 돈다.
+#
+# 한계(비망라, HV9) — "평소 커밋에서 VERSION 을 바꾸지 마라"는 이 그룹이 보지 않는다(릴리스 커밋과 평소 커밋을
+# 기계가 가를 수 없다, CLAUDE.md 1줄이 대신한다). T41-6 은 로컬 태그만 보므로 태그 푸시 누락도 못 잡는다.
+# 전수 증명이 아니다.
+test_harness_versioning() {
+  group_failures=()   # 앞 그룹이 조기 return 했을 때의 잔여물 제거
+  local test_name="T41"
+  local test_desc="버전 체계 — VERSION 정본·설치 기록·폴백·태그 일치·문서 토큰 (T41-1~T41-9)"
+  log_test_name "$test_name" "$test_desc"
+
+  local version_file_t41="$REPO_ROOT/VERSION"
+  # 숫자 부분 1~9자리 — install.sh HARNESS_VERSION_PATTERN·허브 hub_release.py 와 같은 경계(HV1).
+  local semver_pattern_t41='^(0|[1-9][0-9]{0,8})\.(0|[1-9][0-9]{0,8})\.(0|[1-9][0-9]{0,8})$'
+  local repo_version_t41=""
+
+  # T41-1: VERSION 은 SemVer X.Y.Z 한 줄 + 끝 개행 1개다(바이트 수가 첫 줄 길이 + 1 이면 앞뒤 공백·
+  # 둘째 줄·개행 없음이 모두 걸린다).
+  if [[ ! -f "$version_file_t41" ]]; then
+    note_failure "T41-1: 루트 VERSION 파일이 없음(HV1 정본)"
+  else
+    repo_version_t41=$(head -n 1 "$version_file_t41")
+    local version_bytes_t41
+    version_bytes_t41=$(wc -c < "$version_file_t41" | tr -d ' ')
+    if [[ "$version_bytes_t41" -ne $((${#repo_version_t41} + 1)) || ! "$repo_version_t41" =~ $semver_pattern_t41 ]]; then
+      note_failure "T41-1: VERSION 이 SemVer 한 줄(끝 개행 1개)이 아님 — 첫 줄 '${repo_version_t41}', 바이트 ${version_bytes_t41}"
+    fi
+  fi
+
+  # T41-2·T41-8: 실제 레포로 --scope project 설치 → 설치 기록에 "harness_version": "<VERSION 값>" 이
+  # 정확히 1줄, 설치 출력 첫 줄과 dry-run 계획 줄에 버전이 찍힌다(HV6·HV8).
+  local project_sandbox_t41 install_output_t41 install_exit_t41=0 manifest_file_t41
+  project_sandbox_t41=$(mktemp -d)
+  register_cleanup_path "$project_sandbox_t41"
+  install_output_t41=$(cd "$project_sandbox_t41" && "$INSTALL_SCRIPT" --scope project 2>&1) || install_exit_t41=$?
+  manifest_file_t41="$project_sandbox_t41/.claude/.coding-harness.json"
+  if [[ "$install_exit_t41" -ne 0 ]]; then
+    note_failure "T41-2: 실제 레포 --scope project 설치가 exit ${install_exit_t41} 로 실패함"
+  else
+    local recorded_line_count_t41
+    recorded_line_count_t41=$(grep -cF "\"harness_version\": \"${repo_version_t41}\"" "$manifest_file_t41" || true)
+    if [[ "$recorded_line_count_t41" -ne 1 ]]; then
+      note_failure "T41-2: 설치 기록의 harness_version 줄이 정확히 1개가 아님(VERSION '${repo_version_t41}', 실제 ${recorded_line_count_t41}줄)"
+    fi
+  fi
+  if ! grep -qF "[INFO] coding-harness ${repo_version_t41} 설치 (scope: project)" <<< "$install_output_t41"; then
+    note_failure "T41-8: 설치 출력에 '[INFO] coding-harness <VERSION> 설치' 줄이 없음(HV8)"
+  fi
+  local dry_run_output_t41
+  dry_run_output_t41=$(cd "$project_sandbox_t41" && "$INSTALL_SCRIPT" --scope project --dry-run 2>&1) || true
+  if ! grep -qF "[INFO] coding-harness ${repo_version_t41} 설치 계획 (scope: project, DRY-RUN)" <<< "$dry_run_output_t41"; then
+    note_failure "T41-8b: dry-run 출력에 '[INFO] coding-harness <VERSION> 설치 계획' 줄이 없음(HV8)"
+  fi
+
+  # T41-3: 스키마 무간섭(행동). 새 install.sh 가 만든 user scope 설치 기록(harness_version 이 든 v3)을
+  # 둔 채, 대장에 없는 ~/.claude/CLAUDE.md(레거시 센티널 2종을 가진 파일)를 두고 재설치한다 — 은퇴 규칙 4
+  # (read_manifest_version >= 3 → skip)가 새 필드가 든 기록에서도 그대로 발동하면 파일은 무접촉이고
+  # [보호]·은퇴 로그가 없다. 규칙 4 가 안 서면 규칙 7 이 파일을 개명한다.
+  local user_home_t41 user_output_t41 user_claude_md_t41 claude_md_before_t41 user_exit_t41=0
+  user_home_t41=$(mktemp -d)
+  register_cleanup_path "$user_home_t41"
+  user_claude_md_t41="$user_home_t41/.claude/CLAUDE.md"
+  HOME="$user_home_t41" "$INSTALL_SCRIPT" --scope user > /dev/null 2>&1 || true
+  {
+    echo '# 전역 개발 지침 (~/.claude/CLAUDE.md)'
+    echo ''
+    echo '### 서브에이전트 위임은 사용자가 상시 요청한 것이다'
+  } > "$user_claude_md_t41"
+  claude_md_before_t41=$(cat "$user_claude_md_t41")
+  user_output_t41=$(HOME="$user_home_t41" "$INSTALL_SCRIPT" --scope user 2>&1) || user_exit_t41=$?
+  if [[ "$user_exit_t41" -ne 0 ]] || [[ ! -f "$user_claude_md_t41" ]] \
+    || [[ "$(cat "$user_claude_md_t41" 2> /dev/null)" != "$claude_md_before_t41" ]] \
+    || grep -qE '\[보호\]|은퇴' <<< "$user_output_t41"; then
+    note_failure "T41-3: harness_version 이 든 v3 설치 기록에서 은퇴 규칙 4(스키마 번호 3 이상 → 무접촉)가 발동하지 않음(exit ${user_exit_t41})"
+  fi
+
+  # T41-4: 폴백(HV7). VERSION 이 없거나·형식이 틀리거나·여러 줄인 사본에서도 설치는 exit 0 이고,
+  # 설치 기록은 "unknown", stderr 에 VERSION 을 가리키는 WARN 이 정확히 1줄이다.
+  local fallback_case_t41 fixture_dir_t41 target_dir_t41 stderr_file_t41 fallback_exit_t41 warn_count_t41
+  for fallback_case_t41 in missing malformed multiline toolong unreadable; do
+    fixture_dir_t41=$(mktemp -d)
+    target_dir_t41=$(mktemp -d)
+    register_cleanup_path "$fixture_dir_t41" "$target_dir_t41"
+    make_version_fixture_repo "$fixture_dir_t41"
+    case "$fallback_case_t41" in
+      malformed) printf '1.0\n' > "$fixture_dir_t41/VERSION" ;;
+      multiline) printf '1.0.0\n1.0.1\n' > "$fixture_dir_t41/VERSION" ;;
+      toolong) printf '1.0.1234567890\n' > "$fixture_dir_t41/VERSION" ;;
+      unreadable) printf '1.0.0\n' > "$fixture_dir_t41/VERSION"; chmod 000 "$fixture_dir_t41/VERSION" ;;
+    esac
+    if [[ "$fallback_case_t41" == "unreadable" && -r "$fixture_dir_t41/VERSION" ]]; then
+      continue   # root 등 권한 검사를 받지 않는 실행 환경 — 읽기 실패를 재현할 수 없다
+    fi
+    stderr_file_t41="$target_dir_t41.stderr"
+    register_cleanup_path "$stderr_file_t41"
+    fallback_exit_t41=0
+    (cd "$target_dir_t41" && "$fixture_dir_t41/install.sh" --scope project > /dev/null 2> "$stderr_file_t41") || fallback_exit_t41=$?
+    if [[ "$fallback_exit_t41" -ne 0 ]]; then
+      note_failure "T41-4: VERSION 폴백(${fallback_case_t41}) 설치가 exit 0 이 아님(exit ${fallback_exit_t41}) — 버전은 메타데이터라 설치를 막으면 안 된다"
+      continue
+    fi
+    if ! grep -qF '"harness_version": "unknown"' "$target_dir_t41/.claude/.coding-harness.json"; then
+      note_failure "T41-4: VERSION 폴백(${fallback_case_t41}) 설치 기록이 harness_version unknown 이 아님"
+    fi
+    warn_count_t41=$(grep -E '\[WARN\].*VERSION' "$stderr_file_t41" | wc -l | tr -d ' ')
+    if [[ "$warn_count_t41" -ne 1 ]]; then
+      note_failure "T41-4: VERSION 폴백(${fallback_case_t41}) 의 VERSION WARN 이 stderr 에 정확히 1줄이 아님(실제 ${warn_count_t41}줄)"
+    fi
+    if grep -qF 'Permission denied' "$stderr_file_t41"; then
+      note_failure "T41-4b: VERSION 폴백(${fallback_case_t41}) 의 읽기 오류(cat)가 stderr 로 새어 나옴"
+    fi
+  done
+
+  # T41-5: 멱등·갱신. 같은 VERSION 재설치는 manifest 변경 없음, VERSION 만 바뀌면 설치 기록이 다시 쓰인다.
+  fixture_dir_t41=$(mktemp -d)
+  target_dir_t41=$(mktemp -d)
+  register_cleanup_path "$fixture_dir_t41" "$target_dir_t41"
+  make_version_fixture_repo "$fixture_dir_t41"
+  printf '1.2.3\n' > "$fixture_dir_t41/VERSION"
+  (cd "$target_dir_t41" && "$fixture_dir_t41/install.sh" --scope project > /dev/null 2>&1) || true
+  local same_version_output_t41 changed_version_output_t41
+  same_version_output_t41=$(cd "$target_dir_t41" && "$fixture_dir_t41/install.sh" --scope project 2>&1) || true
+  if ! grep -qF 'manifest → 변경 없음' <<< "$same_version_output_t41"; then
+    note_failure "T41-5: 같은 VERSION 재설치에서 'manifest → 변경 없음' 이 안 나옴(멱등 위반)"
+  fi
+  printf '1.2.4\n' > "$fixture_dir_t41/VERSION"
+  changed_version_output_t41=$(cd "$target_dir_t41" && "$fixture_dir_t41/install.sh" --scope project 2>&1) || true
+  if grep -qF 'manifest → 변경 없음' <<< "$changed_version_output_t41" \
+    || ! grep -qF '"harness_version": "1.2.4"' "$target_dir_t41/.claude/.coding-harness.json"; then
+    note_failure "T41-5: VERSION 만 바꾼 재설치에서 설치 기록이 갱신되지 않음(변경 없음으로 오판)"
+  fi
+
+  # T41-6: 로컬 태그 일치(HV2). 레포의 v* 태그는 주석 태그이고 vX.Y.Z 형식이며, 그 커밋의 VERSION 이
+  # 태그 숫자와 같다. git 이 없거나 .git 이 없는 사본(미러 포함)에서는 건너뛴다(실패 아님).
+  if ! command -v git > /dev/null 2>&1 || ! git -C "$REPO_ROOT" rev-parse --git-dir > /dev/null 2>&1; then
+    log_info "T41-6 건너뜀: git 또는 레포 .git 이 없음"
+  else
+    local tag_name_t41 tag_version_t41 tag_object_type_t41 tagged_version_t41
+    while IFS= read -r tag_name_t41; do
+      tag_version_t41="${tag_name_t41#v}"
+      tag_object_type_t41=$(git -C "$REPO_ROOT" cat-file -t "refs/tags/$tag_name_t41" 2> /dev/null || true)
+      tagged_version_t41=$(git -C "$REPO_ROOT" show "refs/tags/$tag_name_t41:VERSION" 2> /dev/null | head -n 1 || true)
+      if [[ ! "$tag_version_t41" =~ $semver_pattern_t41 || "$tag_object_type_t41" != "tag" \
+        || "$tagged_version_t41" != "$tag_version_t41" ]]; then
+        note_failure "T41-6: 태그 ${tag_name_t41} 가 vX.Y.Z 주석 태그가 아니거나 그 커밋의 VERSION('${tagged_version_t41}')과 다름"
+      fi
+    done < <(git -C "$REPO_ROOT" tag -l 'v*')
+  fi
+
+  # T41-9: 자릿수 경계 일치(HV1). 저장소가 받는 VERSION 형식(install.sh 의 숫자 자릿수 {0,N})과 허브가 읽는
+  # 태그 형식(hub_release.py MAX_VERSION_NUMBER_DIGITS)이 같은 경계여야 한다 — 어긋나면 한쪽이 받은 값을 다른
+  # 쪽이 다르게 읽는다(자릿수 무제한은 허브의 int() 변환 한도에서 사이클을 죽였다, 2회차 검수 Major).
+  local pattern_bounds_t41 pattern_bound_count_t41 pattern_bound_t41 hub_digit_limit_t41
+  pattern_bounds_t41=$(grep -E '^readonly HARNESS_VERSION_PATTERN=' "$INSTALL_SCRIPT" | grep -oE '\{0,[0-9]+\}' || true)
+  pattern_bound_count_t41=$(grep -c . <<< "$pattern_bounds_t41" || true)
+  pattern_bound_t41=$(sort -u <<< "$pattern_bounds_t41" | tr -d '{}' | cut -d, -f2)
+  hub_digit_limit_t41=$(sed -nE 's/^MAX_VERSION_NUMBER_DIGITS = ([0-9]+)$/\1/p' "$REPO_ROOT/hub/bin/hub_release.py" | head -1)
+  if [[ "$pattern_bound_count_t41" -ne 3 || -z "$pattern_bound_t41" || "$pattern_bound_t41" == *$'\n'* \
+    || -z "$hub_digit_limit_t41" || "$((pattern_bound_t41 + 1))" -ne "$hub_digit_limit_t41" ]]; then
+    note_failure "T41-9: VERSION 숫자 자릿수 경계가 install.sh({0,${pattern_bound_t41}} ${pattern_bound_count_t41}곳)와 허브 MAX_VERSION_NUMBER_DIGITS(${hub_digit_limit_t41})에서 어긋남 — 저장소와 허브가 받는 형식이 달라진다"
+  fi
+
+  # T41-7a·b·c: 문서 토큰 — 규칙이 문서에서 사라지는 것을 막는다.
+  if ! grep -qF 'harness_version' "$REPO_ROOT/commands/harness-update.md"; then
+    note_failure "T41-7a: commands/harness-update.md 에 harness_version 토큰이 없음(HV8 — 업데이트 보고에 버전이 흐르지 않는다)"
+  fi
+  if ! grep -qE '^## 버전$' "$REPO_ROOT/README.md" || ! grep -qF 'VERSION' "$REPO_ROOT/README.md"; then
+    note_failure "T41-7b: README.md 에 '## 버전' 절 또는 VERSION 언급이 없음(릴리스 절차의 정본 자리)"
+  fi
+  if ! grep -qF 'VERSION' "$REPO_ROOT/CLAUDE.md"; then
+    note_failure "T41-7c: CLAUDE.md 에 VERSION 포인터가 없음(HV10 — 커밋마다 번호를 올리는 실패의 방어선)"
+  fi
+
+  finish_group "$test_name"
+}
+
 # 그룹 레지스트리(항목1, tests-hardening PRP §4.2·§6-2). "<그룹ID>:<함수명>" 쌍의 배열로
 # total_tests 를 리터럴이 아니라 여기서 산출한다. 실행 순서는 기존 register_and_run_tests
 # 호출 순서를 그대로 보존한다(T35 자신의 주석이 순서 의존을 언급하므로 재정렬하지 않는다).
@@ -15862,6 +16152,7 @@ readonly TEST_GROUPS=(
   "T39:test_prose_number_citation_hygiene"
   "T38:test_vendor_patch_contract_tokens"
   "T40:test_hub_dashboard_channel"
+  "T41:test_harness_versioning"
 )
 
 # TEST_GROUPS 의 각 항목이 §6-2 불변식(그룹 ID 유일 · 함수가 실제로 정의됨 · 함수 내부

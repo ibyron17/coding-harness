@@ -38,7 +38,12 @@ DZH:HUB 데이터 계약
   렌더 키(RENDER_KEY_ATTRIBUTE)가 같은 형제는 노드째 옮긴다) ·
   #dzh-session-modal-body(같은 맞대기 — 카드 상세보기가 열려 있을 때만) ·
   #dzh-usage-body(innerHTML) ·
-  #dzh-usage-summary(textContent) · #dzh-refresh 의 data-tooltip·class 속성뿐이다.
+  #dzh-usage-summary(textContent) · #dzh-refresh 의 data-tooltip·class 속성 ·
+  #dzh-harness-version(hidden·textContent·data-tooltip) · #dzh-update(hidden·data-tooltip·
+  aria-label · 자식 .update-label 의 textContent)뿐이다. 뒤의 둘은 docs/prps/harness-versioning.md
+  결정 UN7·UN8 — snapshot.harness_version(설치된 하네스 버전·새 릴리스 알림, 설치 기록이 없으면 null)
+  에서 그리며, 복사 피드백 클래스(.update-btn-copied·.update-btn-copy-failed)는 사용자 상태라
+  렌더 IIFE 가 건드리지 않는다(독립 IIFE 가 붙이고 뗀다 — 폴링 재렌더가 지우지 않는다).
   다음 노드는 정적이며 폴링이 절대 교체하지 않는다: #dzh-usage, #dzh-usage-toggle,
   #dzh-theme-toggle, #dzh-tooltip, #dzh-detail-panel(과 그 자식 전부),
   #dzh-session-modal(과 그 정적 자식 — 다이얼로그 틀·닫기 버튼. 본문의 자식은 제외).
@@ -596,6 +601,21 @@ DZH:HUB 데이터 계약
   /* 헤더 버튼 클러스터 — 새로고침·테마 버튼을 묶는다. R5 로 고정 위치를 버리고 .head-row
      문서 흐름 안(flex)으로 들어왔다 — margin-left:auto 로 항상 오른쪽 끝에 붙는다. */
   .top-actions{margin-left:auto;flex:0 0 auto;display:flex;align-items:center;gap:8px}
+  /* 설치된 하네스 버전(harness-versioning 결정 UN7) — h1 오른쪽의 작은 고정폭 표기. 새 색 토큰 0(--muted).
+     display 를 주지 않으므로 hidden 속성이 그대로 먹는다. */
+  .harness-version{font-family:ui-monospace,monospace;font-size:11.5px;color:var(--muted)}
+  /* 새 버전 알림 버튼(결정 UN7) — 32px 알약, .badge.state-background 가 쓰는 --accent-soft 면 + --accent-ink 글자 +
+     --accent 테두리 쌍 그대로다(새 색 토큰 0, 대비는 그 배지와 같다). display:inline-flex 가 hidden 속성을 이기므로
+     [hidden] 규칙이 필요하다. 라벨 셋(기본·복사됨·복사 실패)은 마크업에 함께 두고 CSS 가 하나만 보인다(결정 UN8). */
+  .update-btn{height:32px;padding:0 12px;font:inherit;font-size:12.5px;font-weight:700;white-space:nowrap;cursor:pointer;
+              display:inline-flex;align-items:center;color:var(--accent-ink);background:var(--accent-soft);
+              border:1px solid var(--accent);border-radius:999px}
+  .update-btn[hidden]{display:none}
+  .update-btn:hover{border-color:var(--accent-ink)}
+  .update-btn:focus-visible{outline:2px solid var(--accent);outline-offset:3px}
+  .update-label-copied,.update-label-copy-failed{display:none}
+  .update-btn-copied .update-label,.update-btn-copy-failed .update-label{display:none}
+  .update-btn-copied .update-label-copied,.update-btn-copy-failed .update-label-copy-failed{display:inline}
   /* 32px 원형 아이콘 버튼 — 헤더 클러스터의 두 버튼이 공유한다(결정 Y4). 상세 패널의
      닫기 컨트롤은 이 클래스를 쓰지 않는다 — 페이지 최상위 액션과 패널 안 컨트롤의
      위계를 구분한다(결정 SP11). 같은 줄에 나란히 서는 버튼들이 같은 크기·같은 테두리를
@@ -973,7 +993,11 @@ try{
 <div class="wrap">
   <div class="head-row">
     <h1>Claude Agents Manager</h1>
+    <span id="dzh-harness-version" class="harness-version" hidden></span>
     <div class="top-actions">
+      <button id="dzh-update" class="update-btn" type="button" data-command="/harness-update" hidden>
+        <span class="update-label"></span><span class="update-label-copied">복사됨 · /harness-update</span><span class="update-label-copy-failed">/harness-update 를 입력하세요</span>
+      </button>
       <button id="dzh-refresh" class="icon-btn refresh-btn" type="button" aria-label="새로고침" data-tooltip="새로고침">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false">
           <path d="M3 12a9 9 0 0 1 9-9 9.75 9.75 0 0 1 6.74 2.74L21 8"/>
@@ -1109,6 +1133,39 @@ try{
   // 시간을 JS 가 알 필요가 없다 — 애니메이션이 끝났다고 브라우저가 알려준다(PV7).
   refreshIconEl.addEventListener('animationend', function(){
     refreshButton.classList.remove(REFRESH_SPIN_CLASS);
+  });
+})();
+
+(function(){
+  // 새 버전 알림 버튼(harness-versioning 결정 UN7~UN9) — 누르면 /harness-update 를 클립보드에 넣는다. 업데이트를
+  // 직접 실행하지 않는다(사용자가 Claude Code 에 붙여 넣어 실행 — 서버는 GET 전용을 지킨다). 렌더 IIFE 안에 넣지
+  // 않는 이유: 그 IIFE 는 file:// 모드에서 `if(!isServed){ … return; }` 로 조기 반환하므로 그 뒤에 두면 복사가
+  // 조용히 죽는다(GOTCHA 4 선례). 스냅샷을 모르는 상수 문자열 복사라 새로고침 회전과 같은 층위의 독립 IIFE 가 맞다.
+  // 피드백(.update-btn-copied·.update-btn-copy-failed)은 사용자 상태다 — 이 IIFE 만 붙이고 떼며 렌더 IIFE 는
+  // 건드리지 않는다(폴링 재렌더가 지우지 않는다, 결정 UN8). 복사할 명령은 마크업의 data-command 가 단일 출처다.
+  var UPDATE_COPIED_CLASS = 'update-btn-copied';
+  var UPDATE_COPY_FAILED_CLASS = 'update-btn-copy-failed';
+  var UPDATE_COPY_FEEDBACK_MS = 2000;     // 복사 피드백 표시 시간
+  var updateButton = document.getElementById('dzh-update');
+  if(!updateButton) return;
+  var UPDATE_COMMAND_TEXT = updateButton.getAttribute('data-command');
+  var feedbackTimer = null;
+
+  function showCopyFeedback(feedbackClass){
+    updateButton.classList.remove(UPDATE_COPIED_CLASS, UPDATE_COPY_FAILED_CLASS);
+    updateButton.classList.add(feedbackClass);
+    clearTimeout(feedbackTimer);
+    feedbackTimer = setTimeout(function(){ updateButton.classList.remove(feedbackClass); }, UPDATE_COPY_FEEDBACK_MS);
+  }
+
+  updateButton.addEventListener('click', function(){
+    var clipboard = navigator.clipboard;
+    if(!clipboard || typeof clipboard.writeText !== 'function'){ showCopyFeedback(UPDATE_COPY_FAILED_CLASS); return; }
+    // writeText 가 동기로 던지는 브라우저도 같은 실패 경로로 모은다.
+    Promise.resolve().then(function(){ return clipboard.writeText(UPDATE_COMMAND_TEXT); }).then(
+      function(){ showCopyFeedback(UPDATE_COPIED_CLASS); },
+      function(){ showCopyFeedback(UPDATE_COPY_FAILED_CLASS); }
+    );
   });
 })();
 
@@ -1514,6 +1571,8 @@ try{
 
   var app = document.getElementById('dzh-app');
   var refreshButton = document.getElementById('dzh-refresh');
+  var harnessVersionEl = document.getElementById('dzh-harness-version');
+  var updateButtonEl = document.getElementById('dzh-update');
   var usageEl = document.getElementById('dzh-usage');
   var usageToggleButton = document.getElementById('dzh-usage-toggle');
   var usageBodyEl = document.getElementById('dzh-usage-body');
@@ -2567,6 +2626,38 @@ try{
     refreshButton.classList.toggle('connection-lost', isServed && connectionLost);
   }
 
+  // 설치된 하네스 버전 표기와 새 버전 알림 버튼(harness-versioning 결정 UN7·UN8). 둘 다 정적 마크업이라 노드를
+  // 교체하지 않고 hidden·data-tooltip·aria-label·textContent 만 맞춘다(className 은 복사 피드백 IIFE 의 것이라 건드리지
+  // 않는다). 뷰가 없으면(설치 기록 없음·옛 서버의 데이터) 둘 다 숨는다 — 이 기능이 없던 화면과 같다.
+  function harnessVersionTooltipText(view){
+    var parts = ['coding-harness ' + view.installed_version];
+    if(view.installed_commit_short) parts[0] += ' (' + view.installed_commit_short + ')';
+    var installedAtMs = Date.parse(view.installed_at);
+    if(isFinite(installedAtMs)) parts.push('설치 ' + formatTimestamp(installedAtMs));
+    return parts.join(' · ');
+  }
+
+  function renderHarnessVersion(view){
+    var hasInstalledVersion = Boolean(view && view.installed_version);
+    harnessVersionEl.hidden = !hasInstalledVersion;
+    if(hasInstalledVersion){
+      var versionText = 'v' + view.installed_version;
+      if(harnessVersionEl.textContent !== versionText) harnessVersionEl.textContent = versionText;
+      harnessVersionEl.setAttribute('data-tooltip', harnessVersionTooltipText(view));
+    }
+    var hasUpdate = Boolean(view && view.is_update_available && view.latest_version);
+    updateButtonEl.hidden = !hasUpdate;
+    if(!hasUpdate) return;
+    var command = updateButtonEl.getAttribute('data-command');
+    var labelText = '새 버전 ' + view.latest_version;
+    var labelEl = updateButtonEl.querySelector('.update-label');
+    if(labelEl.textContent !== labelText) labelEl.textContent = labelText;
+    updateButtonEl.setAttribute('aria-label', labelText + ' — 누르면 ' + command + ' 를 복사합니다');
+    updateButtonEl.setAttribute('data-tooltip',
+      '설치된 버전 ' + (view.installed_version || '알 수 없음') + ' → 최신 ' + view.latest_version
+      + ' · 누르면 ' + command + ' 가 복사됩니다. Claude Code 에 붙여 넣어 실행하세요.');
+  }
+
   // 이번 스냅샷으로 저장 순서를 갱신·영속화(필요할 때만)하고 화면에 그릴 순서를 돌려준다.
   // 계산된 전체 순서가 저장된 것과 다를 때만 쓴다(결정 O4) — 정상 상태에서는 첫 렌더 1회만
   // 쓰고 그 뒤로는 0회다(신규 프로젝트가 없는 한).
@@ -2909,6 +3000,7 @@ try{
     reconcileChildren(app, appContentHtml());   // ← T25-107·T25-229 의 새 앵커
     renderSessionModal();   // 열려 있을 때만 본문을 맞대기로 갱신한다(결정 SC3)
     renderConnectionStatus();
+    renderHarnessVersion(snapshot.harness_version);
     renderUsagePanel(snapshot.usage, snapshot.rate_limit_resets, snapshot.account);
     // 카드 DOM 이 방금 렌더 결과와 맞춰졌다(맞대기가 표시 class 를 지웠다 — 결정 PU3). 누가
     // 듣는지 이 IIFE 는 모르며 값도 싣지 않는다 — 열린 카드가 무엇인지의 유일한 출처는 카드

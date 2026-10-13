@@ -19,6 +19,7 @@ from pathlib import Path
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "..", "hub", "bin"))
 
 import hub_collect  # noqa: E402  (sys.path 조정 후 임포트)
+import hub_release_read  # noqa: E402
 import hub_session_cost  # noqa: E402
 
 NEUTRALIZED_CLAUDE_GLOBAL_CONFIG_PATH = Path("/nonexistent-coding-harness-tests/.claude.json")
@@ -30,3 +31,12 @@ hub_collect.CLAUDE_GLOBAL_CONFIG_PATH = NEUTRALIZED_CLAUDE_GLOBAL_CONFIG_PATH
 # 임시 디렉터리로 덮고 tearDown 에서 **이 중화값으로** 되돌린다.
 NEUTRALIZED_SESSION_COSTS_DIR = Path("/nonexistent-coding-harness-tests/session_costs")
 hub_session_cost.SESSION_COSTS_DIR = NEUTRALIZED_SESSION_COSTS_DIR
+
+# 하네스 설치 기록(~/.claude/.coding-harness.json)과 릴리스 확인 기록(~/.claude/hub/release_check.json)도 같은
+# 방식으로 중화한다(docs/prps/harness-versioning.md 단계 B) — collect_snapshot 이 두 파일을 읽으므로, 경로
+# 상수를 바꿔 끼우기를 잊은 테스트가 실제 개발자 머신의 설치 버전·repo_path 를 읽지 못하게 한다(결정적 실행).
+# 이 파일들을 쓰는 테스트는 각자 임시 경로로 덮고 tearDown 에서 **이 중화값으로** 되돌린다.
+NEUTRALIZED_INSTALL_RECORD_PATH = Path("/nonexistent-coding-harness-tests/.coding-harness.json")
+NEUTRALIZED_RELEASE_CHECK_PATH = Path("/nonexistent-coding-harness-tests/release_check.json")
+hub_release_read.INSTALL_RECORD_PATH = NEUTRALIZED_INSTALL_RECORD_PATH
+hub_release_read.RELEASE_CHECK_PATH = NEUTRALIZED_RELEASE_CHECK_PATH

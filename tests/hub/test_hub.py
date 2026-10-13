@@ -16,6 +16,8 @@ sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "..", "hub", "b
 import hub  # noqa: E402
 import hub_collect  # noqa: E402
 import hub_daemon  # noqa: E402
+import hub_release  # noqa: E402
+import hub_release_read  # noqa: E402
 import hub_server_state  # noqa: E402
 import hub_server_state_read  # noqa: E402
 import hub_settings  # noqa: E402
@@ -349,6 +351,29 @@ class CmdStatusServerSummaryTest(unittest.TestCase):
         hub_collect.CONFIG_PATH.write_text(json.dumps({"usage_api_enabled": True}))
         payload = self._run_cmd_status(maintenance_stalled=False)
         self.assertTrue(payload["usage_api_enabled"])
+
+    def test_release_check_fields_default_to_on_with_no_record(self) -> None:
+        """harness-versioning 결정 UN2 — 한 번도 확인하지 않았으면 release_check 는 null, 스위치는 기본 on."""
+        payload = self._run_cmd_status(maintenance_stalled=False)
+        self.assertTrue(payload["update_check_enabled"])
+        self.assertIsNone(payload["release_check"])
+
+    def test_release_check_failure_is_surfaced_only_here(self) -> None:
+        """실패는 화면 경고가 아니라 /hub status 에서만 보인다 — 사유와 직전 성공의 최신 버전이 함께 나온다."""
+        original_path = hub_release_read.RELEASE_CHECK_PATH
+        hub_release_read.RELEASE_CHECK_PATH = self.temp_dir / "release_check.json"
+        self.addCleanup(setattr, hub_release_read, "RELEASE_CHECK_PATH", original_path)
+        hub_release_read.write_release_check_record(hub_release.ReleaseCheckRecord(5, 1, "1.1.0", "timeout"))
+        payload = self._run_cmd_status(maintenance_stalled=False)
+        self.assertEqual(
+            payload["release_check"],
+            {"last_attempt_at_ms": 5, "last_success_at_ms": 1, "latest_version": "1.1.0", "last_failure_reason": "timeout"},
+        )
+
+    def test_update_check_enabled_reflects_config(self) -> None:
+        hub_collect.CONFIG_PATH.write_text(json.dumps({"update_check_enabled": False}))
+        payload = self._run_cmd_status(maintenance_stalled=False)
+        self.assertFalse(payload["update_check_enabled"])
 
     def _write_synthetic_account(self) -> None:
         hub_collect.CLAUDE_GLOBAL_CONFIG_PATH.write_text(

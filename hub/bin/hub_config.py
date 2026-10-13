@@ -35,6 +35,7 @@ _CONFIG_FIELD_TYPES: dict[str, type | tuple[type, ...]] = {
     "show_account_info": bool,
     "usage_api_enabled": bool,
     "usage_api_poll_interval_seconds": int,
+    "update_check_enabled": bool,
 }
 
 

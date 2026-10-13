@@ -21,6 +21,14 @@ readonly COMMANDS_FILE_COUNT=8
 readonly MAX_DIFF_LINES=20
 readonly MANIFEST_FILE_NAME=".coding-harness.json"
 readonly MANIFEST_VERSION=3
+# 하네스 릴리스 버전(docs/prps/harness-versioning.md HV1~HV7) — 루트 VERSION 이 정본이다. 위
+# MANIFEST_VERSION 은 설치 기록 파일의 스키마 번호이고 이것과 무관하다.
+readonly VERSION_FILE="$REPO_ROOT/VERSION"
+# 숫자 부분은 1~9자리(`[1-9][0-9]{0,8}`)다 — 새 버전 알림을 읽는 쪽(릴리스 확인 모듈의 자릿수 상수)과
+# 같은 경계다. 저장소가 받는 형식과 읽는 쪽이 받는 형식이 달라지면 안 된다(자릿수 무제한은 읽는 쪽의
+# 정수 변환 한도에 걸린다 — 판단 기록은 docs/prps/harness-versioning.md HV1).
+readonly HARNESS_VERSION_PATTERN='^(0|[1-9][0-9]{0,8})\.(0|[1-9][0-9]{0,8})\.(0|[1-9][0-9]{0,8})$'
+readonly UNKNOWN_HARNESS_VERSION="unknown"
 # ~/.claude/CLAUDE.md 은퇴 판정 상수 — 매직 문자열 금지. user scope 전용(project scope 는
 # CLAUDE.md 를 아예 모른다). 개명 접미사는 덮어쓰기 전 백업(.bak-)과 의미가 달라 구분한다 —
 # 은퇴는 덮어쓸 본체가 없는 1회성 마이그레이션이다.
@@ -45,6 +53,7 @@ target_rules_dir=""
 target_agents_dir=""
 target_commands_dir=""
 target_manifest_path=""
+harness_version=""
 
 log_info() { echo "[INFO] $*"; }
 log_warn() { echo "[WARN] $*" >&2; }
@@ -1051,15 +1060,37 @@ build_files_ledger_json() {
   printf '\n'
 }
 
+# 루트 VERSION 을 읽어 SemVer 문자열을 stdout 으로 낸다. 파일 없음·읽기 실패·여러 줄·형식 오류 →
+# "unknown" 을 내고 WARN 1줄(stderr)을 남긴다. 실패로 반환하지 않는다(HV7) — 버전은 메타데이터라
+# 이것 때문에 팀원 설치를 막지 않는다(installed_from_commit 의 "unknown" 폴백과 같은 판단).
+read_harness_version() {
+  local version_text=""
+  if [[ ! -f "$VERSION_FILE" ]]; then
+    log_warn "VERSION 파일이 없어 harness_version 을 $UNKNOWN_HARNESS_VERSION 으로 기록합니다: $VERSION_FILE"
+    echo "$UNKNOWN_HARNESS_VERSION"; return 0
+  fi
+  if ! version_text=$(cat "$VERSION_FILE" 2>/dev/null); then
+    log_warn "VERSION 파일을 읽을 수 없어 harness_version 을 $UNKNOWN_HARNESS_VERSION 으로 기록합니다: $VERSION_FILE"
+    echo "$UNKNOWN_HARNESS_VERSION"; return 0
+  fi
+  if [[ "$version_text" == *$'\n'* || ! "$version_text" =~ $HARNESS_VERSION_PATTERN ]]; then
+    log_warn "VERSION 형식이 X.Y.Z(숫자 1~9자리) 한 줄이 아니라 harness_version 을 $UNKNOWN_HARNESS_VERSION 으로 기록합니다: $VERSION_FILE"
+    echo "$UNKNOWN_HARNESS_VERSION"; return 0
+  fi
+  echo "$version_text"
+}
+
 build_manifest_json() {
   local installed_at="$1"
   local installed_from_commit="$2"
+  local harness_version="$3"
   local files_ledger
   files_ledger=$(build_files_ledger_json) || return 1
 
   # H2(§9-2·§7-4): repo_path·target_base_dir 도 JSON 문자열 자리에 넣기 전에 이스케이프한다.
-  # scope·installed_at·installed_from_commit 은 이스케이프하지 않는다 — 각각 parse_arguments
-  # 가 검증한 고정값, date 출력, git 커밋 해시라 이스케이프가 필요한 문자가 나올 수 없다.
+  # scope·installed_at·installed_from_commit·harness_version 은 이스케이프하지 않는다 — 각각
+  # parse_arguments 가 검증한 고정값, date 출력, git 커밋 해시, 정규식을 통과했거나 고정 문자열
+  # ("unknown")이라 이스케이프가 필요한 문자가 나올 수 없다.
   local escaped_repo_path escaped_target_base_dir
   escaped_repo_path=$(escape_json_string "$REPO_ROOT") || {
     log_error "레포 경로에 제어문자가 있어 manifest 를 생성할 수 없습니다: $REPO_ROOT"
@@ -1077,6 +1108,7 @@ build_manifest_json() {
   "scope": "$scope",
   "installed_at": "$installed_at",
   "installed_from_commit": "$installed_from_commit",
+  "harness_version": "$harness_version",
   "target_base_dir": "$escaped_target_base_dir",
   "files_count": {
     "rules": $RULES_FILE_COUNT,
@@ -1159,7 +1191,7 @@ save_manifest_file() {
 
   # 새 manifest 생성
   local manifest
-  manifest=$(build_manifest_json "$installed_at" "$installed_from_commit") || return 1
+  manifest=$(build_manifest_json "$installed_at" "$installed_from_commit" "$harness_version") || return 1
 
   # 기존 파일이 있으면 installed_at 제외하고 비교 (멱등성 확보)
   if [[ -f "$manifest_path" ]]; then
@@ -1181,7 +1213,7 @@ save_manifest_file() {
 }
 
 log_installation_plan() {
-  log_info "coding-harness 설치 계획 (scope: $scope, DRY-RUN)"
+  log_info "coding-harness $harness_version 설치 계획 (scope: $scope, DRY-RUN)"
   log_info "대상: $target_base_dir"
 
   if ! check_preconditions; then
@@ -1216,7 +1248,7 @@ log_installation_plan() {
 }
 
 perform_installation() {
-  log_info "coding-harness 설치 (scope: $scope)"
+  log_info "coding-harness $harness_version 설치 (scope: $scope)"
   log_info "대상: $target_base_dir"
 
   if ! check_preconditions; then
@@ -1256,6 +1288,8 @@ perform_installation() {
 main() {
   parse_arguments "$@"
   resolve_target_paths || { log_error "설치 중단 — 변경된 파일 없음"; return 1; }
+  # 실행당 1번만 읽는다 — VERSION 폴백 WARN 이 한 번만 나온다(HV7).
+  harness_version=$(read_harness_version)
 
   if [[ "$dry_run" == "true" ]]; then
     log_installation_plan

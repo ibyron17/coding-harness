@@ -16,6 +16,7 @@ import time
 import hub_collect
 import hub_daemon
 import hub_model
+import hub_release_read
 import hub_server
 import hub_server_state
 import hub_server_state_read
@@ -239,6 +240,14 @@ def _account_info_fields(config: hub_model.HubConfig) -> dict | None:
     }
 
 
+def _release_check_status() -> dict | None:
+    """진단용 — 새 릴리스 확인(release_check.json)의 마지막 기록. 한 번도 확인하지 않았으면 None.
+
+    실패는 화면 경고로 띄우지 않고 여기서만 보인다(사용량 API 폴링과 같은 처리, 결정 UN2)."""
+    record = hub_release_read.read_release_check_record()
+    return dataclasses.asdict(record) if record is not None else None
+
+
 def cmd_status(args: argparse.Namespace) -> int:
     """훅 설치 상태 · 이벤트 · 마지막 수집 실패 · 서버 요약 · 사용량 진단을 보고한다(검수 R3-m2)."""
     now_ms = _now_ms()
@@ -272,6 +281,8 @@ def cmd_status(args: argparse.Namespace) -> int:
             "usage_api_enabled": config.usage_api_enabled,
             "usage_api_last_attempt_age_ms": _usage_api_last_attempt_age_ms(now_ms),
             "usage_api_last_failure": hub_collect.read_last_usage_api_failure(),
+            "update_check_enabled": config.update_check_enabled,
+            "release_check": _release_check_status(),
         },
         args.json,
     )

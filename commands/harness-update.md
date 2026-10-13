@@ -25,6 +25,7 @@ When found, verify:
 - `version` ∈ { 1, 2, 3 } (v1 = pre-ledger manifest, v2 = adds the `files` sha256 ledger install.sh uses for stale/modified classification and tombstone deletion — see install.sh's `check_directory_conflict`/`process_removals`, v3 = drops CLAUDE.md from that ledger since install.sh no longer deploys it — see `retire_user_claude_md`)
 - `repo_path` exists and is a directory
 - `scope` ∈ { "project", "user" }
+- `harness_version` is optional — absent or `"unknown"` means a pre-versioning install; report it as `unknown` (the schema number `version` is unrelated and stays 3)
 
 If validation fails, report the error and stop.
 
@@ -98,7 +99,7 @@ git log --oneline '@{u}..HEAD'   # commits in local not in remote (divergence)
 
 If local has commits not in remote AND remote has commits not in local → **ERROR**: "Branches have diverged. Manual resolution required."
 
-If no new commits in upstream AND the install is fresh → **INFO**: "Already up to date. No changes." → exit 0
+If no new commits in upstream AND the install is fresh → **INFO**: `[INFO] Already up to date (<installed harness_version>). No changes.` → exit 0
 
 If no new commits in upstream but the install is stale:
 
@@ -111,9 +112,10 @@ If no new commits in upstream but the install is stale:
 
 Skip Phase 3 (there is nothing to pull) and continue directly to Phase 4. No confirmation — reinstalling from an already-fetched, non-diverged repo only touches managed files and is caught by Phase 4's own conflict check if anything unexpected is in the way.
 
-If new commits exist:
+If new commits exist, first read the remote's release version — `git show '@{u}:VERSION'` (a failure means `unknown`) — and compare it with the `harness_version` read from the manifest in Phase 1 (`unknown` when absent):
 
 ```
+[INFO] Version: <installed harness_version> → <remote VERSION>
 [INFO] Remote has N new commits:
   <log output here>
 [INFO] Updating...
@@ -350,9 +352,9 @@ git -C "$repo_path" rev-parse HEAD
 
 If `installed_from_commit` in manifest equals current HEAD → **OK**: Installation verified.
 
-Report:
+Read `harness_version` from the refreshed manifest and report it with the short hash of the current HEAD (a release between tags shows the previous release number — the hash tells them apart):
 ```
-[OK] Update complete
+[OK] Update complete — coding-harness <harness_version> (<short hash>)
 [OK] Manifest updated: installed_from_commit = <hash>
 ```
 
@@ -371,7 +373,7 @@ Exit 0.
 | No tracking branch | ERROR: stop with `git branch --set-upstream-to` hint |
 | Fetch fails | ERROR: stop |
 | Branches diverged | ERROR: stop |
-| Already up to date (repo and install both fresh) | INFO: stop, exit 0 |
+| Already up to date (repo and install both fresh) | INFO: report the installed `harness_version`, stop, exit 0 |
 | Repo up to date but install stale | INFO: reinstall automatically, skip Phase 3, proceed to Phase 4 |
 | Pull fails | ERROR: stop |
 | install.sh conflict | WARN: install.sh already classified every listed file as modified (ledger mismatch) — show the list (`diff -rq` summary lines, not full diff content; may be a subset — the precondition chain stops at the first conflicting directory) and ask once for a batch `--force`, noting it backs up every modified file across all three managed directories |

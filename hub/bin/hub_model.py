@@ -13,6 +13,7 @@ from dataclasses import asdict, dataclass
 from hub_account import AccountInfo
 from hub_parse import UNSET_SOURCE_PATH, Tier1Snapshot
 from hub_project import ProjectView, project_dashboard_key, tier1_file_path
+from hub_release import HarnessVersionView
 from hub_usage import RateLimitResets, UsageSample
 
 _DATA_MARKER_OPEN = '<script type="application/json" id="dzh-data">'
@@ -42,6 +43,7 @@ class HubConfig:
     show_account_info: bool = True                 # false 면 ~/.claude.json 을 아예 읽지 않는다(결정 AC7)
     usage_api_enabled: bool = False                # 사용량 API 폴링 스위치, 기본 off(결정 A6 — 옵트인)
     usage_api_poll_interval_seconds: int = 300     # 폴링 기본 주기(5분, 결정 A3)
+    update_check_enabled: bool = True              # 새 릴리스 태그 확인(git ls-remote) 스위치, 기본 on(결정 D5·UN4). false 면 스레드를 안 띄우고 캐시도 안 읽는다
 
 
 # ---- 표시(view) ----
@@ -57,6 +59,7 @@ class HubSnapshot:
     rate_limit_resets: RateLimitResets | None = None    # 없으면 초기화 예정 시각 줄을 그리지 않는다
     account: AccountInfo | None = None  # usage 가 있을 때만 채워진다(결정 AC2). 출처는 rate_limits.json 이 아니라 ~/.claude.json
     template_stamp: str = ""    # 이 페이지를 렌더한 hub_template.html 의 세대(결정 SH3)
+    harness_version: HarnessVersionView | None = None    # 설치된 하네스 버전·새 릴리스 알림. user scope 설치 기록이 없으면 None(템플릿이 숨긴다, harness-versioning UN7)
 
 
 def _register_dashboard(registry: dict[str, str], key: str | None, tier1: Tier1Snapshot | None) -> None:

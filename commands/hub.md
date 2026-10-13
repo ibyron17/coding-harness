@@ -315,6 +315,16 @@ python3 -- "$HOME/.claude/hub/bin/hub.py" status --json
 포함되지 않는다**). 이 경로는 스위치 off·statusLine 미등록·세션 미실행·계약 불일치·만료와
 함께 "패널이 안 뜨는 이유"의 사각지대를 마저 없앤다.
 
+`update_check_enabled`(`config.json` 의 새 릴리스 확인 스위치, 기본 `true`) ·
+`release_check`(`{last_attempt_at_ms, last_success_at_ms, latest_version, last_failure_reason}`
+또는 한 번도 확인하지 않았으면 `null`)도 같은 표에 곁들인다. 서버가 6시간마다 coding-harness 저장소
+폴더에서 `git ls-remote --tags` 로 새 릴리스 태그를 확인한 마지막 결과다. 화면에 「새 버전」 알림이
+안 뜨는 이유를 이 두 필드로 구분한다 — `update_check_enabled:false`(껐다) · `release_check:null`
+(서버가 꺼져 있었거나 아직 첫 확인 전) · `last_failure_reason` 이 있으면 그 사유(`no_install_record`
+설치 기록 없음 · `repo_missing` 저장소 폴더 없음 · `git_unavailable` git 없음 · `timeout` 15초 초과 ·
+`remote_error` 원격 접속 실패(인증·네트워크·SSH 키 포함) · `output_too_large` 출력이 너무 큼 · `parse_error` 태그 목록 해석 실패) — 실패해도 직전에 알아낸
+`latest_version` 은 남는다. 실패는 화면에 경고로 뜨지 않고 여기서만 보인다.
+
 ---
 
 ## 구현 노트 (사람이 읽는 참고용 — 이 절은 실행하지 않는다)
