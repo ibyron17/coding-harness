@@ -310,7 +310,11 @@ trap suite_exit_guard EXIT
 # 54238 → 54254(+16B): CLAUDE.md(제목·첫 문단·manifest 파일 이름 `.coding-harness.json`)와
 # role-separation.md 첫 문단의 저장소 이름 표기 4곳을 `coding-harness` 로 맞춘 데서 나왔다(곳당 +4B).
 # 이 값도 추정이 아니라 편집 후 재측정한 실측치다.
-readonly ALWAYS_ON_CONTEXT_BUDGET_BYTES=54254
+# 54254 → 54660(+406B, 2026-10-13 사용자 결정): CLAUDE.md §5 에 브랜치 규칙 한 항목(4줄)을 더했다 —
+# main 을 릴리스 브랜치로 두고 작업은 develop 위 브랜치에서 한다. 같은 저장소의 여러 세션이 main
+# 체크아웃의 미커밋 작업과 부딪히지 않게 하려는 규칙이라 모든 세션이 읽는 상시 컨텍스트에 둔다.
+# 이 값도 추정이 아니라 편집 후 재측정한 실측치다.
+readonly ALWAYS_ON_CONTEXT_BUDGET_BYTES=54660
 
 # 허브 진행 기록 규칙 파일 증분 상한 래칫(T40-5, docs/prps/dashboard-into-hub.md HD2·HD10).
 # 옛 DASHBOARD_MD_BUDGET_BYTES(T22-163, dashboard.md 대상)를 승계한다 — dashboard.md 자체가

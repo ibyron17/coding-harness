@@ -45,6 +45,10 @@ bash -n install.sh && bash -n hub/install.sh
 ## 5. 컨벤션
 
 - **커밋 메시지**: `type: 한국어 서술형` (git log 관행 — feat/fix/docs/test/refactor 등).
+- **브랜치**: `main` 은 릴리스 브랜치다 — 직접 커밋·푸시하지 않고 릴리스 때만 `develop` 에서
+  반영한다. 작업은 `develop` 위의 `<type>/<짧은-이름>` 브랜치(예: `fix/hub-host-header-guard`)에서
+  하고 원격에 푸시한다. 워크트리가 `main` 에서 갈라졌으면 `develop` 위로 옮긴다. `develop`
+  반영은 사용자가 요청할 때 한다.
 - **함수 50줄 제한의 프로젝트 예외**: `tests/run.sh` 의 T 그룹 함수는 시나리오 나열이
   본질이라 분할이 오히려 가독성을 해친다 — user rules 의 50줄 규칙에 대한 정당한
   프로젝트 우선 적용이다(project CLAUDE.md 가 user-level rules 보다 우선순위가 높다).

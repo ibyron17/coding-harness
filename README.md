@@ -105,7 +105,7 @@ scope 는 대상 프로젝트의 `./CLAUDE.md` 를 건드리지 않고, user sco
 `~/.claude/CLAUDE.md` 를 안전하게 은퇴시킨다. 판정 규칙은 아래
 「`~/.claude/CLAUDE.md` 은퇴」 절 참고.)
 
-상시 컨텍스트를 차지하는 것은 **CLAUDE.md 1개 + rules 16개 = 17개(실측 54,254B)** 뿐이다.
+상시 컨텍스트를 차지하는 것은 **CLAUDE.md 1개 + rules 16개 = 17개(실측 54,660B)** 뿐이다.
 이 수치는 `tests/run.sh` 의 T26 이 예산 상한으로 강제한다(래칫 — 내리는 것은 자유, 올리려면
 그 값을 고치는 커밋에 근거를 남겨야 한다).
 나머지는 조건이 맞을 때(rules 30개) 또는 호출할 때(agents 4개, commands 8개)만 로드된다.
@@ -236,7 +236,7 @@ scope 는 대상 프로젝트의 `./CLAUDE.md` 를 건드리지 않고, user sco
 | react-native/ | 8 | **조건부** | React Native/Expo 확장 (accessibility·production-readiness 포함) |
 | python/ | 5 | **조건부** | `paths`(py/pyi) 매칭 시 로드 |
 
-**항상 로드되는 rules**: 16개 (CLAUDE.md 포함 시 17개, 실측 54,254B — `tests/run.sh` T26 예산 상한으로 강제)
+**항상 로드되는 rules**: 16개 (CLAUDE.md 포함 시 17개, 실측 54,660B — `tests/run.sh` T26 예산 상한으로 강제)
 
 `common/karpathy-guidelines.md` 는 Andrej Karpathy의 관찰에서 파생된, LLM 코딩의 흔한 실패(추측성
 코드·과잉 수정·불명확한 목표)를 줄이기 위한 행동 지침이며, `paths` frontmatter가 없어 **설치된
