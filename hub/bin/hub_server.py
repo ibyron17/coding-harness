@@ -46,6 +46,16 @@ ALLOWED_REQUEST_PATHS = ("/", "/hub.html")
 # 요청 문자열에서 뽑는 것은 정규식이 확정한 16자리 hex 뿐이다 — 이 문자열은 절대 경로 조립에
 # 쓰이지 않고 오직 dashboard_paths_by_key 딕셔너리의 조회 키로만 쓰인다(결정 N3).
 PROJECT_DASHBOARD_PATH_PATTERN = re.compile(r"^/project/([0-9a-f]{16})/dashboard\.html\Z")
+# DNS 리바인딩 방어(docs/prps/hub-host-header-guard.md): 원격 페이지가 자기 도메인을 127.0.0.1 로
+# 다시 풀어 이 포트의 응답을 읽어도 그 요청의 Host 는 공격자 도메인이다. `[::1]` 은 넣지 않는다 —
+# BIND_ADDRESS 가 IPv4 전용이라 그 Host 로 도착하는 요청이 없다(HG3).
+ALLOWED_HOST_NAMES = ("localhost", "127.0.0.1")
+# 기본 포트면 클라이언트가 Host 에서 포트를 생략한다 — 이 규칙이 없으면 `server_port: 80` 설정의
+# 모든 요청(http_ok 확인 포함)이 403 이 된다(HG4).
+HTTP_DEFAULT_PORT = 80
+# RFC 9110 OWS: 파서가 앞 공백만 벗기고 뒤 공백·탭은 남긴다. `str.strip()` 은 NBSP 등까지 벗겨
+# RFC 보다 넓어지므로 쓰지 않는다(HG5).
+HTTP_OPTIONAL_WHITESPACE = " \t"
 SERVER_LOG_MAX_BYTES = 256 * 1024
 CACHE_CONTROL_NO_STORE = "no-store"
 
@@ -92,18 +102,37 @@ def _truncate_log_if_oversized(log_path, max_bytes: int) -> None:
         pass
 
 
+def is_allowed_host_header(host_header_values: list[str], server_port: int) -> bool:
+    """Host 헤더가 정확히 1개이고 그 값이 허용 이름:실제 포트일 때만 True(순수 — DNS 리바인딩 방어).
+
+    문자열 전체 일치로만 판정한다 — 포트를 `int()` 로 파싱하면 `+8794`·`08794`·`8_794` 를 전부
+    8794 로 받아 준다(docs/prps/hub-host-header-guard.md §6)."""
+    if len(host_header_values) != 1:
+        return False
+    normalized_host = host_header_values[0].strip(HTTP_OPTIONAL_WHITESPACE).lower()
+    allowed_hosts = {f"{name}:{server_port}" for name in ALLOWED_HOST_NAMES}
+    if server_port == HTTP_DEFAULT_PORT:
+        allowed_hosts.update(ALLOWED_HOST_NAMES)
+    return normalized_host in allowed_hosts
+
+
 class _HubRequestHandler(http.server.BaseHTTPRequestHandler):
     """허용 경로 2개는 hub.html 을, 프로젝트 대시보드 경로는 레지스트리 조회로 서빙한다.
-    그 외는 전부 404(결정 N3 — 요청 문자열로 경로를 조립하지 않는다)."""
+    그 외는 전부 404(결정 N3 — 요청 문자열로 경로를 조립하지 않는다). Host 가 루프백
+    이름:실제 포트가 아니면 경로와 무관하게 403(docs/prps/hub-host-header-guard.md HG1)."""
 
     def do_GET(self) -> None:
-        """경로 판정 → 신선도 게이트 → 본문 생산. 게이트는 **인식된 경로에만** 건다 —
+        """Host 판정 → 경로 판정 → 신선도 게이트 → 본문 생산(docs/prps/hub-host-header-guard.md).
+        게이트는 **인식된 경로에만** 건다 —
         favicon 처럼 화이트리스트 밖 요청이 수집을 유발하면 안 된다.
 
         인식된 경로 판정을 `if`/`return` 으로 먼저 끝내 두 분기가 각자의 `dashboard_match`
         상태(불변식)를 함께 들고 다니지 않게 한다(검수 Minor D) — 이전에는 그 불변식이
         `is_hub_path`·`dashboard_match` 두 지역 변수에 흩어져 있어 타입 검사기가 좁히지
         못했다."""
+        if not is_allowed_host_header(self.headers.get_all("Host", []), self.server.server_address[1]):
+            self.send_error(403)
+            return
         if self.path in ALLOWED_REQUEST_PATHS:
             self._refresh_if_stale()
             self._serve_hub_html()
