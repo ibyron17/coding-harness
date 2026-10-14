@@ -164,7 +164,9 @@ DZH:HUB 데이터 계약
   라 선택 차단이 지울 것이 애초에 없다.
 
   .tier1-active 줄과 그 잘림 방어(TC2, docs/prps/hub-tier1-clamp-fix-and-session-model.md)는 걷혔다 — 단계명을 옮겨
-  받았던 진행률 줄 맨 앞 단계 칩도 걷혔다(결정 LM4·LM12, docs/prps/hub-session-row-layout-and-modal-size.md).
+  받았던 진행률 줄 맨 앞 단계 칩도 걷혔다(결정 LM4·LM12, docs/prps/hub-session-row-layout-and-modal-size.md). 승인을 기다리는 세션은
+  단계 칩이 아니라 첫 줄 상태 배지 뒤의 「◆ 승인 대기」 표지(.badge.approval-wait)로만 알린다 — 서버가 실은 bool 하나
+  (tier1.is_approval_step_active)와 base_state 로 정한다(결정 AW1~AW5, docs/prps/hub-approval-wait-badge.md).
   세션 줄 안의 순서는 line → meta → 발췌 → 진행률 → 실행 줄 → 워크플로이고 DOM 순서가 곧 시각 순서다(결정 LM2).
 
   세션 모델·effort(요구 2, 같은 문서 결정 MD1~MD10)는 .session-meta 의 세 번째 항목
@@ -426,6 +428,14 @@ DZH:HUB 데이터 계약
      의 halo 금지 정신 — glow 는 working 전용). */
   .badge.state-background{background:var(--accent-soft);color:var(--accent-ink);border:1px solid var(--accent)}
   .badge.state-done{background:transparent;color:var(--muted);border:1px solid var(--line)}
+  /* 승인 대기 표지(결정 AW4, docs/prps/hub-approval-wait-badge.md) — 「사용자 조치가 필요하다」는 주황(--attention) 계열이되 한도 초과(채움)·
+     소식 없음(점선)과 흰 면 + 실선 링으로 형태가 갈린다. 면을 --surface 로 칠하는 이유는 대비다: 글자 --attention 이 --surface 위
+     5.02:1(라이트)·7.29:1(다크)로 WCAG AA(4.5:1)를 넘지만 면이 투명이면 열린 행(--accent-soft) 위 4.06:1, --attention-soft 면이면
+     4.39:1 로 11px 글자에 미달이다. 링은 border 가 아니라 안쪽 box-shadow 다 — 실측(320px 트랙)에서 1px border 는 첫 줄을 19→21px 로
+     키우고 상태 배지 중심을 +1px 내려 트리 갈고리 정렬 허용치(≤1px)를 소진했지만, 안쪽 링은 표지 없는 줄과 높이·중심이 같았다.
+     링은 흐림·번짐·애니메이션이 없는 1px 테두리 대용이라 halo 금지(T25-190·243·250)와 무관하다. 새 색 토큰 0. 단계 칩(.agent-chip)
+     어휘를 쓰지 않는다 — 결정 LM12 가 실행 칩과 헷갈려 걷은 것의 부활이 아니다(결정 AW5). */
+  .badge.approval-wait{background:var(--surface);color:var(--attention);box-shadow:inset 0 0 0 1px var(--attention)}
   .last-activity{margin-left:auto;font-size:11.5px;color:var(--muted);flex:0 0 auto;white-space:nowrap}
   .path{font-size:11.5px;color:var(--muted);margin-top:2px;word-break:break-all}
   .tier1-pct{font-size:12px;font-weight:700;color:var(--accent-ink);margin-top:8px}
@@ -1338,6 +1348,11 @@ try{
   // 같은 짜임) — 320px 최악 조합에서 프로젝트 머리가 넘치지 않도록 짧은 라벨(STATE_LABEL.background)
   // 은 프로젝트 배지가 쓴다(docs/prps/hub-subagent-background-pause.md §9 R8·GOTCHA 11 실측).
   var BACKGROUND_SESSION_LABEL = '백그라운드 대기';
+  // 승인 대기 표지(결정 AW1~AW4, docs/prps/hub-approval-wait-badge.md) — 설계를 마치고 사용자 승인을 기다리는 세션의
+  // 첫 줄 표지. 글리프 ◆ 는 상태 글리프(●■◐○▲)와 같은 기하 도형 블록이라 이모지로 그려지지 않는다(RI10 기준).
+  var APPROVAL_WAIT_LABEL = '승인 대기';
+  var APPROVAL_WAIT_GLYPH = '◆';
+  var APPROVAL_WAIT_TOOLTIP = '진행 기록이 「승인」 단계에 있고 세션이 사용자 입력을 기다리고 있습니다. 세션에 답하면(승인·수정 요청) 이 표시가 거둬집니다.';
   // stale 판정 임계값(분) — 서버 hub_model.HubConfig.stale_after_minutes 기본값(30)과
   // 결합된 하드코딩이다. 스냅샷에는 실리지 않아(상태만 'stale'로 온다) 클라이언트가 값
   // 자체를 직접 안다 — commands/dashboard.md 의 find -mmin -30(같은 30분을 리터럴로 아는
@@ -1781,6 +1796,23 @@ try{
     return '<span class="badge state-' + state + '"' + tooltipAttribute + '>'
          + '<span class="glyph" aria-hidden="true">' + STATE_GLYPH[state] + '</span>'
          + label + '</span>';
+  }
+
+  // 승인 대기 표지를 보일 세션인가(결정 AW1) — 서버 사실(진행 기록의 승인 단계가 진행중) ∧ 메인 턴이 끝나 사용자
+  // 차례(base_state idle) ∧ 한도 초과 아님. 「사용자 차례인가」는 표시 상태(stale 이 가린다)가 아니라 그 아래 base_state 가
+  // 답한다. 단계 이름은 화면이 해석하지 않는다 — 서버가 bool 하나로 넘긴다(결정 AW2). 순수 함수 — DOM 에 닿지 않는다.
+  // 키가 없는 옛 서버의 페이로드는 undefined 라 false 다(오늘 화면 그대로 — 페일 클로즈).
+  function isAwaitingApproval(session){
+    if(!session.tier1 || !session.tier1.is_approval_step_active) return false;
+    return session.base_state === 'idle' && session.state !== 'interrupted';
+  }
+
+  // 첫 줄 상태 배지 뒤의 승인 대기 표지(결정 AW3·AW4). 해당 없으면 빈 문자열 — 첫 줄이 오늘과 같다. 모양은 .badge 어휘 +
+  // 주황 안쪽 링이라 서브에이전트 실행 칩(.agent-chip)과 겹치지 않는다(결정 AW5 — LM12 가 걷은 단계 칩의 부활이 아니다).
+  function renderApprovalWaitBadge(session){
+    if(!isAwaitingApproval(session)) return '';
+    return '<span class="badge approval-wait" data-tooltip="' + escapeHtml(APPROVAL_WAIT_TOOLTIP) + '">'
+      + '<span class="glyph" aria-hidden="true">' + APPROVAL_WAIT_GLYPH + '</span>' + APPROVAL_WAIT_LABEL + '</span>';
   }
 
   // 실행 목록의 칩 라벨(결정 AR8) — 단계 매핑이 있으면 단계 이름, 없으면 agent_type 을
@@ -2247,7 +2279,7 @@ try{
   // 세션 줄·세션 카드 공통 내용(첫 줄·메타·발췌·진행·실행·워크플로). 1단 본문(첫 줄·메타·발췌)을 다 그린 뒤
   // 2단 가지(진행률 → 실행 줄 → 워크플로)를 연다 — DOM 순서가 곧 시각 순서다(결정 LM2, CSS order 를 쓰지
   // 않는다: 화면 낭독기는 버튼 안 자식을 DOM 순서로 읽는다). 첫 줄(.session-line)
-  // 은 상태 배지와 소요 시간(작업 시작부터 — 마지막 이벤트 경과가 아니다, 그건 프로젝트 머리 .last-activity 가
+  // 은 상태 배지(+ 해당할 때 승인 대기 표지 — 결정 AW3)와 소요 시간(작업 시작부터 — 마지막 이벤트 경과가 아니다, 그건 프로젝트 머리 .last-activity 가
   // 보인다)이고(백그라운드 대기 세션이 출력 파일을 찾았으면 그 뒤에 출력 갱신이 붙는다 — 결정 LA10),
   // 식별 줄(.session-meta)이 첫 줄 안으로 새지 않는 불변을 T25-127 이 이 함수 안에서 문다(앵커 이동 —
   // 결정 SC6). renderSession(카드 세션 줄)과 renderSessionCard(모달 세션 카드, 아래 카드
@@ -2255,6 +2287,7 @@ try{
   function renderSessionContent(session){
     return '<div class="session-line">'
       + renderStateBadge(session.state, session.base_state, session.last_event_at_ms, session.interruption, session.background_wait)
+      + renderApprovalWaitBadge(session)
       + '<span class="session-time"><span class="sr-only">' + SESSION_DURATION_SR_LABEL + '</span>'
       + sessionElapsedLabel(session, Date.now()) + '</span>'
       + renderSessionActivity(session)
@@ -2301,7 +2334,7 @@ try{
   // 세션 카드(renderSessionProgress) 전용이다. 카드와 카드 상세보기 머리는 프로젝트 단위 진행률을
   // 그리지 않는다(결정 MX4, docs/prps/hub-session-modal-cleanup.md) — 그래서 이전 작업·주인 세션
   // 없음 라벨 인자와 null 가드도 없다. 진행률 줄 맨 앞 단계 칩은 없다 — 아래 서브에이전트 실행 칩과
-  // 헷갈려 걷었다(결정 LM12, docs/prps/hub-session-row-layout-and-modal-size.md).
+  // 헷갈려 걷었다(결정 LM12, docs/prps/hub-session-row-layout-and-modal-size.md). 승인 대기 표지는 첫 줄에 산다 — AW3.
   function renderTier1(tier1){
     return '<div class="tier1-pct">' + escapeHtml(tier1.title) + ' — '
       + tier1.completed + '/' + tier1.total + ' · ' + tier1.percent + '%</div>'

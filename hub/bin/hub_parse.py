@@ -65,6 +65,10 @@ class Tier1Snapshot:
     # pass 가 없으면 False. 사실만 싣는다 — 「커밋 전」 칩이 걷힌 뒤(결정 LM12) 현재 화면은 읽지 않는다. 정적 값이라
     # snapshot_content_key 를 흔들지 않는다.
     is_committed: bool = False
+    # 진행 기록의 「승인」 단계가 진행중인가(결정 AW2, docs/prps/hub-approval-wait-badge.md). 사실만 싣는다 — 세션
+    # 상태와 합쳐 표지를 보일지는 화면(isAwaitingApproval)이 정한다(GN4·FT4·LM6 관례). 이벤트 열의 함수라
+    # snapshot_content_key 에 안전하다.
+    is_approval_step_active: bool = False
 
 
 # ---------------------------------------------------------------------------
@@ -225,7 +229,10 @@ def parse_event_lines(text: str) -> tuple[DashboardEvent, ...]:
 # 비표준 단계 목록 전용으로 그 인덱스 하나만 명시 갱신한다(같은 reducer 의 한 갈래).
 # ---------------------------------------------------------------------------
 
-_PHASE_NAME_BY_COMPLETION_KIND = {"design": "설계", "approve": "승인", "impl": "구현"}
+# 진행 기록 어휘의 「승인」 단계 이름 — log approve 가 끝내는 단계와 is_approval_step_active 가 보는 단계를
+# 한 리터럴로 묶는다(결정 AW2, docs/prps/hub-approval-wait-badge.md).
+_APPROVAL_PHASE_NAME = "승인"
+_PHASE_NAME_BY_COMPLETION_KIND = {"design": "설계", "approve": _APPROVAL_PHASE_NAME, "impl": "구현"}
 
 
 def _state_from_completed_count(phase_count: int, completed_count: int) -> tuple[str, ...]:
@@ -283,6 +290,11 @@ def is_commit_logged_after_last_pass(events: tuple[DashboardEvent, ...]) -> bool
     return any(event.kind == "commit" for event in events[last_pass_index + 1 :])
 
 
+def is_approval_step_active(steps: tuple[StepView, ...]) -> bool:
+    """「승인」이라는 이름의 단계가 진행중(active)인가(결정 AW2). 그런 단계가 없으면 False."""
+    return any(step.name == _APPROVAL_PHASE_NAME and step.state == "active" for step in steps)
+
+
 _UPDATED_LABEL_PREFIX = "갱신: "
 
 
@@ -334,6 +346,7 @@ def snapshot_from_events(events: tuple[DashboardEvent, ...]) -> Tier1Snapshot:
         file_mtime_ms=UNSET_FILE_MTIME_MS,
         task_started_at_ms=init_event.time_ms,
         is_committed=is_commit_logged_after_last_pass(later_events),
+        is_approval_step_active=is_approval_step_active(steps),
     )
 
 

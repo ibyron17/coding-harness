@@ -590,7 +590,10 @@ readonly MUTATION_HARNESS_GROUP="T37"
 #
 # 129 → 131(harness-versioning.md 2회차 검수 Major·Minor): 신규 가드 T41-4b(VERSION 읽기 오류 stderr 누수)·T41-9(저장소와 허브의
 # VERSION 숫자 자릿수 경계 일치)의 변조행 2건을 붙였다. T99-6 은 이 상수 인용을 바꾼 수정에 맞춰 sed 리터럴을 옮겼다. 순증가 2.
-readonly LEDGER_MUTATION_ROW_FLOOR=131
+#
+# 131 → 133(hub-approval-wait-badge.md, 결정 AW1~AW5): 신규 가드 T25-280(승인 대기 표지 배선 — 첫 줄 호출)·T25-281(표지가 실행 칩이
+# 아니다)의 변조행 2건을 붙였다. 순증가 2.
+readonly LEDGER_MUTATION_ROW_FLOOR=133
 
 # 원장 면제행 수의 상한 래칫(T37-14 가 실행마다 검사, PRP §12 「면제행이 영구 도피처가
 # 된다」의 두 번째 완화). 착지 시점 실측 390. 신규 가드를 기존 공통 사유로 면제 등록하면
@@ -929,7 +932,11 @@ readonly LEDGER_EXEMPT_ROW_RATCHET=372
 #
 # 555 → 557(harness-versioning.md 2회차 검수): 신설 2건 T41-4b·T41-9. 순증가 2. 개정한 T41-1·T41-4 는 같은 ID 라 개수에 닿지 않는다.
 # collect_guard_ids 를 그대로 재현해 편집 전(555)·후(557) 재측정한다.
-readonly SOURCE_GUARD_ID_FLOOR=557
+#
+# 557 → 559(hub-approval-wait-badge.md, 결정 AW1~AW5): 신설 2건 T25-280(승인 대기 표지 배선)·T25-281(표지가 실행 칩이 아니다 — LM12 관계).
+# 순증가 2. 개정한 T25-201(data-tooltip 기대값 20 → 21)은 같은 ID 라 개수에 닿지 않는다. collect_guard_ids 를 그대로 재현해 편집
+# 전(557)·후(559) 재측정한다.
+readonly SOURCE_GUARD_ID_FLOOR=559
 
 # 배포 트리(rules/·agents/·commands/)에 남는 "파일명:줄번호" 형태 인용 수의 상한
 # 래칫(T39-4). 배포되는 문서가 다른 파일의 줄 번호를 인용하면, 그 파일을 고치는 수정이
@@ -4158,7 +4165,7 @@ read_python_product_constant() {
 test_hub_docs_and_constants() {
   group_failures=()   # 앞 그룹이 조기 return 했을 때의 잔여물 제거
   local test_name="T25"
-  local test_desc="허브 문서·상수 정합성 (T25-1~T25-279)"
+  local test_desc="허브 문서·상수 정합성 (T25-1~T25-281)"
   log_test_name "$test_name" "$test_desc"
 
   local hub_settings_file="$REPO_ROOT/hub/bin/hub_settings.py"
@@ -8494,11 +8501,14 @@ PYEOF
   # 정가 기준 추정 고지가 없으면 숫자가 청구액으로 읽히므로 칩이 있으면 툴팁이 늘 붙는다. 같은 README 목록(위 툴팁 서술)에 반영했다.
   # 같은 문서 개정 LM12 가 그 단계 칩을 걷으며 칩의 툴팁도 함께 사라져 21 → 20(−1) — hub/README.md 「화면 배치」 진행률 줄 서술에서 칩과 그 툴팁
   # 서술을 걷었다.
-  # 기대값을 20으로 고정한다: 다른 트리거가 함께 죽으면 19 이하, 추가(단계 칩 툴팁 부활 포함)가 되돌아오면 21 이상.
+  # docs/prps/hub-approval-wait-badge.md(결정 AW4)가 세션 첫 줄에 승인 대기 표지(renderApprovalWaitBadge)를 더하며 20 → 21(+1) —
+  # 표지의 판정 기준·거둬지는 조건을 말하는 정적 툴팁이다(보이는 글자 「승인 대기」에 없는 정보). hub/README.md 「화면 배치」의 승인 대기
+  # 항목과 툴팁 서술에 반영했다.
+  # 기대값을 21로 고정한다: 다른 트리거가 함께 죽으면 20 이하, 추가(단계 칩 툴팁 부활 포함)가 되돌아오면 22 이상.
   local data_tooltip_attribute_count_201
   data_tooltip_attribute_count_201=$(grep -c 'data-tooltip="' "$hub_template_file")
-  if [[ "$data_tooltip_attribute_count_201" -ne 20 ]]; then
-    note_failure "T25-201: data-tooltip=\" 리터럴이 ${data_tooltip_attribute_count_201}건(기대 20)"
+  if [[ "$data_tooltip_attribute_count_201" -ne 21 ]]; then
+    note_failure "T25-201: data-tooltip=\" 리터럴이 ${data_tooltip_attribute_count_201}건(기대 21)"
   fi
 
   # T25-202(신설, 역 — 이슈 3, docs/prps/hub-ui-4-issues.md §4, 결정 WT3·WT4 서버 되돌림
@@ -10520,6 +10530,67 @@ PYEOF
   fi
   if grep -qE '^(import|from)[[:space:]].*hub_(collect|server)\b' "$hub_release_read_file_275"; then
     note_failure "T25-279: hub_release_read.py 가 hub_collect·hub_server 를 임포트함(순환 의존)"
+  fi
+
+  # T25-280(신설, 정 — 결정 AW1~AW4·AW7, docs/prps/hub-approval-wait-badge.md): 승인 대기 표지의 배선. ① hub_parse.py 의 Tier1Snapshot 이
+  # `is_approval_step_active: bool = False` 사실 필드를 선언한다 ② isAwaitingApproval() 본문이 그 필드(`tier1.is_approval_step_active`)를
+  # 읽는다(서버 필드만 개명해도 화면이 눈먼 채 항상 false 가 되지 않게 — 개명하면 정적 가드가 눈이 먼다) ③ renderSessionContent() 의 첫 줄
+  # 구간(T25-127 과 같은 awk 추출 — class="session-line" 뒤 첫 </div> 앞)에 renderApprovalWaitBadge(session) 호출이 있다(호출이 식별 줄·
+  # 진행률 줄로 옮겨지거나 지워지면 표지가 첫 줄에서 사라진다) ④ `.badge.approval-wait{` 규칙이 있고 그 본문에 animation 이 없다(halo·pulse 금지 —
+  # glow 는 working 전용, T25-190 계열) ⑤ hub/README.md 「화면 배치」에 승인 대기 서술이 있다(T25-36·T25-152 관례). 메시지는 반복문 밖의 고정
+  # 문구로 나눠 쓴다(T25-240 관례와 같은 이유 — 원장 판별자 자격, T37-13). 원장 행은 ③ 을 문다.
+  local hub_parse_file_280="$REPO_ROOT/hub/bin/hub_parse.py"
+  local awaiting_body_280 approval_badge_body_280 session_content_body_280 first_line_segment_280 approval_rule_280
+  if ! grep -qF 'is_approval_step_active: bool = False' "$hub_parse_file_280"; then
+    note_failure "T25-280: hub_parse.py 에 is_approval_step_active: bool = False 선언이 없음(결정 AW2 위반 — 승인 단계 진행중 사실이 스냅샷에 실리지 않는다)"
+  fi
+  awaiting_body_280=$(sed -n '/^  function isAwaitingApproval(session){$/,/^  }$/p' "$hub_template_file")
+  if [[ -z "$awaiting_body_280" ]]; then
+    record_failure "$test_name" "T25-280: isAwaitingApproval() 범위 추출 실패 — 앵커가 깨졌다"
+    return 1
+  fi
+  if ! grep -qF 'tier1.is_approval_step_active' <<< "$awaiting_body_280"; then
+    note_failure "T25-280: isAwaitingApproval() 이 서버 사실 tier1.is_approval_step_active 를 읽지 않음(결정 AW2 위반 — 필드 이름이 서버와 어긋나면 표지가 영영 안 뜬다)"
+  fi
+  approval_badge_body_280=$(sed -n '/^  function renderApprovalWaitBadge(session){$/,/^  }$/p' "$hub_template_file")
+  session_content_body_280=$(sed -n '/function renderSessionContent(session){/,/^  }$/p' "$hub_template_file")
+  if [[ -z "$approval_badge_body_280" || -z "$session_content_body_280" ]]; then
+    record_failure "$test_name" "T25-280: renderApprovalWaitBadge()·renderSessionContent() 범위 추출 실패 — 앵커가 깨졌다"
+    return 1
+  fi
+  first_line_segment_280=$(awk '
+    /class="session-line"/ { in_range=1 }
+    in_range {
+      if (match($0, /<\/div>/)) { print substr($0, 1, RSTART-1); exit }
+      print
+    }
+  ' <<< "$session_content_body_280")
+  if ! grep -qF 'renderApprovalWaitBadge(session)' <<< "$first_line_segment_280"; then
+    note_failure "T25-280: 승인 대기 표지 호출이 첫 줄(session-line) 구성 안에 없음(결정 AW3 위반 — 표지가 상태 배지 뒤에서 사라지거나 다른 줄로 옮겨졌다)"
+  fi
+  approval_rule_280=$(extract_flattened_css_rules "$hub_template_file" '\.badge\.approval-wait' | head -1)
+  if [[ -z "$approval_rule_280" ]]; then
+    note_failure "T25-280: .badge.approval-wait 규칙이 없음(결정 AW4 위반 — 표지가 스타일 없이 그려진다)"
+  elif grep -qF 'animation' <<< "$approval_rule_280"; then
+    note_failure "T25-280: .badge.approval-wait 규칙에 animation 이 있음(결정 AW4 위반 — halo·pulse 는 working 전용이다)"
+  fi
+  if ! grep -qF '승인 대기' "$hub_readme_file"; then
+    note_failure "T25-280: hub/README.md 에 승인 대기 설명이 없음(결정 AW7 위반 — 화면 배치 문서가 표지를 알리지 않는다)"
+  fi
+
+  # T25-281(신설, 역 — 결정 AW5, docs/prps/hub-approval-wait-badge.md): 승인 대기 표지는 결정 LM12 가 걷은 단계 칩의 부활이 아니다.
+  # ① renderApprovalWaitBadge() 본문에 agent-chip 이 없다(서브에이전트 실행 칩과 같은 모양·클래스를 쓰지 않는다) ② renderTier1() 본문에
+  # approval-wait·renderApprovalWaitBadge 가 없다(표지는 첫 줄에 살지 진행률 줄에 되돌아가지 않는다) ③ 템플릿에 따옴표로 닫힌 정확한
+  # 리터럴 \'승인\' 이 없다 — 화면이 단계 이름으로 승인을 다시 판정하지 않는다(판정은 서버 사실 하나, AW2. 라벨 \'승인 대기\' 는 걸리지
+  # 않는다). 메시지는 반복문 밖의 고정 문구다. 원장 행은 ① 을 문다.
+  if grep -qF 'agent-chip' <<< "$approval_badge_body_280"; then
+    note_failure "T25-281: 승인 대기 표지가 실행 칩 클래스(agent-chip)를 씀(결정 AW5 위반 — 걷힌 단계 칩과 같은 혼동이 돌아온다)"
+  fi
+  if grep -qE 'approval-wait|renderApprovalWaitBadge' <<< "$render_tier1_body_263"; then
+    note_failure "T25-281: renderTier1() 이 승인 대기 표지를 그림(결정 AW3·AW5 위반 — 표지가 진행률 줄로 옮겨졌다)"
+  fi
+  if grep -qF "'승인'" "$hub_template_file"; then
+    note_failure "T25-281: 템플릿에 단계 이름 리터럴 '승인' 이 있음(결정 AW2 위반 — 화면이 단계 이름으로 승인 대기를 다시 판정한다)"
   fi
 
   finish_group "$test_name"
