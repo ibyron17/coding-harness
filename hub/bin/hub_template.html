@@ -2276,14 +2276,14 @@ try{
     return '<div class="session-tier1">' + body + '</div>';
   }
 
-  // 세션 줄·세션 카드 공통 내용(첫 줄·메타·발췌·진행·실행·워크플로). 1단 본문(첫 줄·메타·발췌)을 다 그린 뒤
-  // 2단 가지(진행률 → 실행 줄 → 워크플로)를 연다 — DOM 순서가 곧 시각 순서다(결정 LM2, CSS order 를 쓰지
-  // 않는다: 화면 낭독기는 버튼 안 자식을 DOM 순서로 읽는다). 첫 줄(.session-line)
-  // 은 상태 배지(+ 해당할 때 승인 대기 표지 — 결정 AW3)와 소요 시간(작업 시작부터 — 마지막 이벤트 경과가 아니다, 그건 프로젝트 머리 .last-activity 가
+  // 세션 줄·세션 카드 공통 내용(첫 줄·메타·발췌·진행·실행·워크플로). 1단 본문(첫 줄·메타·발췌)을 다 그린 뒤 2단 가지(진행률
+  // → 실행 줄 → 워크플로)를 연다 — DOM 순서가 곧 시각 순서다(결정 LM2, CSS order 를 쓰지 않는다: 화면 낭독기는
+  // 버튼 안 자식을 DOM 순서로 읽는다). 첫 줄(.session-line)은 상태 배지(+ 해당할 때 승인 대기 표지 —
+  // 결정 AW3)와 소요 시간(작업 시작부터 — 마지막 이벤트 경과가 아니다, 그건 프로젝트 머리 .last-activity 가
   // 보인다)이고(백그라운드 대기 세션이 출력 파일을 찾았으면 그 뒤에 출력 갱신이 붙는다 — 결정 LA10),
   // 식별 줄(.session-meta)이 첫 줄 안으로 새지 않는 불변을 T25-127 이 이 함수 안에서 문다(앵커 이동 —
-  // 결정 SC6). renderSession(카드 세션 줄)과 renderSessionCard(모달 세션 카드, 아래 카드
-  // 상세보기 절)가 이 함수를 공유한다(DRY) — 소비자가 둘이 됐다.
+  // 결정 SC6). renderSession(카드 세션 줄)과 renderSessionCard(모달 세션 카드, 아래 카드 상세보기
+  // 절)가 이 함수를 공유한다(DRY) — 소비자가 둘이 됐다.
   function renderSessionContent(session){
     return '<div class="session-line">'
       + renderStateBadge(session.state, session.base_state, session.last_event_at_ms, session.interruption, session.background_wait)
