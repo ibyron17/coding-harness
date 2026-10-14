@@ -276,7 +276,7 @@ manifest 를 갱신한다. **레포는 최신인데 설치본만 낡은 경우**
   `harness_version` 필드 자체가 없다 — 같은 의미다). 릴리스 사이의 `develop` 을
   설치하면 번호는 직전 릴리스인데 내용은 그보다 앞서 있다 — 그래서 `/harness-update` 보고에 짧은
   커밋 해시를 함께 적는다.
-- **올리는 때**: 릴리스할 때만 올리고 같은 커밋에 태그 `vX.Y.Z`(주석 태그)를 단다. 평소 커밋은
+- **올리는 때**: 릴리스할 때만 올리고, 그 변경이 `main` 에 병합된 커밋에 태그 `vX.Y.Z`(주석 태그)를 단다. 평소 커밋은
   `VERSION` 을 건드리지 않는다 — 동시 세션 병합 충돌과 새 버전 알림 남발을 막으려는 규칙이다.
   원격에 태그를 올리는 것(태그 푸시)이 곧 릴리스 공표다. GitHub 릴리스 페이지는 만들지 않는다(태그만).
 - **무엇을 올리나**: 팀원 머신에 실제로 닿는 것(`rules/` · `agents/` · `commands/` · 허브 코드 ·
@@ -291,14 +291,21 @@ manifest 를 갱신한다. **레포는 최신인데 설치본만 낡은 경우**
 
   여러 수준이 섞이면 가장 높은 것을 쓴다. 커밋 접두(`feat:` · `fix:`)는 참고일 뿐이고 MAJOR 는
   위 표로 판정한다.
-- **릴리스 절차** (`main` 은 릴리스 브랜치, 작업은 `develop` — `CLAUDE.md` §5 「브랜치」):
+- **릴리스 절차** (`main` 은 릴리스 브랜치이고 PR 로만 바뀐다, 작업은 `develop` — `CLAUDE.md` §5 「브랜치」):
   1. `git log --oneline v<직전>..develop -- rules agents commands <허브 코드 폴더> install.sh removals.txt`
      — 비어 있으면 릴리스하지 않는다.
   2. 위 표로 수준을 정해 `develop` 의 `VERSION` 을 고친다.
-  3. `bash tests/run.sh --only T41` 통과 확인 후 커밋(`chore: 버전을 X.Y.Z 로 올린다`).
-  4. `git switch main && git merge --ff-only develop` 로 `main` 에 반영하고
-     `git tag -a vX.Y.Z -m "coding-harness X.Y.Z"` (로컬).
-  5. **사용자 확인 뒤** `git push origin main develop` · `git push origin vX.Y.Z`.
+  3. `bash tests/run.sh --only T41` 통과 확인 후 커밋(`chore: 버전을 X.Y.Z 로 올린다`)하고 `develop` 을 푸시한다.
+  4. `gh pr create --base main --head develop --title "release: vX.Y.Z"` 로 릴리스 PR 을 연다.
+  5. **사용자가** GitHub 에서 **Create a merge commit** 으로 병합한다 — 이 병합이 릴리스 승인이다.
+  6. `git fetch origin` 뒤 병합 커밋에 `git tag -a vX.Y.Z -m "coding-harness X.Y.Z" origin/main` 을 달고
+     **사용자 확인 뒤** `git push origin vX.Y.Z`.
+
+  `main` 에는 릴리스마다 병합 커밋이 하나씩 생겨 `develop` 과 커밋 번호가 달라진다 — 정상이다(다음
+  릴리스 PR 에는 새 커밋만 보인다). `v1.0.0` 은 이 절차 이전에 내서 `develop` 과 같은 커밋이다.
+- **GitHub 규칙 세트**: `main PR 필수`(승인 0, 병합 방식은 Merge commit 만, 예외 계정 없음 — `main` 으로
+  직접 푸시하면 거절된다) · `main·develop 보호`(삭제·강제 푸시 금지) · `릴리스 태그`(`v*` 태그 옮기기·삭제
+  금지 — 잘못 단 태그는 이 규칙 세트를 잠시 꺼야 고칠 수 있다).
 - **허브 알림**: 허브 서버가 켜져 있으면 새 릴리스 태그가 올라왔을 때 화면에 알림 버튼이 뜬다 —
   허브 설명서의 「새 버전 알림」.
 
