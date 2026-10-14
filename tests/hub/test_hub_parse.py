@@ -349,6 +349,78 @@ class IsCommitLoggedAfterLastPassTest(unittest.TestCase):
         self.assertFalse(hub_parse.is_commit_logged_after_last_pass(()))
 
 
+class IsApprovalStepActiveTest(unittest.TestCase):
+    """is_approval_step_active — 「승인」 단계가 진행중인가(결정 AW2, docs/prps/hub-approval-wait-badge.md).
+    이벤트 열 → snapshot_from_events(...).steps → 판정. 이름이 곧 사례다."""
+
+    FULL = ["설계", "승인", "구현", "검수"]
+    SHORT = ["구현", "검수"]
+
+    def _steps_of(self, phases: list, *event_dicts: dict) -> tuple[hub_parse.StepView, ...]:
+        events = hub_parse.parse_event_lines(_jsonl(_init_dict(0, "제목", phases), *event_dicts))
+        return hub_parse.snapshot_from_events(events).steps
+
+    def _is_active(self, phases: list, *event_dicts: dict) -> bool:
+        return hub_parse.is_approval_step_active(self._steps_of(phases, *event_dicts))
+
+    def test_init_only_has_design_active_not_approval(self) -> None:
+        self.assertFalse(self._is_active(self.FULL))
+
+    def test_design_makes_approval_active(self) -> None:
+        self.assertTrue(self._is_active(self.FULL, _log_dict(1, "design", "설계 완료")))
+
+    def test_note_after_design_keeps_approval_active(self) -> None:
+        self.assertTrue(self._is_active(self.FULL, _log_dict(1, "design", "설계"), _log_dict(2, "note", "메모")))
+
+    def test_approve_ends_approval(self) -> None:
+        self.assertFalse(self._is_active(self.FULL, _log_dict(1, "design", "설계"), _log_dict(2, "approve", "승인")))
+
+    def test_impl_without_approve_ends_approval(self) -> None:
+        """approve 누락 — impl 이 승인까지 done 으로 만든다."""
+        self.assertFalse(self._is_active(self.FULL, _log_dict(1, "design", "설계"), _log_dict(2, "impl", "구현")))
+
+    def test_fail_after_impl_leaves_implementation_active_not_approval(self) -> None:
+        events = (
+            _log_dict(1, "design", "설계"), _log_dict(2, "approve", "승인"),
+            _log_dict(3, "impl", "구현"), _log_dict(4, "fail", "검수 실패"),
+        )
+
+        self.assertFalse(self._is_active(self.FULL, *events))
+
+    def test_abbreviated_path_never_has_an_approval_step(self) -> None:
+        for label, events in (
+            ("init only", ()),
+            ("impl", (_log_dict(1, "impl", "구현"),)),
+            ("fail", (_log_dict(1, "impl", "구현"), _log_dict(2, "fail", "실패"))),
+            ("pass", (_log_dict(1, "impl", "구현"), _log_dict(2, "pass", "통과"))),
+        ):
+            with self.subTest(label):
+                self.assertFalse(self._is_active(self.SHORT, *events))
+
+    def test_non_standard_list_follows_step_events(self) -> None:
+        phases = ["조사", "승인", "실행"]
+        base = (_step_dict(1, 1, "done"), _step_dict(2, 2, "active"))
+
+        self.assertTrue(self._is_active(phases, *base))
+        self.assertFalse(self._is_active(phases, *base, _step_dict(3, 2, "done")))
+
+    def test_step_named_differently_is_not_approval(self) -> None:
+        """「확인」 같은 다른 이름은 승인으로 추정하지 않는다."""
+        self.assertFalse(self._is_active(["분석", "확인", "실행"], _step_dict(1, 2, "active")))
+
+    def test_second_approval_step_counts(self) -> None:
+        phases = ["설계", "승인", "구현", "승인", "배포"]
+        events = (_log_dict(1, "design", "설계"), _log_dict(2, "approve", "승인"), _log_dict(3, "impl", "구현"))
+
+        self.assertTrue(self._is_active(phases, *events))
+
+    def test_standard_flow_pass_ends_approval(self) -> None:
+        self.assertFalse(self._is_active(self.FULL, _log_dict(1, "design", "설계"), _log_dict(2, "pass", "통과")))
+
+    def test_empty_steps_is_false(self) -> None:
+        self.assertFalse(hub_parse.is_approval_step_active(()))
+
+
 class SnapshotFromEventsTest(unittest.TestCase):
     """snapshot_from_events — 이벤트 열 → Tier1Snapshot(hub/README.md 「데이터 모델」 대응표)."""
 
@@ -520,6 +592,25 @@ class SnapshotFromEventsTest(unittest.TestCase):
 
         self.assertIn("is_committed", serialized)
         self.assertIs(serialized["is_committed"], False)
+
+    def test_is_approval_step_active_is_true_after_design_and_false_after_approve(self) -> None:
+        init = _init_dict(0, "제목", ["설계", "승인", "구현", "검수"])
+        design = _log_dict(1, "design", "설계")
+        approve = _log_dict(2, "approve", "승인")
+
+        after_design = hub_parse.snapshot_from_events(hub_parse.parse_event_lines(_jsonl(init, design)))
+        after_approve = hub_parse.snapshot_from_events(hub_parse.parse_event_lines(_jsonl(init, design, approve)))
+
+        self.assertTrue(after_design.is_approval_step_active)
+        self.assertFalse(after_approve.is_approval_step_active)
+
+    def test_is_approval_step_active_key_is_present_in_the_serialized_snapshot(self) -> None:
+        events = hub_parse.parse_event_lines(_jsonl(_init_dict(0, "제목", ["구현", "검수"])))
+
+        serialized = dataclasses.asdict(hub_parse.snapshot_from_events(events))
+
+        self.assertIn("is_approval_step_active", serialized)
+        self.assertIs(serialized["is_approval_step_active"], False)
 
 
 class ParseDashboardJsonlTest(unittest.TestCase):
