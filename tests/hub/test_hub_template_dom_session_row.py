@@ -69,12 +69,14 @@ def _steps(*name_state_detail: tuple[str, str, str]) -> tuple[hub_parse.StepView
     )
 
 
-def _tier1(title: str, steps: tuple[hub_parse.StepView, ...], is_committed: bool = False) -> hub_parse.Tier1Snapshot:
+def _tier1(
+    title: str, steps: tuple[hub_parse.StepView, ...], is_committed: bool = False, is_approval_step_active: bool = False,
+) -> hub_parse.Tier1Snapshot:
     completed = sum(1 for step in steps if step.state == "done")
     return hub_parse.Tier1Snapshot(
         title=title, subtitle="", completed=completed, total=len(steps), percent=round(completed * 100 / len(steps)),
         steps=steps, matrix_done=None, impl_done=0, impl_total=0, updated_text="-",
-        file_mtime_ms=BASE_TIME_MS, is_committed=is_committed,
+        file_mtime_ms=BASE_TIME_MS, is_committed=is_committed, is_approval_step_active=is_approval_step_active,
     )
 
 
@@ -123,7 +125,8 @@ _STRUCTURE_SESSIONS = (
 _STRUCTURE_SNAPSHOT = _snapshot((_project(_PROJECT_PATH, "rows", "working", _STRUCTURE_SESSIONS),))
 
 # D27 — 옛 단계 칩이 떴던 상태마다 세션 1개(진행중 단계 있음·백그라운드 대기·검수 통과 뒤 커밋 전·커밋 완료·끝난 작업·이스케이프). 어느 상태에서도
-# 진행률 줄에는 칩이 없고, 서브에이전트 실행 줄(.agent-run-list)의 칩만 남는다. 단계 이름·직전 기록 요약은 어디에도 그려지지 않는다.
+# 진행률 줄에는 칩이 없고, 서브에이전트 실행 줄(.agent-run-list)의 칩만 남는다. 진행률 줄에는 단계 이름·직전 기록 요약이 그려지지 않는다 — 승인 대기
+# 표지는 첫 줄(결정 AW3, 검사는 test_hub_template_dom_approval.py)이라 idle-approval 은 그 사실을 켜도 진행률 줄에 자식 요소가 없어야 한다.
 _STAGE_SESSIONS = (
     _dated("working-review", "working", "working", 1, task_excerpt="실행 줄 있는 검수", tier1=_tier1("검수 중", _FOUR_PHASES_REVIEWING),
            agent_runs=(_run("r5", "검수", True, "검수 실행"),)),
@@ -135,7 +138,7 @@ _STAGE_SESSIONS = (
     _dated("idle-finished-task", "idle", "idle", 5, task_excerpt="끝난 작업의 대시보드", tier1=_tier1("끝난 작업", _FOUR_PHASES_ALL_DONE),
            tier1_is_finished_task=True),
     _dated("idle-approval", "idle", "idle", 6, task_excerpt="승인 기다림",
-           tier1=_tier1("승인 중", _steps(("설계", "done", ""), ("승인", "active", ""), ("구현", "wait", ""), ("검수", "wait", "")))),
+           tier1=_tier1("승인 중", _steps(("설계", "done", ""), ("승인", "active", ""), ("구현", "wait", ""), ("검수", "wait", "")), is_approval_step_active=True)),
     _dated("idle-escape", "idle", "idle", 7, task_excerpt="이스케이프",
            tier1=_tier1(_ESCAPE_TITLE, _steps(("설계", "done", ""), ("<b>검수</b>", "active", _ESCAPE_DETAIL)))),
     _dated("two-runs", "working", "working", 8, task_excerpt="실행 칩 둘", tier1=_tier1("실행 둘", _FOUR_PHASES_REVIEWING),
@@ -365,7 +368,7 @@ class HubSessionRowLayoutDomTest(unittest.TestCase):
     def test_d27_progress_line_has_no_stage_chip_and_run_chips_stay(self) -> None:
         # 결정 LM12(LM5·LM6 개정) — 진행률 줄 맨 앞 단계 칩은 걷혔다: 아래 서브에이전트 실행 줄의 .agent-chip 과 같은 어휘라 헷갈렸다. 어떤 상태
         # (진행중 단계·백그라운드 대기·검수 통과 뒤 커밋 전·커밋 완료·끝난 작업)에서도 진행률 줄은 「제목 — 완료/전체 · 퍼센트」 글자뿐이고 자식 요소가
-        # 하나도 없다(칩·툴팁·보조기술 라벨 없음). 단계 이름과 직전 기록 요약은 화면 어디에도 글자로 새지 않는다. 제목은 글자 그대로 그려진다(이스케이프).
+        # 하나도 없다(칩·툴팁·보조기술 라벨 없음). 진행률 줄에는 단계 이름과 직전 기록 요약이 글자로 새지 않는다(승인 대기 표지는 첫 줄 — AW3). 제목은 글자 그대로 그려진다(이스케이프).
         # 별도 「진행중 단계」 줄(.tier1-active)도 없다(LM4). 서브에이전트 실행 줄의 칩 수는 그대로다. 대시보드 없는 세션은 진행률 줄 없이 「대시보드 없음」 1개.
         result = run_scenario(_make_page(_STAGE_SNAPSHOT, _probe_body(_STAGE_SESSIONS)), window_width=1440, window_height=900)
         for session in _STAGE_SESSIONS:

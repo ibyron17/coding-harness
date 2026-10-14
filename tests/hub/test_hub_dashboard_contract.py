@@ -111,6 +111,21 @@ class NonStandardPhaseStepRoundTripTest(_ContractTestCase):
         self.assertEqual([step.state for step in snapshot.steps], ["done", "active", "wait", "wait"])
 
 
+class ApprovalWaitRoundTripTest(_ContractTestCase):
+    """기록기가 쓴 「설계|승인|구현|검수」 기록이 수집되면 승인 단계 진행 사실이 설계 뒤에만 켜진다.
+    기록 규칙의 단계 이름과 파서가 보는 이름이 어긋나면 여기서 깨진다(결정 AW2)."""
+
+    def test_approval_step_is_active_between_design_and_approve(self) -> None:
+        self._run(hub_dashboard_log.cmd_init, "승인 대기 왕복", "설계|승인|구현|검수")
+        self.assertFalse(self._collect_one().is_approval_step_active)
+
+        self.assertEqual(self._run(hub_dashboard_log.cmd_log, ["design", "설계 완료"]), "OK")
+        self.assertTrue(self._collect_one().is_approval_step_active)
+
+        self.assertEqual(self._run(hub_dashboard_log.cmd_log, ["approve", "승인 완료"]), "OK")
+        self.assertFalse(self._collect_one().is_approval_step_active)
+
+
 class DisabledSwitchRoundTripTest(_ContractTestCase):
     """진행 기록을 끈 프로젝트는 init 이 아무것도 쓰지 않아 수집 대상이 없다(RL10)."""
 
