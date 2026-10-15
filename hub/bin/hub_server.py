@@ -17,6 +17,7 @@ hub_dashboard_render(둘 다 ★순수)로 요청 시점에 그린다 — 디스
 개정 쟁점 R1·R3(docs/prps/hub-dashboard.md), 결정 AR4·AR5(docs/prps/audit-remediation.md) 참조.
 """
 
+import dataclasses
 import http.server
 import os
 import re
@@ -24,12 +25,15 @@ import signal
 import sys
 import threading
 import time
+from collections.abc import Sequence
 from pathlib import Path
 
 import hub_atomic_write
 import hub_collect
 import hub_dashboard_render
 import hub_model
+import hub_notify
+import hub_notify_send
 import hub_parse
 import hub_project
 import hub_release
@@ -72,6 +76,9 @@ SNAPSHOT_FRESHNESS_WINDOW_MS = 2000
 # (2) collect_health 가 계속 관측 가능하도록 — 아무도 페이지를 열지 않는 서버가 영구히
 #     "never_collected" 를 보고하면 사용자가 정상과 고장을 구분할 수 없다.
 BACKGROUND_COLLECT_MAX_AGE_MS = 5 * 60 * 1000
+# 알림이 켜져 있을 때 훅 이벤트·세션 명부 파일의 변화가 보이면 신선도 창과 무관하게 수집한다(결정 MN6,
+# docs/prps/hub-macos-notification.md). 0 인 이유: 창 안의 캐시는 그 변화 **이전**에 만든 것일 수 있다.
+ACTIVITY_COLLECT_MAX_AGE_MS = 0
 
 # `_run_usage_api_poll_cycle` 이 fetch 계약 밖에서 새는 예외를 잡았을 때 쓰는 실패 사유
 # (결정 AR4). `hub_usage_fetch.FailureReason` Literal 에는 넣지 않는다 — 그 사유는 fetch 가
@@ -222,8 +229,25 @@ class _HubRequestHandler(http.server.BaseHTTPRequestHandler):
         """요청이 상시로 들어와 server.log 를 부풀리므로 무음으로 오버라이드한다."""
 
 
+def _observe_for_notification(
+    notifier: hub_notify_send.SessionNotifier | None, snapshot: hub_model.HubSnapshot
+) -> None:
+    """수집 성공 스냅샷을 알림기에 넘긴다. notifier 가 None 이면 아무것도 안 한다.
+
+    예외는 stderr 한 줄로 흡수한다 — `_run_collect_cycle` 의 `except Exception` 이 잡으면 알림 쪽 결함이 수집 실패
+    (`record_collect_failure`)로 잘못 기록된다(결정 MN7).
+    """
+    if notifier is None:
+        return
+    try:
+        notifier.observe(snapshot)
+    except Exception as error:
+        print(f"알림 관측 처리되지 않은 예외: {error}", file=sys.stderr)
+
+
 def _run_collect_cycle(
     last_content_key: str | None,
+    notifier: hub_notify_send.SessionNotifier | None = None,
 ) -> tuple[str | None, dict[str, str] | None]:
     """한 사이클: 수집 → (내용이 바뀌었거나 hub.html 이 없으면) 쓰기 → 실패 기록/해제.
 
@@ -250,6 +274,8 @@ def _run_collect_cycle(
 
     성공 스탬프(`touch_collect_success_stamp`)는 `clear_collect_failure()` 와 같은 지점에서
     찍는다(개정 2) — `evaluate_collect_health` 가 보는 유일한 성공 시각 출처다.
+
+    `notifier` 가 있으면 성공한 스냅샷을 그쪽에 넘긴다(결정 MN7 — 수집 실패 사이클은 넘기지 않는다). 반환 모양은 불변이다.
     """
     now_ms = int(time.time() * 1000)
     try:
@@ -260,6 +286,7 @@ def _run_collect_cycle(
             hub_collect.write_hub_html(snapshot)
         hub_collect.clear_collect_failure()
         hub_server_state_read.touch_collect_success_stamp()
+        _observe_for_notification(notifier, snapshot)
         return content_key, hub_model.build_dashboard_registry(snapshot)
     except Exception as error:
         hub_collect.record_collect_failure(str(error))
@@ -291,10 +318,14 @@ class _SnapshotRefresher:
     각자 갱신하는(쓰기 억제 판정이 깨지는) 일이 구조적으로 생길 수 없다.
     """
 
-    def __init__(self, httpd: http.server.ThreadingHTTPServer) -> None:
+    def __init__(
+        self, httpd: http.server.ThreadingHTTPServer, notifier: hub_notify_send.SessionNotifier | None = None
+    ) -> None:
         self._httpd = httpd
+        self._notifier = notifier    # 수집 락 안에서만 관측을 받는다(결정 MN7) — 별도 락이 없다
         self._lock = threading.Lock()
         self._last_attempt_at_monotonic_ms: int | None = None
+        self._last_started_at_monotonic_ms: int | None = None    # 마지막 수집이 **시작**한 시각 — 강제 수집의 이중 검사가 쓴다(C2)
         self._last_content_key: str | None = None
 
     def collect_if_older_than(self, now_monotonic_ms: int, max_age_ms: int) -> None:
@@ -306,7 +337,8 @@ class _SnapshotRefresher:
         스탬프(파일 mtime, `collect_health` 의 입력)는 이 시계와 무관하게 벽시계 그대로
         둔다 — 두 시계의 용도가 다르다.
         """
-        if self._is_within(now_monotonic_ms, max_age_ms):
+        is_forced = max_age_ms <= 0
+        if not is_forced and self._is_within(now_monotonic_ms, max_age_ms):
             return
         with self._lock:
             # 이중 검사. 진입 시점의 now_monotonic_ms 를 **그대로 다시 쓴다** — 락을 기다리는
@@ -314,7 +346,7 @@ class _SnapshotRefresher:
             # 완료 시점(`_collect_once` 의 `finally`)에 찍히므로 여기서 시계를 다시 읽어도
             # 결과는 같지만, 진입 시각을 재사용하는 편이 "이 요청은 자기가 본 시점 기준으로
             # 판정한다"는 뜻이 더 분명하다.
-            if self._is_within(now_monotonic_ms, max_age_ms):
+            if self._is_covered_after_lock_wait(now_monotonic_ms, max_age_ms):
                 return
             try:
                 self._collect_once()
@@ -331,6 +363,18 @@ class _SnapshotRefresher:
             return False
         return (now_monotonic_ms - self._last_attempt_at_monotonic_ms) < max_age_ms
 
+    def _is_covered_after_lock_wait(self, entry_monotonic_ms: int, max_age_ms: int) -> bool:
+        """락을 기다리는 동안 다른 스레드가 한 수집이 이 호출의 몫을 대신하는가.
+
+        창이 있는 일반 수집은 마지막 시도가 창 안이면 대신한다(위 이중 검사). 강제 수집(max_age_ms <= 0 — 알림이 켜졌을 때 파일 변화가
+        보인 경우, 결정 MN6)은 **진입 뒤에 시작한** 수집만 대신한다 — 진입 전에 시작한 수집은 그 변화보다 앞선 캐시일 수 있어, 그 수집이
+        끝났다고 건너뛰면 알림이 다음 요청이나 5분 상한까지 늦어진다(검수 1회차 C2).
+        """
+        if max_age_ms > 0:
+            return self._is_within(entry_monotonic_ms, max_age_ms)
+        started_at_ms = self._last_started_at_monotonic_ms
+        return started_at_ms is not None and started_at_ms > entry_monotonic_ms
+
     def _collect_once(self) -> None:
         """한 사이클을 돌리고 시도 시각을 갱신한다.
 
@@ -345,8 +389,9 @@ class _SnapshotRefresher:
         (hub_collect.py:475-482)가 "Popen 이 실패해도 스탬프는 남긴다"로 같은 판단을 이미
         내렸다. 실패 사실은 last_collect_error.json 이 따로 보존한다.
         """
+        self._last_started_at_monotonic_ms = _monotonic_ms()
         try:
-            self._last_content_key, registry = _run_collect_cycle(self._last_content_key)
+            self._last_content_key, registry = _run_collect_cycle(self._last_content_key, self._notifier)
             _apply_dashboard_registry(self._httpd, registry)
         finally:
             self._last_attempt_at_monotonic_ms = _monotonic_ms()
@@ -416,10 +461,31 @@ def _run_usage_api_poll_cycle(
     return hub_usage.next_usage_api_poll_state(now_ms, poll_state, failure_reason)
 
 
+def _collect_for_notification(
+    refresher: _SnapshotRefresher,
+    notifier: hub_notify_send.SessionNotifier,
+    activity_directories: Sequence[Path],
+    last_signature: hub_notify_send.ActivitySignature | None,
+) -> hub_notify_send.ActivitySignature:
+    """서명 읽기(먼저) → 바뀌었으면 강제 수집 → 확인 대기 후보가 있으면 확인 수집(결정 MN3·MN6). 다음 틱의 서명을 돌려준다.
+
+    서명을 수집보다 먼저 읽는다 — 읽은 뒤 수집 사이에 온 이벤트는 그 수집에 포함되거나 다음 틱의 서명 변화로 다시 잡힌다
+    (놓침 없음). 첫 틱(직전 서명 없음)은 비교만 시작한다 — 기동 첫 수집은 배경 상한 경로가 이미 한다.
+    """
+    signature = hub_notify_send.read_activity_signature(activity_directories)
+    if last_signature is not None and signature != last_signature:
+        refresher.collect_if_older_than(_monotonic_ms(), ACTIVITY_COLLECT_MAX_AGE_MS)
+    if notifier.has_pending():
+        refresher.collect_if_older_than(_monotonic_ms(), hub_notify.NOTIFY_SETTLE_MS)
+    return signature
+
+
 def _maintenance_loop(
     config: hub_model.HubConfig,
     stop_event: threading.Event,
     refresher: _SnapshotRefresher,
+    notifier: hub_notify_send.SessionNotifier | None = None,
+    activity_directories: Sequence[Path] = (),
 ) -> None:
     """데몬 스레드 본체(개정 2, AR5 로 폴링 분리). 수집은 요청이 이끌고, 이 루프는 둘만 한다.
 
@@ -428,6 +494,9 @@ def _maintenance_loop(
         않는다). 하트비트의 뜻은 이제 "이 티커가 살아 있다"다 — "수집이 성공했다"는
         collect_health 가 따로 답한다.
     (2) 배경 수집 상한 보장 — 요청이 이미 갱신했으면 아무것도 하지 않는다.
+
+    알림기(`notifier`)가 있을 때만 (1)·(2) 사이에 활동 감시(`_collect_for_notification`)가 끼어든다(결정 MN6). 없으면 이 루프는
+    알림 기능 이전과 한 글자도 다르게 동작하지 않는다.
 
     사용량 API 폴링은 더 이상 이 루프에 없다(결정 AR5 — 결정 A3 의 배치 번복) — 그 원격
     호출(최악 15초 블로킹, hub_usage_fetch.py)을 이 하트비트 티커에 태우면 TTL(15초) 산술이
@@ -442,9 +511,12 @@ def _maintenance_loop(
     부르지 않고 stderr 에만 남긴다 — 이 print 자체가 마지막 방어선이라 더 실패할 여지를
     만들지 않는 것이 핵심이다.
     """
+    last_signature: hub_notify_send.ActivitySignature | None = None
     while not stop_event.is_set():
         try:
             hub_server_state_read.touch_server_heartbeat()
+            if notifier is not None:
+                last_signature = _collect_for_notification(refresher, notifier, activity_directories, last_signature)
             refresher.collect_if_older_than(_monotonic_ms(), BACKGROUND_COLLECT_MAX_AGE_MS)
             hub_server_state_read.touch_server_heartbeat()
         except Exception as error:
@@ -519,6 +591,54 @@ def _start_release_check_thread(config: hub_model.HubConfig, stop_event: threadi
     return release_check_thread
 
 
+def _start_notifier(config: hub_model.HubConfig, now_ms: int) -> hub_notify_send.SessionNotifier | None:
+    """notify_enabled ∧ 지원 환경일 때만 알림기를 만들고 active_since_ms 를 기록한다. 아니면 None(+필요 시 한 줄 로그).
+
+    기동 때는 직전 기록의 나머지 필드를 보존하고 active_since_ms 만 바꾼다(결정 MN11). 기록 쓰기 실패는 한 줄로 흡수한다 —
+    알림기는 그대로 돈다. 작업 제목은 record_prompt_excerpt 가 켜져 있을 때만 알림에 싣는다(결정 MN9).
+    """
+    if not config.notify_enabled:
+        return None
+    if not hub_notify_send.is_notify_supported():
+        print("알림 비활성: macOS 가 아니거나 /usr/bin/osascript 가 없습니다", file=sys.stderr)
+        return None
+    previous = hub_notify_send.read_notify_status()
+    if previous is None:
+        record = hub_notify.NotifyStatusRecord(now_ms, None, None, None, None)
+    else:
+        record = dataclasses.replace(previous, active_since_ms=now_ms)
+    try:
+        hub_notify_send.write_notify_status(record)
+    except OSError as error:
+        print(f"알림 상태 기록 쓰기 실패: {error}", file=sys.stderr)
+    return hub_notify_send.SessionNotifier(include_task_title=config.record_prompt_excerpt)
+
+
+def _start_background_threads(
+    config: hub_model.HubConfig,
+    stop_event: threading.Event,
+    refresher: _SnapshotRefresher,
+    notifier: hub_notify_send.SessionNotifier | None,
+) -> None:
+    """데몬 스레드를 띄운다 — 유지보수 티커 · 사용량 API 폴링 · (켜져 있으면) 새 릴리스 확인.
+
+    활동 감시 디렉터리는 훅 이벤트와 호스트 세션 명부뿐이다 — ~/.claude/hub/ 자체는 넣지 않는다(hub.html·notify_status.json 쓰기가
+    다시 수집을 부르는 자기 유발 루프가 된다, 결정 MN6).
+    """
+    activity_directories = (hub_collect.EVENTS_DIR, hub_collect.SESSIONS_DIR)
+    maintenance_thread = threading.Thread(
+        target=_maintenance_loop, args=(config, stop_event, refresher, notifier, activity_directories), daemon=True,
+    )
+    maintenance_thread.start()
+
+    usage_api_poll_thread = threading.Thread(
+        target=_usage_api_poll_loop, args=(config, stop_event), daemon=True
+    )
+    usage_api_poll_thread.start()
+
+    _start_release_check_thread(config, stop_event)
+
+
 def run_server(config: hub_model.HubConfig) -> int:
     """HTTP 서버(메인) + 유지보수 티커·사용량 API 폴링·새 릴리스 확인(데몬 스레드 2~3개)을 띄우고 블로킹한다.
 
@@ -532,14 +652,17 @@ def run_server(config: hub_model.HubConfig) -> int:
         print(f"포트 {config.server_port} bind 실패: {error}", file=sys.stderr)
         return 1
     httpd.dashboard_paths_by_key = {}    # 첫 수집 사이클 전까지는 프로젝트 대시보드가 전부 404
+    # 알림기의 active_since_ms 가 server.json 의 started_at_ms 와 같은 시각이어야 /hub status 의 notify_active 가 성립한다.
+    started_at_ms = int(time.time() * 1000)
+    notifier = _start_notifier(config, started_at_ms)
     # 요청 핸들러와 유지보수 티커가 같은 refresher 를 공유한다 —
     # dashboard_paths_by_key 와 같은 관례로 서버 인스턴스에 싣는다(결정 N3).
-    httpd.snapshot_refresher = _SnapshotRefresher(httpd)
+    httpd.snapshot_refresher = _SnapshotRefresher(httpd, notifier)
 
     try:
         hub_server_state_read.write_server_record(
             hub_server_state.ServerRecord(
-                pid=os.getpid(), port=config.server_port, started_at_ms=int(time.time() * 1000),
+                pid=os.getpid(), port=config.server_port, started_at_ms=started_at_ms,
                 # sys.argv[0] 그대로 — 정규화하지 않는다(docs/prps/hub-server-identity.md D2).
                 hub_py_path=sys.argv[0],
             )
@@ -561,17 +684,7 @@ def run_server(config: hub_model.HubConfig) -> int:
 
     signal.signal(signal.SIGTERM, _handle_sigterm)
 
-    maintenance_thread = threading.Thread(
-        target=_maintenance_loop, args=(config, stop_event, httpd.snapshot_refresher), daemon=True
-    )
-    maintenance_thread.start()
-
-    usage_api_poll_thread = threading.Thread(
-        target=_usage_api_poll_loop, args=(config, stop_event), daemon=True
-    )
-    usage_api_poll_thread.start()
-
-    _start_release_check_thread(config, stop_event)
+    _start_background_threads(config, stop_event, httpd.snapshot_refresher, notifier)
 
     httpd.serve_forever()
     return 0

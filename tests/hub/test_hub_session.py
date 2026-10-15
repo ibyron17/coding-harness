@@ -1571,9 +1571,9 @@ class SessionTaskStartedAtFieldTest(unittest.TestCase):
         self.assertFalse(view.agent_runs[0].is_previous_task)
 
     def test_field_sits_right_after_the_finished_task_flag_and_keeps_session_cost_last(self) -> None:
-        """T25-150 — session_cost 가 맨 뒤(background_wait 는 그 바로 앞)이고, 새 필드는 tier1_is_finished_task 바로 뒤다."""
+        """T25-150 — session_cost 가 맨 뒤(is_awaiting_approval·background_wait 가 그 앞)이고, 새 필드는 tier1_is_finished_task 바로 뒤다."""
         names = [field.name for field in dataclasses.fields(hub_session.SessionView)]
-        self.assertEqual(names[-2:], ["background_wait", "session_cost"])
+        self.assertEqual(names[-3:], ["background_wait", "is_awaiting_approval", "session_cost"])   # MN5 — 승인 대기 판정 필드가 그 사이에 든다
         self.assertEqual(names[names.index("tier1_is_finished_task") + 1], "task_started_at_ms")
 
     def test_field_is_serialized_into_the_snapshot_json(self) -> None:
@@ -2523,7 +2523,7 @@ class LiveActivityViewTest(unittest.TestCase):
         names = {field.name for field in dataclasses.fields(hub_session.SessionView)}
 
         self.assertFalse({name for name in names if "activity" in name})
-        self.assertEqual(dataclasses.fields(hub_session.SessionView)[-2].name, "background_wait")
+        self.assertEqual(dataclasses.fields(hub_session.SessionView)[-3].name, "background_wait")   # MN5 — is_awaiting_approval 이 그 뒤에 낀다
 
 
 class SessionCostWiringTest(unittest.TestCase):
@@ -2550,6 +2550,65 @@ class SessionCostWiringTest(unittest.TestCase):
         plain = hub_session.compute_session_view(facts, facts.last_event_at_ms, STALE_AFTER_MS)
         with_cost = hub_session.compute_session_view(facts, facts.last_event_at_ms, STALE_AFTER_MS, session_cost=self.COST)
         self.assertEqual(dataclasses.replace(with_cost, session_cost=None), plain)
+
+
+class IsAwaitingApprovalTest(unittest.TestCase):
+    """MN5(docs/prps/hub-macos-notification.md) — 승인 대기 판정의 정본. AW1 표의 행 전부를 Python 단위로 잠근다
+    (그동안 DOM D43 이 지던 규칙)."""
+
+    @staticmethod
+    def _tier1(is_approval_step_active: bool) -> hub_parse.Tier1Snapshot:
+        return hub_parse.Tier1Snapshot(
+            title="t", subtitle="", completed=1, total=4, percent=25, steps=(),
+            matrix_done=None, impl_done=0, impl_total=0, updated_text="-",
+            file_mtime_ms=BASE_TIME_MS, is_approval_step_active=is_approval_step_active,
+        )
+
+    def test_idle_with_active_approval_step_is_true(self) -> None:
+        self.assertTrue(hub_session.is_awaiting_approval("idle", "idle", self._tier1(True)))
+
+    def test_background_over_idle_is_true(self) -> None:
+        self.assertTrue(hub_session.is_awaiting_approval("background", "idle", self._tier1(True)))
+
+    def test_stale_over_idle_is_true(self) -> None:
+        self.assertTrue(hub_session.is_awaiting_approval("stale", "idle", self._tier1(True)))
+
+    def test_stale_over_working_is_false(self) -> None:
+        self.assertFalse(hub_session.is_awaiting_approval("stale", "working", self._tier1(True)))
+
+    def test_working_is_false(self) -> None:
+        self.assertFalse(hub_session.is_awaiting_approval("working", "working", self._tier1(True)))
+
+    def test_interrupted_is_false(self) -> None:
+        self.assertFalse(hub_session.is_awaiting_approval("interrupted", "idle", self._tier1(True)))
+
+    def test_done_is_false(self) -> None:
+        self.assertFalse(hub_session.is_awaiting_approval("done", "done", self._tier1(True)))
+
+    def test_fact_off_is_false(self) -> None:
+        self.assertFalse(hub_session.is_awaiting_approval("idle", "idle", self._tier1(False)))
+
+    def test_no_tier1_is_false(self) -> None:
+        self.assertFalse(hub_session.is_awaiting_approval("idle", "idle", None))
+
+    def test_compute_session_view_carries_the_flag(self) -> None:
+        facts = _facts_from([_event("UserPromptSubmit"), _event("Stop", 1000)])
+        view = hub_session.compute_session_view(
+            facts, now_ms=facts.last_event_at_ms, stale_after_ms=STALE_AFTER_MS, tier1=self._tier1(True),
+        )
+        self.assertEqual((view.state, view.is_awaiting_approval), ("idle", True))
+
+    def test_compute_session_view_is_false_without_tier1(self) -> None:
+        facts = _facts_from([_event("UserPromptSubmit"), _event("Stop", 1000)])
+        view = hub_session.compute_session_view(facts, now_ms=facts.last_event_at_ms, stale_after_ms=STALE_AFTER_MS)
+        self.assertFalse(view.is_awaiting_approval)
+
+    def test_compute_session_view_is_false_while_working(self) -> None:
+        facts = _facts_from([_event("UserPromptSubmit")])
+        view = hub_session.compute_session_view(
+            facts, now_ms=facts.last_event_at_ms, stale_after_ms=STALE_AFTER_MS, tier1=self._tier1(True),
+        )
+        self.assertFalse(view.is_awaiting_approval)
 
 
 if __name__ == "__main__":

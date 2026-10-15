@@ -66,7 +66,7 @@ class Tier1Snapshot:
     # snapshot_content_key 를 흔들지 않는다.
     is_committed: bool = False
     # 진행 기록의 「승인」 단계가 진행중인가(결정 AW2, docs/prps/hub-approval-wait-badge.md). 사실만 싣는다 — 세션
-    # 상태와 합쳐 표지를 보일지는 화면(isAwaitingApproval)이 정한다(GN4·FT4·LM6 관례). 이벤트 열의 함수라
+    # 상태와 합쳐 표지를 보일지는 서버(hub_session.is_awaiting_approval, 결정 MN5)가 정하고 화면은 그 결과만 읽는다. 이벤트 열의 함수라
     # snapshot_content_key 에 안전하다.
     is_approval_step_active: bool = False
 

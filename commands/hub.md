@@ -325,6 +325,16 @@ python3 -- "$HOME/.claude/hub/bin/hub.py" status --json
 `remote_error` 원격 접속 실패(인증·네트워크·SSH 키 포함) · `output_too_large` 출력이 너무 큼 · `parse_error` 태그 목록 해석 실패) — 실패해도 직전에 알아낸
 `latest_version` 은 남는다. 실패는 화면에 경고로 뜨지 않고 여기서만 보인다.
 
+`notify_enabled`(`config.json` 의 macOS 알림 스위치, 기본 `false`) · `notify_active`(지금 도는 서버가 알림기를
+켜고 시작했는가) · `notify_status`(`{active_since_ms, last_attempt_at_ms, last_success_at_ms, last_failure_reason,
+last_failure_exit_code}` 또는 기록이 없으면 `null`)도 같은 표에 곁들인다. 세션이 작업중에서 대기·백그라운드 대기·승인 대기·한도
+초과로 바뀔 때 서버가 `osascript` 로 띄우는 알림의 상태다(알림 문구는 기록에 없다). 알림이 안 오는 이유를 이 세 필드로 구분한다 —
+`notify_enabled:false`(껐다, 기본) · `notify_enabled:true` 인데 `notify_active:false`(켰지만 서버를 아직 재기동하지 않았거나 macOS 가
+아니거나 `osascript` 가 없다 — `/hub server restart` 후에도 같으면 `server.log` 를 본다) · `last_failure_reason` 이 있으면 그 사유(`osascript_missing`
+실행 파일 없음 · `timeout` 10초 초과 · `exit_nonzero` 비정상 종료, 종료 코드는 `last_failure_exit_code` · `invalid_text` 문구에 보낼 수 없는 문자가 섞임). **macOS 알림 설정에서 「스크립트 편집기」
+알림이 꺼져 있거나 집중 모드이면 알림이 안 뜨는데도 정상(성공)으로 기록된다** — 그때는 터미널에서
+`osascript -e 'display notification "test"'` 로 배너가 뜨는지 확인하도록 안내한다.
+
 ---
 
 ## 구현 노트 (사람이 읽는 참고용 — 이 절은 실행하지 않는다)

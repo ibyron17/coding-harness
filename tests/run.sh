@@ -593,7 +593,15 @@ readonly MUTATION_HARNESS_GROUP="T37"
 #
 # 131 → 133(hub-approval-wait-badge.md, 결정 AW1~AW5): 신규 가드 T25-280(승인 대기 표지 배선 — 첫 줄 호출)·T25-281(표지가 실행 칩이
 # 아니다)의 변조행 2건을 붙였다. 순증가 2.
-readonly LEDGER_MUTATION_ROW_FLOOR=133
+#
+# 133 → 136(hub-light-theme-sunset.md, 결정 LT2·LT4·LT9·LT12): 신규 가드 T25-282(라이트 의미 쌍 관계)·T25-283(허브·대시보드 라이트 토큰
+# 불일치)·T25-284(다크 별칭)의 변조행 3건을 붙였다. T99-6 은 이 상수 인용을 바꾼 수정에 맞춰 sed 리터럴을 옮겼다. 순증가 3.
+#
+# 136 → 139(hub-macos-notification.md, 결정 MN6~MN9·MN11): 신규 가드 T25-285(osascript 인자 전달 — 사용자 문자열이 스크립트 소스에 닿지 않는다)·
+# T25-286(활동 감시 대상 — 자기 유발 루프 방지)·T25-287(알림 문서·어휘)의 변조행 3건을 붙였다. 개정한 T25-104·T25-149 는 원래 변조행이라 같은 ID 로
+# 변조 sed 만 바꿨고(35→37), T99-6 은 이 상수 인용을 바꾼 수정에 맞춰 sed 리터럴을 옮겼다. 순증가 3. 라이트 테마 PR(#6)이 먼저 T25-282~284 를 써서 이 기능의
+# 가드는 develop 병합 뒤 T25-285~287 로 확정했다.
+readonly LEDGER_MUTATION_ROW_FLOOR=139
 
 # 원장 면제행 수의 상한 래칫(T37-14 가 실행마다 검사, PRP §12 「면제행이 영구 도피처가
 # 된다」의 두 번째 완화). 착지 시점 실측 390. 신규 가드를 기존 공통 사유로 면제 등록하면
@@ -936,7 +944,14 @@ readonly LEDGER_EXEMPT_ROW_RATCHET=372
 # 557 → 559(hub-approval-wait-badge.md, 결정 AW1~AW5): 신설 2건 T25-280(승인 대기 표지 배선)·T25-281(표지가 실행 칩이 아니다 — LM12 관계).
 # 순증가 2. 개정한 T25-201(data-tooltip 기대값 20 → 21)은 같은 ID 라 개수에 닿지 않는다. collect_guard_ids 를 그대로 재현해 편집
 # 전(557)·후(559) 재측정한다.
-readonly SOURCE_GUARD_ID_FLOOR=559
+#
+# 559 → 562(hub-light-theme-sunset.md, 결정 LT2·LT4·LT9·LT12): 신설 3건 T25-282(라이트 의미 쌍 관계)·T25-283(허브·대시보드 라이트 토큰 불일치)·
+# T25-284(다크 별칭). 순증가 3. collect_guard_ids 를 그대로 재현해 편집 전(559)·후(562) 재측정한다.
+#
+# 562 → 565(hub-macos-notification.md, 결정 MN6~MN9·MN11): 신설 3건 T25-285(osascript 인자 전달)·T25-286(활동 감시 대상)·T25-287(알림 문서·어휘).
+# 순증가 3. 개정한 T25-10·T25-104·T25-149·T25-280 은 같은 ID 라 개수에 닿지 않는다. collect_guard_ids 를 그대로 재현해 편집 전(562)·후(565)
+# 재측정했다. develop(라이트 테마 PR #6)이 T25-282~284 를 먼저 써서 번호를 285~287 로 확정했다.
+readonly SOURCE_GUARD_ID_FLOOR=565
 
 # 배포 트리(rules/·agents/·commands/)에 남는 "파일명:줄번호" 형태 인용 수의 상한
 # 래칫(T39-4). 배포되는 문서가 다른 파일의 줄 번호를 인용하면, 그 파일을 고치는 수정이
@@ -4165,7 +4180,7 @@ read_python_product_constant() {
 test_hub_docs_and_constants() {
   group_failures=()   # 앞 그룹이 조기 return 했을 때의 잔여물 제거
   local test_name="T25"
-  local test_desc="허브 문서·상수 정합성 (T25-1~T25-281)"
+  local test_desc="허브 문서·상수 정합성 (T25-1~T25-287)"
   log_test_name "$test_name" "$test_desc"
 
   local hub_settings_file="$REPO_ROOT/hub/bin/hub_settings.py"
@@ -4319,9 +4334,10 @@ test_hub_docs_and_constants() {
   # docs/prps/hub-live-session-native-source.md 결정 LS2 — hub_live_session.py 편입; +
   # docs/prps/hub-subagent-background-pause.md 결정 BW11(M1) — hub_session.py 에서 분리된
   # hub_session_facts.py 편입; + docs/prps/hub-live-activity.md 결정 LA14 — hub_activity.py 편입; +
-  # docs/prps/harness-versioning.md 단계 B — hub_release.py 편입):
+  # docs/prps/harness-versioning.md 단계 B — hub_release.py 편입; + docs/prps/hub-macos-notification.md
+  # — hub_notify.py 편입(알림 판정·문구·argv 의 ★순수 모듈. 시간대 표기·프로세스 실행은 hub_notify_send.py 몫이다)):
   # hub_model.py·hub_parse.py·hub_usage.py·hub_session.py·hub_session_facts.py·hub_project.py·
-  # hub_server_state.py·hub_config.py·hub_dashboard_render.py·hub_live_session.py·hub_activity.py·hub_release.py 에
+  # hub_server_state.py·hub_config.py·hub_dashboard_render.py·hub_live_session.py·hub_activity.py·hub_release.py·hub_notify.py 에
   # 파일시스템 접근이 없다(순수 레이어 경계의 기계적 강제). dashboard_render.py 는 ★순수 마커를 자체
   # 선언하고도 이 목록에 없었다(구현 시점 누락). hub_atomic_write.py 는 tempfile·os.fdopen 을
   # 쓰므로 이 목록에 넣지 않는다.
@@ -4329,7 +4345,7 @@ test_hub_docs_and_constants() {
   for pure_file in "$REPO_ROOT/hub/bin/hub_model.py" "$REPO_ROOT/hub/bin/hub_parse.py" "$REPO_ROOT/hub/bin/hub_usage.py" \
       "$hub_session_file" "$hub_session_facts_file" "$hub_project_file" "$hub_server_state_file" "$hub_config_file" \
       "$REPO_ROOT/hub/bin/hub_dashboard_render.py" "$REPO_ROOT/hub/bin/hub_live_session.py" \
-      "$REPO_ROOT/hub/bin/hub_activity.py" "$REPO_ROOT/hub/bin/hub_release.py"; do
+      "$REPO_ROOT/hub/bin/hub_activity.py" "$REPO_ROOT/hub/bin/hub_release.py" "$REPO_ROOT/hub/bin/hub_notify.py"; do
     if grep -qE 'open\(|Path\(|os\.' "$pure_file"; then
       record_failure "$test_name" "T25-10: $pure_file 에 파일시스템 접근 흔적(open(/Path(/os.)이 있음"
       return 1
@@ -6241,12 +6257,16 @@ PYEOF
   # 결정 AC8 이 hub_account.py 를 더해 30 → 31 로, docs/prps/hub-live-activity.md 결정 LA14 가
   # hub_activity.py 를 더해 31 → 32 로, docs/prps/harness-benchmark-adoption.md ⑨ 가
   # hub_session_cost.py 를 더해 32 → 33 으로, docs/prps/harness-versioning.md 단계 B 가
-  # hub_release.py·hub_release_read.py 를 더해 33 → 35 로 다시 바꿨다, T25-149 참조):
-  # hub/README.md 가 35개 파일을 고지하고, hub-dashboard.md 모듈 구성표가 hub_session.py·
+  # hub_release.py·hub_release_read.py 를 더해 33 → 35 로, docs/prps/hub-macos-notification.md 가
+  # hub_notify.py·hub_notify_send.py 를 더해 35 → 37 로 다시 바꿨다, T25-149 참조):
+  # hub/README.md 가 37개 파일을 고지하고, hub-dashboard.md 모듈 구성표가 hub_session.py·
   # hub_session_facts.py·hub_live_session.py 를 안다. 역방향 — 옛 "12개 파일" 고지가 남아
   # 있으면 안 된다.
-  if ! grep -qF "35개 파일" "$hub_readme_file"; then
-    note_failure "T25-104: hub/README.md 에 35개 파일 고지가 없음"
+  if ! grep -qF "37개 파일" "$hub_readme_file"; then
+    note_failure "T25-104: hub/README.md 에 37개 파일 고지가 없음"
+  fi
+  if grep -qF "35개 파일" "$hub_readme_file"; then
+    note_failure "T25-104: hub/README.md 에 옛 35개 파일 고지가 남아 있음"
   fi
   if grep -qF "33개 파일" "$hub_readme_file"; then
     note_failure "T25-104: hub/README.md 에 옛 33개 파일 고지가 남아 있음"
@@ -6531,6 +6551,191 @@ PYEOF
     note_failure "T25-110: .card.card-open 이 면색+테두리 2채널을 함께 쓰지 않음"
   fi
 
+  # T25-282·T25-283·T25-284(신설, 결정 LT2·LT4·LT9·LT12, docs/prps/hub-light-theme-sunset.md): 라이트 금빛 팔레트의 세 관계.
+  # T25-110 은 원장 면제행이라 개정하지 않고(개정하면 변조행 승급 의무가 생긴다 — PRP §9 X7) 새 관계는 별도 ID 로 둔다. 한 python 이
+  # 두 템플릿을 읽어 pairs=·parity=·alias= 세 줄을 내고, 발화 줄은 가드마다 하나다.
+  #   ① 의미 쌍: 채움 위 글자는 그라데이션 모든 정지점에서 4.5:1, 글자 토큰은 면 위 4.5:1, 경고(남보라)와 평상·채움은 CIELAB b* 의
+  #      부호가 반대(적록 색각이상에서도 갈린다 — LT4), 막대의 한 정지점은 트랙과 비텍스트 3:1.
+  #   ② 허브·대시보드의 라이트 맨몸 :root 선언이 문자 단위로 같다(dzh- 접두 허브 배치 토큰 제외 — LT2).
+  #   ③ 새 토큰의 다크 별칭이 파일마다 정확히 2번(다크 블록 두 벌) 있다 — 별칭이 있어야 바뀐 규칙 8개가 다크에서 옛 계산값이 된다(LT12).
+  # 한계(비망라): 첫 맨몸 :root 블록만 본다. 정지점은 #RRGGBB 만 인식하고 rgb()·색 이름은 세지 않는다. ③ 은 별칭 리터럴의 개수만
+  # 세므로, 별칭이 있어도 규칙이 새 토큰을 쓰지 않는 결함은 못 잡는다.
+  local light_theme_output light_theme_pairs light_theme_parity light_theme_alias
+  light_theme_output=$(python3 - "$hub_template_file" "$REPO_ROOT/hub/bin/hub_dashboard_template.html" <<'PYEOF'
+import re
+import sys
+
+MIN_TEXT_CONTRAST = 4.5            # WCAG 1.4.3 AA — 글자
+MIN_NONTEXT_CONTRAST = 3.0         # WCAG 1.4.11 — 비텍스트(막대 대 트랙)
+MIN_HUE_AXIS_MAGNITUDE = 20.0      # CIELAB b* — 부호가 반대여도 0 근처면 색각이상에서 갈리지 않는다
+HUB_ONLY_TOKEN_PREFIX = "dzh-"     # 허브 배치 토큰(패널 폭·거터) — 대시보드에는 없다
+DARK_ALIAS_LITERALS = (
+    "--accent-fill:var(--accent-ink)",
+    "--on-accent-fill:var(--bg)",
+    "--accent-bar:var(--accent)",
+    "--gloss-edge:0 0 transparent",
+)
+EXPECTED_ALIAS_COUNT = 2           # 다크 블록 두 벌(미디어쿼리 + data-theme)
+SRGB_LINEAR_CUTOFF = 0.04045      # sRGB 전달 함수의 선형 구간 경계(IEC 61966-2-1)
+D65_WHITE_Z = 1.08883              # D65 백색점의 Z(Y=1 기준) — CIE 1976 L*a*b*
+LAB_EPSILON = 0.008856             # CIE 1976 L*a*b* 의 (6/29)^3 — 이 아래는 선형 근사
+LAB_LINEAR_SLOPE = 7.787           # CIE 1976 L*a*b* 선형 구간 기울기 (29/6)^2 / 3
+HEX_COLOR = re.compile(r"#[0-9A-Fa-f]{6}")
+FLAT_TOKENS = (
+    "surface", "soft", "accent", "accent-ink", "accent-soft",
+    "attention", "attention-soft", "on-accent-fill",
+)
+GRADIENT_TOKENS = ("accent-fill", "accent-bar")
+
+
+def linear_channels(hex_color):
+    """#RRGGBB 의 선형 sRGB 채널 3개."""
+    channels = [int(hex_color[index:index + 2], 16) / 255 for index in (1, 3, 5)]
+    return [
+        channel / 12.92 if channel <= SRGB_LINEAR_CUTOFF else ((channel + 0.055) / 1.055) ** 2.4
+        for channel in channels
+    ]
+
+
+def relative_luminance(hex_color):
+    """WCAG 상대 휘도."""
+    red, green, blue = linear_channels(hex_color)
+    return 0.2126 * red + 0.7152 * green + 0.0722 * blue
+
+
+def contrast_ratio(first, second):
+    """두 색의 WCAG 대비비."""
+    first_luminance, second_luminance = relative_luminance(first), relative_luminance(second)
+    return (max(first_luminance, second_luminance) + 0.05) / (min(first_luminance, second_luminance) + 0.05)
+
+
+def lab_b_star(hex_color):
+    """CIELAB b*(파랑-노랑 축, D65) — 양수는 노랑 쪽, 음수는 파랑 쪽. 출처: CIE 1976 L*a*b*, sRGB→XYZ(D65) 행렬의 Y·Z 행."""
+    red, green, blue = linear_channels(hex_color)
+    tristimulus_y = 0.2126 * red + 0.7152 * green + 0.0722 * blue
+    tristimulus_z = (0.0193339 * red + 0.1191920 * green + 0.9503041 * blue) / D65_WHITE_Z
+
+    def lab_f(tristimulus_ratio):
+        if tristimulus_ratio > LAB_EPSILON:
+            return tristimulus_ratio ** (1 / 3)
+        return LAB_LINEAR_SLOPE * tristimulus_ratio + 16 / 116
+
+    return 200 * (lab_f(tristimulus_y) - lab_f(tristimulus_z))
+
+
+def read_source(path):
+    """파일 전체 텍스트."""
+    with open(path, encoding="utf-8") as handle:
+        return handle.read()
+
+
+def light_declarations(source):
+    """첫 맨몸 :root 블록의 --이름:값; 선언(공백 정규화). 블록이 없으면 None."""
+    block = re.search(r":root\{(.*?)\}", source, re.S)
+    if block is None:
+        return None
+    return {
+        name: " ".join(value.split())
+        for name, value in re.findall(r"--([a-z-]+):([^;]+);", block.group(1))
+    }
+
+
+def check_pairs(tokens):
+    """의미 쌍 관계(① ~ ⑦)의 위반 목록."""
+    if tokens is None:
+        return ["허브 라이트 :root 블록을 찾지 못함"]
+    absent = [name for name in FLAT_TOKENS + GRADIENT_TOKENS if name not in tokens]
+    if absent:
+        return ["라이트 :root 에 없는 토큰: " + ", ".join(absent)]
+    flat = {name: tokens[name] for name in FLAT_TOKENS}
+    malformed = [name for name, value in flat.items() if not re.fullmatch(HEX_COLOR, value)]
+    fill_stops = HEX_COLOR.findall(tokens["accent-fill"])
+    bar_stops = HEX_COLOR.findall(tokens["accent-bar"])
+    if malformed or not fill_stops or not bar_stops:
+        return ["#RRGGBB 로 읽히지 않는 토큰 또는 정지점 없음: " + ", ".join(malformed or ["accent-fill/accent-bar"])]
+    problems = []
+    for stop in fill_stops:
+        ratio = contrast_ratio(flat["on-accent-fill"], stop)
+        if ratio < MIN_TEXT_CONTRAST:
+            problems.append(f"① 채움 정지점 {stop} 위 글자 {ratio:.2f}:1 < {MIN_TEXT_CONTRAST}")
+    for label, text_name, face_name in (
+        ("②", "accent-ink", "accent-soft"),
+        ("③", "attention", "surface"),
+        ("④", "attention", "attention-soft"),
+        ("⑤", "attention", "accent-soft"),
+    ):
+        ratio = contrast_ratio(flat[text_name], flat[face_name])
+        if ratio < MIN_TEXT_CONTRAST:
+            problems.append(f"{label} {text_name} 대 {face_name} {ratio:.2f}:1 < {MIN_TEXT_CONTRAST}")
+    attention_b = lab_b_star(flat["attention"])
+    ordinary = [("accent", flat["accent"]), ("accent-ink", flat["accent-ink"])]
+    ordinary += [(f"accent-fill {stop}", stop) for stop in fill_stops]
+    for name, color in ordinary:
+        ordinary_b = lab_b_star(color)
+        same_side = (ordinary_b > 0) == (attention_b > 0)
+        if same_side or min(abs(ordinary_b), abs(attention_b)) < MIN_HUE_AXIS_MAGNITUDE:
+            problems.append(f"⑥ b* {name} {ordinary_b:+.1f} 대 attention {attention_b:+.1f} — 반대편이 아님")
+    best_bar = max(contrast_ratio(stop, flat["soft"]) for stop in bar_stops)
+    if best_bar < MIN_NONTEXT_CONTRAST:
+        problems.append(f"⑦ 막대 정지점 대 트랙 최댓값 {best_bar:.2f}:1 < {MIN_NONTEXT_CONTRAST}")
+    return problems
+
+
+def check_parity(hub_tokens, dashboard_tokens):
+    """두 파일 라이트 선언의 차이 목록."""
+    if hub_tokens is None or dashboard_tokens is None:
+        return ["라이트 :root 블록을 찾지 못함"]
+    hub = {name: value for name, value in hub_tokens.items() if not name.startswith(HUB_ONLY_TOKEN_PREFIX)}
+    dashboard = {
+        name: value for name, value in dashboard_tokens.items() if not name.startswith(HUB_ONLY_TOKEN_PREFIX)
+    }
+    problems = []
+    for name in sorted(set(hub) | set(dashboard)):
+        if name not in dashboard:
+            problems.append(f"--{name} 는 허브에만 있음")
+        elif name not in hub:
+            problems.append(f"--{name} 는 대시보드에만 있음")
+        elif hub[name] != dashboard[name]:
+            problems.append(f"--{name} 값 불일치(허브 {hub[name]} / 대시보드 {dashboard[name]})")
+    return problems
+
+
+def check_aliases(label, source):
+    """다크 별칭 리터럴 개수 위반 목록."""
+    problems = []
+    for literal in DARK_ALIAS_LITERALS:
+        count = source.count(literal)
+        if count != EXPECTED_ALIAS_COUNT:
+            problems.append(f"{label} {literal} {count}개(기대 {EXPECTED_ALIAS_COUNT})")
+    return problems
+
+
+hub_source = read_source(sys.argv[1])
+dashboard_source = read_source(sys.argv[2])
+hub_tokens = light_declarations(hub_source)
+dashboard_tokens = light_declarations(dashboard_source)
+results = {
+    "pairs": check_pairs(hub_tokens),
+    "parity": check_parity(hub_tokens, dashboard_tokens),
+    "alias": check_aliases("허브", hub_source) + check_aliases("대시보드", dashboard_source),
+}
+for key, problems in results.items():
+    print(key + "=" + ("; ".join(problems) if problems else "OK"))
+PYEOF
+)
+  light_theme_pairs=$(sed -n 's/^pairs=//p' <<< "$light_theme_output")
+  light_theme_parity=$(sed -n 's/^parity=//p' <<< "$light_theme_output")
+  light_theme_alias=$(sed -n 's/^alias=//p' <<< "$light_theme_output")
+  if [[ "$light_theme_pairs" != "OK" ]]; then
+    note_failure "T25-282: 라이트 의미 쌍 관계 위반(결정 LT4 — 평상·채움과 경고가 한 색으로 붙거나 글자·막대 대비가 미달) — ${light_theme_pairs:-<출력 없음 — python 이 죽었다>}"
+  fi
+  if [[ "$light_theme_parity" != "OK" ]]; then
+    note_failure "T25-283: 허브·대시보드 라이트 토큰 불일치(결정 LT2 — 상세 패널 iframe 안만 다른 색으로 남는다) — ${light_theme_parity:-<출력 없음 — python 이 죽었다>}"
+  fi
+  if [[ "$light_theme_alias" != "OK" ]]; then
+    note_failure "T25-284: 다크 별칭 개수 불일치(결정 LT12 — 다크 화면이 라이트 금빛으로 바뀐다) — ${light_theme_alias:-<출력 없음 — python 이 죽었다>}"
+  fi
+
   # T25-111(결정 WT3, docs/prps/hub-worktree-fold.md): hub_project.py 에 워크트리 경로 마커
   # 상수가 리터럴로 있다. 마커 문자열이 조용히 바뀌면 아무 경로도 접히지 않는다.
   # 독립 서브체크라 note_failure 를 쓴다(검수 1회차 M2) — record_failure + return 1 이면
@@ -6736,6 +6941,7 @@ tree = ast.parse(open(source_path, encoding="utf-8").read(), filename=source_pat
 FUNCTION_NAMES = (
     "_maintenance_loop",
     "_usage_api_poll_loop",
+    "_start_background_threads",
     "run_server",
     "do_GET",
     "_serve_hub_html",
@@ -6779,17 +6985,18 @@ PYEOF
     record_failure "$test_name" "T25-122: hub_server.py AST 추출이 아무 출력도 내지 않았다 — ast.parse 실패(SyntaxError) 가능"
     return 1
   fi
-  local maintenance_loop_body usage_api_poll_loop_body run_server_body
+  local maintenance_loop_body usage_api_poll_loop_body run_server_body background_threads_body
   local do_get_body serve_hub_html_body serve_project_dashboard_body
   maintenance_loop_body=$(sed -n '/^__BEGIN__:_maintenance_loop$/,/^__END__:_maintenance_loop$/p' <<< "$hub_server_ast_output" | sed '1d;$d')
   usage_api_poll_loop_body=$(sed -n '/^__BEGIN__:_usage_api_poll_loop$/,/^__END__:_usage_api_poll_loop$/p' <<< "$hub_server_ast_output" | sed '1d;$d')
   run_server_body=$(sed -n '/^__BEGIN__:run_server$/,/^__END__:run_server$/p' <<< "$hub_server_ast_output" | sed '1d;$d')
+  background_threads_body=$(sed -n '/^__BEGIN__:_start_background_threads$/,/^__END__:_start_background_threads$/p' <<< "$hub_server_ast_output" | sed '1d;$d')
   do_get_body=$(sed -n '/^__BEGIN__:do_GET$/,/^__END__:do_GET$/p' <<< "$hub_server_ast_output" | sed '1d;$d')
   serve_hub_html_body=$(sed -n '/^__BEGIN__:_serve_hub_html$/,/^__END__:_serve_hub_html$/p' <<< "$hub_server_ast_output" | sed '1d;$d')
   serve_project_dashboard_body=$(sed -n '/^__BEGIN__:_serve_project_dashboard$/,/^__END__:_serve_project_dashboard$/p' <<< "$hub_server_ast_output" | sed '1d;$d')
   # 함수를 못 찾으면(이름 변경·삭제) 반드시 실패한다 — 옛 `-z` 빈 문자열 가드의 역할을
   # AST 추출 쪽에서도 유지한다.
-  if grep -qF '__MISSING__' <<< "$maintenance_loop_body$usage_api_poll_loop_body$run_server_body$do_get_body$serve_hub_html_body$serve_project_dashboard_body"; then
+  if grep -qF '__MISSING__' <<< "$maintenance_loop_body$usage_api_poll_loop_body$background_threads_body$run_server_body$do_get_body$serve_hub_html_body$serve_project_dashboard_body"; then
     # N-4(Q1 검수 2회차, INFO) — AST 덤프 전체(80줄)를 싣는 대신 문제 함수 이름만 좁혀 싣는다.
     local missing_function_names
     missing_function_names=$(grep -B1 '__MISSING__' <<< "$hub_server_ast_output" | grep '^__BEGIN__:' | sed 's/^__BEGIN__://' | tr '\n' ' ')
@@ -6814,8 +7021,13 @@ PYEOF
     return 1
   fi
   # ④ 두 데몬 스레드(유지보수 티커 + 사용량 API 폴링)가 모두 기동돼야 한다.
-  if ! grep -qF 'target=_usage_api_poll_loop' <<< "$run_server_body"; then
-    note_failure "T25-122: run_server 본문에 _usage_api_poll_loop 스레드 기동이 없음"
+  # 스레드 기동부는 run_server 에서 _start_background_threads 로 옮겼다(함수 50줄 상한, 검수 1회차 D4) — 기동은 그 함수 본문에서, run_server 는
+  # 그 함수를 부르는지로 본다. 둘 중 하나라도 빠지면 폴링 스레드가 영영 뜨지 않는다.
+  if ! grep -qF 'target=_usage_api_poll_loop' <<< "$background_threads_body"; then
+    note_failure "T25-122: _start_background_threads 본문에 _usage_api_poll_loop 스레드 기동이 없음"
+  fi
+  if ! grep -qF '_start_background_threads(' <<< "$run_server_body"; then
+    note_failure "T25-122: run_server 본문이 _start_background_threads 를 부르지 않음(데몬 스레드가 하나도 뜨지 않는다)"
   fi
 
   # T25-123(개정 2): hub_server_state.py 에 evaluate_collect_health·maintenance_stalled·
@@ -7314,19 +7526,20 @@ PYEOF
   # 를 더해 30으로, docs/prps/hub-usage-panel-account.md 결정 AC8 이 hub_account.py 를 더해
   # 31로, docs/prps/hub-live-activity.md 결정 LA14 가 hub_activity.py 를 더해 32로,
   # docs/prps/harness-benchmark-adoption.md ⑨ 가 hub_session_cost.py 를 더해 33으로,
-  # docs/prps/harness-versioning.md 단계 B 가 hub_release.py·hub_release_read.py 를 더해 35로 갱신):
-  # hub/install.sh 의 HUB_FILE_COUNT 가 35 이다. T25-1 은
+  # docs/prps/harness-versioning.md 단계 B 가 hub_release.py·hub_release_read.py 를 더해 35로,
+  # docs/prps/hub-macos-notification.md 가 hub_notify.py·hub_notify_send.py 를 더해 37로 갱신):
+  # hub/install.sh 의 HUB_FILE_COUNT 가 37 이다. T25-1 은
   # "선언값==실제 파일 수"라는 일반 교차 검사라, 값이 이전 수에 머문 채 실제 파일 수도
   # 우연히 그 수로 되돌아가면(새 파일을 추가하며 다른 파일을 실수로 지운 경우) 잡지 못하는
-  # 사각이 있다 — 이 값 자체를 35로 고정해 그 사각을 없앤다. hub/README.md 「파일 배치」의
-  # 파일 수 서술도 함께 35로 갱신됐는지 본다.
+  # 사각이 있다 — 이 값 자체를 37로 고정해 그 사각을 없앤다. hub/README.md 「파일 배치」의
+  # 파일 수 서술도 함께 37로 갱신됐는지 본다.
   local declared_hub_file_count
   declared_hub_file_count=$(grep -oE '^readonly HUB_FILE_COUNT=[0-9]+' "$hub_install_file" | grep -oE '[0-9]+$')
-  if [[ "$declared_hub_file_count" -ne 35 ]]; then
-    note_failure "T25-149: hub/install.sh 의 HUB_FILE_COUNT=$declared_hub_file_count(기대 35)"
+  if [[ "$declared_hub_file_count" -ne 37 ]]; then
+    note_failure "T25-149: hub/install.sh 의 HUB_FILE_COUNT=$declared_hub_file_count(기대 37)"
   fi
-  if ! grep -qF '35개 파일' "$hub_readme_file"; then
-    note_failure "T25-149: hub/README.md 「파일 배치」에 '35개 파일' 서술이 없음"
+  if ! grep -qF '37개 파일' "$hub_readme_file"; then
+    note_failure "T25-149: hub/README.md 「파일 배치」에 '37개 파일' 서술이 없음"
   fi
 
   # T25-150(정+역, 결정 FT7·GOTCHA 8 — 갱신: docs/prps/hub-subagent-background-pause.md 결정
@@ -10533,8 +10746,9 @@ PYEOF
   fi
 
   # T25-280(신설, 정 — 결정 AW1~AW4·AW7, docs/prps/hub-approval-wait-badge.md): 승인 대기 표지의 배선. ① hub_parse.py 의 Tier1Snapshot 이
-  # `is_approval_step_active: bool = False` 사실 필드를 선언한다 ② isAwaitingApproval() 본문이 그 필드(`tier1.is_approval_step_active`)를
-  # 읽는다(서버 필드만 개명해도 화면이 눈먼 채 항상 false 가 되지 않게 — 개명하면 정적 가드가 눈이 먼다) ③ renderSessionContent() 의 첫 줄
+  # `is_approval_step_active: bool = False` 사실 필드를, hub_session.py 의 SessionView 가 `is_awaiting_approval: bool = False` 판정 필드를
+  # 선언한다(결정 MN5, docs/prps/hub-macos-notification.md — 판정이 서버로 옮겨졌다) ② isAwaitingApproval() 본문이 그 판정 필드
+  # (`session.is_awaiting_approval`)를 읽는다(서버 필드만 개명해도 화면이 눈먼 채 항상 false 가 되지 않게 — 개명하면 정적 가드가 눈이 먼다) ③ renderSessionContent() 의 첫 줄
   # 구간(T25-127 과 같은 awk 추출 — class="session-line" 뒤 첫 </div> 앞)에 renderApprovalWaitBadge(session) 호출이 있다(호출이 식별 줄·
   # 진행률 줄로 옮겨지거나 지워지면 표지가 첫 줄에서 사라진다) ④ `.badge.approval-wait{` 규칙이 있고 그 본문에 animation 이 없다(halo·pulse 금지 —
   # glow 는 working 전용, T25-190 계열) ⑤ hub/README.md 「화면 배치」에 승인 대기 서술이 있다(T25-36·T25-152 관례). 메시지는 반복문 밖의 고정
@@ -10544,13 +10758,16 @@ PYEOF
   if ! grep -qF 'is_approval_step_active: bool = False' "$hub_parse_file_280"; then
     note_failure "T25-280: hub_parse.py 에 is_approval_step_active: bool = False 선언이 없음(결정 AW2 위반 — 승인 단계 진행중 사실이 스냅샷에 실리지 않는다)"
   fi
+  if ! grep -qF 'is_awaiting_approval: bool = False' "$hub_session_file"; then
+    note_failure "T25-280: hub_session.py 에 is_awaiting_approval: bool = False 선언이 없음(결정 MN5 위반 — 승인 대기 판정이 스냅샷에 실리지 않아 화면 표지와 알림이 판정을 잃는다)"
+  fi
   awaiting_body_280=$(sed -n '/^  function isAwaitingApproval(session){$/,/^  }$/p' "$hub_template_file")
   if [[ -z "$awaiting_body_280" ]]; then
     record_failure "$test_name" "T25-280: isAwaitingApproval() 범위 추출 실패 — 앵커가 깨졌다"
     return 1
   fi
-  if ! grep -qF 'tier1.is_approval_step_active' <<< "$awaiting_body_280"; then
-    note_failure "T25-280: isAwaitingApproval() 이 서버 사실 tier1.is_approval_step_active 를 읽지 않음(결정 AW2 위반 — 필드 이름이 서버와 어긋나면 표지가 영영 안 뜬다)"
+  if ! grep -qF 'session.is_awaiting_approval' <<< "$awaiting_body_280"; then
+    note_failure "T25-280: isAwaitingApproval() 이 서버 판정 session.is_awaiting_approval 을 읽지 않음(결정 MN5 위반 — 필드 이름이 서버와 어긋나면 표지가 영영 안 뜬다)"
   fi
   approval_badge_body_280=$(sed -n '/^  function renderApprovalWaitBadge(session){$/,/^  }$/p' "$hub_template_file")
   session_content_body_280=$(sed -n '/function renderSessionContent(session){/,/^  }$/p' "$hub_template_file")
@@ -10591,6 +10808,83 @@ PYEOF
   fi
   if grep -qF "'승인'" "$hub_template_file"; then
     note_failure "T25-281: 템플릿에 단계 이름 리터럴 '승인' 이 있음(결정 AW2 위반 — 화면이 단계 이름으로 승인 대기를 다시 판정한다)"
+  fi
+
+  # T25-285(신설, 보안 — 결정 MN8, docs/prps/hub-macos-notification.md): 사용자 문자열이 AppleScript 소스·셸에 닿지 않는다. ① NOTIFY_APPLESCRIPT_LINES
+  # 블록이 `on run argv` 를 갖고 문자열 끼워 넣기 문법(`{`·`%`·`format(`)이 없다 ② osascript_argv() 본문에 옵션 종료 구분자 "--" 가 있다(없으면 `-` 로
+  # 시작하는 프로젝트 이름을 osascript 가 옵션으로 다시 읽는다 — 설계 중 실측) ③ hub_notify_send.py 에 `shell=` 이 없고 subprocess.run( 의 첫 인자가
+  # hub_notify.osascript_argv( 다(리스트 argv 외의 경로로 실행하지 않는다). 메시지는 반복문 밖의 고정 문구다. 원장 행은 ② 를 문다.
+  local hub_notify_file_282="$REPO_ROOT/hub/bin/hub_notify.py"
+  local hub_notify_send_file_282="$REPO_ROOT/hub/bin/hub_notify_send.py"
+  local applescript_block_282 argv_body_282 run_call_second_line_282
+  applescript_block_282=$(sed -n '/^NOTIFY_APPLESCRIPT_LINES = (/,/^)/p' "$hub_notify_file_282")
+  argv_body_282=$(awk '/^def osascript_argv\(/{flag=1} flag{print} flag && /^    return /{exit}' "$hub_notify_file_282")
+  if [[ -z "$applescript_block_282" || -z "$argv_body_282" ]]; then
+    record_failure "$test_name" "T25-285: NOTIFY_APPLESCRIPT_LINES·osascript_argv() 범위 추출 실패 — 앵커가 깨졌다"
+    return 1
+  fi
+  if ! grep -qF 'on run argv' <<< "$applescript_block_282"; then
+    note_failure "T25-285: NOTIFY_APPLESCRIPT_LINES 에 on run argv 가 없음(결정 MN8 위반 — 문구가 argv 로 전달되지 않는다)"
+  fi
+  if grep -qE '\{|%|format\(' <<< "$applescript_block_282"; then
+    note_failure "T25-285: NOTIFY_APPLESCRIPT_LINES 에 문자열 끼워 넣기 문법({·%·format()이 있음(결정 MN8 위반 — 사용자 문자열이 AppleScript 소스에 들어갈 수 있다)"
+  fi
+  if ! grep -qF '"--"' <<< "$argv_body_282"; then
+    note_failure "T25-285: osascript_argv() 에 -- 구분자가 없음(결정 MN8 위반 — - 로 시작하는 프로젝트 이름이 osascript 옵션으로 읽힌다)"
+  fi
+  if grep -qF 'shell=' "$hub_notify_send_file_282"; then
+    note_failure "T25-285: hub_notify_send.py 에 shell= 인자가 있음(결정 MN8 위반 — 셸을 거치면 사용자 문자열이 명령으로 해석될 수 있다)"
+  fi
+  run_call_second_line_282=$(awk '/subprocess\.run\(/{getline next_line; print next_line; exit}' "$hub_notify_send_file_282")
+  if ! grep -qF 'hub_notify.osascript_argv(' <<< "$run_call_second_line_282"; then
+    note_failure "T25-285: hub_notify_send.py 의 subprocess.run( 첫 인자가 hub_notify.osascript_argv( 가 아님(결정 MN8 위반 — 순수 argv 조립을 거치지 않는 실행 경로)"
+  fi
+
+  # T25-286(신설, 경계 — 결정 MN6·MN7): ① hub_notify_send.py 가 hub_collect·hub_server 를 임포트하지 않는다(hub_server 가 이 모듈을 부르므로 순환이
+  # 된다 — T25-279 와 같은 관례) ② hub_server.py 의 활동 감시 디렉터리 튜플(_start_background_threads 가 만든다)이 `hub_collect.EVENTS_DIR, hub_collect.SESSIONS_DIR` 이고 run_server() 가
+  # `hub_collect.HUB_HOME` 을 감시 대상으로 쓰지 않는다(~/.claude/hub/ 는 hub.html·notify_status.json 쓰기가 다시 수집을 부르는 자기 유발 루프가 된다).
+  # 메시지는 반복문 밖의 고정 문구다. 원장 행은 ② 를 문다.
+  local run_server_body_283
+  run_server_body_283=$(sed -n '/^def _start_background_threads(/,$p' "$hub_server_file")   # 스레드 기동 함수 + run_server(파일 끝까지)
+  if grep -qE '^(import|from)[[:space:]].*hub_(collect|server)\b' "$hub_notify_send_file_282"; then
+    note_failure "T25-286: hub_notify_send.py 가 hub_collect·hub_server 를 임포트함(순환 의존 — hub_server 가 이 모듈을 부른다)"
+  fi
+  if ! grep -qF '(hub_collect.EVENTS_DIR, hub_collect.SESSIONS_DIR)' <<< "$run_server_body_283"; then
+    note_failure "T25-286: run_server() 의 활동 감시 디렉터리가 훅 이벤트·세션 명부 둘이 아님(결정 MN6 위반 — 감시 대상이 어긋나 알림이 늦거나 안 울린다)"
+  fi
+  if grep -qF 'hub_collect.HUB_HOME' <<< "$run_server_body_283"; then
+    note_failure "T25-286: run_server() 가 hub_collect.HUB_HOME 을 참조함(결정 MN6 위반 — hub.html 쓰기가 수집을 다시 부르는 자기 유발 루프)"
+  fi
+
+  # T25-287(신설, 문서·어휘 — 결정 MN9·MN11·MN13): ① hub/README.md 에 notify_enabled·notify_status.json·스크립트 편집기·알림 센터가 있다(프라이버시
+  # 고지가 알림 문구의 노출 위치를 알린다) ② commands/hub.md 에 notify_status 가 있다 ③ 알림 제목 라벨 4개(NOTIFY_TITLE_LABEL_BY_KIND)가 화면 배지 어휘
+  # (STATE_LABEL·STATE_GLYPH·BACKGROUND_SESSION_LABEL·APPROVAL_WAIT_*)와 같은 글자다 — 규칙이 아니라 어휘라 두 벌이 허용되고 이 가드가 교차 확인한다.
+  # 메시지는 반복문 밖의 고정 문구다. 원장 행은 ① 의 notify_status.json 을 문다.
+  if ! grep -qF 'notify_enabled' "$hub_readme_file" || ! grep -qF '스크립트 편집기' "$hub_readme_file" \
+      || ! grep -qF '알림 센터' "$hub_readme_file"; then
+    note_failure "T25-287: hub/README.md 에 notify_enabled·스크립트 편집기·알림 센터 중 빠진 것이 있음(결정 MN9 위반 — 알림 문구가 어디에 남는지 알리지 않는다)"
+  fi
+  if ! grep -qF 'notify_status.json' "$hub_readme_file"; then
+    note_failure "T25-287: hub/README.md 에 notify_status.json 설명이 없음(결정 MN11 위반 — 알림 기록 파일이 문서에 없다)"
+  fi
+  if ! grep -qF 'notify_status' "$hub_command_file"; then
+    note_failure "T25-287: commands/hub.md 에 notify_status 설명이 없음(결정 MN11 위반 — /hub status 의 알림 필드가 안내되지 않는다)"
+  fi
+  if ! grep -qF '"■ 한도 초과"' "$hub_notify_file_282" || ! grep -qF "interrupted:'한도 초과'" "$hub_template_file" \
+      || ! grep -qF "interrupted:'■'" "$hub_template_file"; then
+    note_failure "T25-287: 알림 제목 「■ 한도 초과」 가 화면 배지 어휘(STATE_LABEL·STATE_GLYPH)와 어긋남(결정 MN9 위반 — 알림과 화면이 같은 상태를 다른 글자로 부른다)"
+  fi
+  if ! grep -qF '"◆ 승인 대기"' "$hub_notify_file_282" || ! grep -qF "APPROVAL_WAIT_LABEL = '승인 대기'" "$hub_template_file" \
+      || ! grep -qF "APPROVAL_WAIT_GLYPH = '◆'" "$hub_template_file"; then
+    note_failure "T25-287: 알림 제목 「◆ 승인 대기」 가 화면 표지 어휘(APPROVAL_WAIT_LABEL·APPROVAL_WAIT_GLYPH)와 어긋남(결정 MN9 위반)"
+  fi
+  if ! grep -qF '"○ 대기"' "$hub_notify_file_282" || ! grep -qF "idle:'대기'" "$hub_template_file" \
+      || ! grep -qF "idle:'○'" "$hub_template_file"; then
+    note_failure "T25-287: 알림 제목 「○ 대기」 가 화면 배지 어휘(STATE_LABEL·STATE_GLYPH)와 어긋남(결정 MN9 위반)"
+  fi
+  if ! grep -qF '"◐ 백그라운드 대기"' "$hub_notify_file_282" || ! grep -qF "BACKGROUND_SESSION_LABEL = '백그라운드 대기'" "$hub_template_file" \
+      || ! grep -qF "background:'◐'" "$hub_template_file"; then
+    note_failure "T25-287: 알림 제목 「◐ 백그라운드 대기」 가 화면 배지 어휘(BACKGROUND_SESSION_LABEL·STATE_GLYPH)와 어긋남(결정 MN9 위반)"
   fi
 
   finish_group "$test_name"
