@@ -321,7 +321,7 @@
 | `tests/hub/test_hub_server.py` | UPDATE | 관측 배선·티커 활동 수집(§9.4) |
 | `tests/hub/test_hub_config.py` | UPDATE | `notify_enabled` 기본·타입 |
 | `tests/hub/test_hub_template_dom_approval.py` | UPDATE | 픽스처가 `is_awaiting_approval` 을 Python 함수로 채움 · 옛 페이로드 흉내가 지우는 키를 `is_awaiting_approval` 로(§9.5) |
-| `tests/run.sh` | UPDATE | T25-10 순수 목록 + `hub_notify.py` · T25-104/T25-149 35→37 · T25-280 ①② 재조준 · 신설 T25-285~N3 · 그룹 설명 범위 문자열 · `SOURCE_GUARD_ID_FLOOR`·`LEDGER_MUTATION_ROW_FLOOR` |
+| `tests/run.sh` | UPDATE | T25-10 순수 목록 + `hub_notify.py` · T25-104/T25-149 35→37 · T25-280 ①② 재조준 · 신설 T25-285~287 · 그룹 설명 범위 문자열 · `SOURCE_GUARD_ID_FLOOR`·`LEDGER_MUTATION_ROW_FLOOR` |
 | `tests/mutations.tsv` | UPDATE | 신설 가드 3건의 변조행 |
 
 **영향 없음(확인함)**: 상시 로드 컨텍스트(T26 — `CLAUDE.md`·`rules/README.md`·`rules/common`·`rules/workflow` 무변경) · `hub/rules/dashboard-recording.md`
@@ -330,8 +330,8 @@
 
 ### 동시 작업 주의 (병합 직전 필수)
 
-- 다른 세션이 워크트리 `.claude/worktrees/hub-light-sunset`(브랜치 `feat/hub-light-theme-sunset`)에서 `hub/bin/hub_template.html`·`hub/README.md`·
-  `tests/run.sh`·`tests/mutations.tsv` 를 미커밋 상태로 고치고 있다.
+- 설계 시점에 다른 세션이 브랜치 `feat/hub-light-theme-sunset` 에서 `hub/bin/hub_template.html`·`hub/README.md`·`tests/run.sh`·`tests/mutations.tsv`
+  를 고치고 있었다 — 그 작업은 PR #6 으로 develop 에 먼저 들어갔고, 이 브랜치는 병합 커밋 `0c1bcca` 로 따라잡았다.
 - **템플릿 수정은 JS 함수 본문 1곳 + 주석 2곳으로 최소화한다**(CSS·토큰 무변경 — 라이트 테마 작업과 겹치지 않는 구역).
 - **새 검사 번호(T25-285~287)와 `SOURCE_GUARD_ID_FLOOR`(565)·`LEDGER_MUTATION_ROW_FLOOR`(139)·T25 그룹 설명의 범위 문자열(`T25-1~T25-287`)·루트 README 문서
   수(90)는 develop 병합 뒤 다시 세어 확정했다**(라이트 테마 PR #6 이 T25-282~284 를 먼저 썼다). 본문의 T25-285~287 은 확정 번호다.
