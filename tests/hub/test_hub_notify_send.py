@@ -325,10 +325,10 @@ class LocalClockLabelTest(unittest.TestCase):
         self.assertEqual(hub_notify_send.local_clock_label(self._epoch_ms("2026-10-16 02:30"), now_ms), "10/16 02:30")
 
 
-def _session(session_id: str, state: str, base_state: str) -> hub_session.SessionView:
+def _session(session_id: str, state: str, base_state: str, is_awaiting_approval: bool = False) -> hub_session.SessionView:
     return hub_session.SessionView(
         session_id=session_id, short_id=session_id, started_at_ms=BASE_MS, state=state, base_state=base_state,
-        last_event_at_ms=BASE_MS, task_excerpt=None, agent_runs=(),
+        last_event_at_ms=BASE_MS, task_excerpt=None, agent_runs=(), is_awaiting_approval=is_awaiting_approval,
     )
 
 
@@ -352,7 +352,8 @@ class SessionNotifierTest(unittest.TestCase):
         return _snapshot(at_ms, _session("s", "working", "working"))
 
     def _waiting(self, at_ms: int):
-        return _snapshot(at_ms, _session("s", "idle", "idle"))
+        """알림 국면은 승인 대기뿐이다(AN1) — 대기 세션에 승인 표지를 붙여 알림을 만든다."""
+        return _snapshot(at_ms, _session("s", "idle", "idle", is_awaiting_approval=True))
 
     def test_first_observation_dispatches_nothing_even_for_a_waiting_session(self) -> None:
         notifier, dispatched = self._notifier()
@@ -368,7 +369,7 @@ class SessionNotifierTest(unittest.TestCase):
         notifier.observe(self._waiting(self.T0 + 5 * MINUTE_MS + hub_notify.NOTIFY_SETTLE_MS))
         self.assertEqual(len(dispatched), 1)
         texts, now_ms = dispatched[0]
-        self.assertEqual((texts[0].title, now_ms), ("○ 대기 · proj", self.T0 + 5 * MINUTE_MS + hub_notify.NOTIFY_SETTLE_MS))
+        self.assertEqual((texts[0].title, now_ms), ("◆ 승인 대기 · proj", self.T0 + 5 * MINUTE_MS + hub_notify.NOTIFY_SETTLE_MS))
         self.assertFalse(notifier.has_pending())
 
     def test_same_snapshot_repeated_dispatches_nothing_more(self) -> None:
@@ -395,7 +396,7 @@ class SessionNotifierTest(unittest.TestCase):
             title="비공개 제목", subtitle="", completed=0, total=1, percent=0, steps=(), matrix_done=None,
             impl_done=0, impl_total=0, updated_text="-", file_mtime_ms=BASE_MS,
         )
-        waiting_with_title = _snapshot(0, _session("s", "idle", "idle"))
+        waiting_with_title = _snapshot(0, _session("s", "idle", "idle", is_awaiting_approval=True))
         for include, expected_subtitle in ((True, "비공개 제목"), (False, "")):
             with self.subTest(include=include):
                 notifier, dispatched = self._notifier(include_task_title=include)
@@ -422,7 +423,7 @@ class SessionNotifierTest(unittest.TestCase):
             notifier.observe(self._waiting(confirmed_at_ms))
             self.assertTrue(delivered.wait(timeout=5))
         texts, now_ms = received["batch"]
-        self.assertEqual((texts[0].title, now_ms), ("○ 대기 · proj", confirmed_at_ms))
+        self.assertEqual((texts[0].title, now_ms), ("◆ 승인 대기 · proj", confirmed_at_ms))
 
 
 class IsNotifySupportedTest(unittest.TestCase):

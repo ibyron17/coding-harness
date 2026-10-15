@@ -1122,6 +1122,7 @@ class StartNotifierTest(unittest.TestCase):
         session = hub_session.SessionView(
             session_id="s", short_id="s", started_at_ms=1, state="working" if working else "idle",
             base_state="working" if working else "idle", last_event_at_ms=1, task_excerpt=None, agent_runs=(), tier1=tier1,
+            is_awaiting_approval=not working,
         )
         project = hub_project.ProjectView(
             display_name="proj", path="/repo/proj", tier=2, state="working", last_activity_at_ms=1,
@@ -1130,7 +1131,7 @@ class StartNotifierTest(unittest.TestCase):
         return hub_model.HubSnapshot(collected_at_ms=collected_at_ms, projects=(project,), unresolved_dir_names=(), warnings=())
 
     def test_task_titles_follow_the_prompt_excerpt_switch(self) -> None:
-        """공개 동작으로 확인한다 — 알림기에 작업→대기 전이를 먹이면 전송 스레드가 받는 문구의 부제가 스위치를 따른다."""
+        """공개 동작으로 확인한다 — 알림기에 작업→승인 대기 전이를 먹이면 전송 스레드가 받는 문구의 부제가 스위치를 따른다."""
         for excerpt_on, expected_subtitle in ((True, "비공개 제목"), (False, "")):
             delivered = threading.Event()
             received = []
