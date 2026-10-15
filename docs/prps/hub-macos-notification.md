@@ -294,7 +294,7 @@
 | 백그라운드 대기 진입(≥2분) | 탭의 배지만 | `◐ 백그라운드 대기` 배너 | MN4 |
 | 허브 탭 화면 | — | **변화 없음** | 표지 판정 위치만 이동(MN5) |
 | `/hub status` | — | `notify_enabled`·`notify_active`·`notify_status` | MN11 |
-| 알림 클릭 | — | 스크립트 편집기가 열릴 수 있음 | 한계 |
+| 알림 클릭 | — | 스크립트 편집기가 켜지며 파일 열기 창이 뜸(M6 실측) | 한계 |
 
 ---
 
@@ -664,7 +664,7 @@ def _start_notifier(config: hub_model.HubConfig, now_ms: int) -> hub_notify_send
 | M3 | `hub_notify_send.py` 전송·기록·서명·`SessionNotifier` | `test_hub_notify_send` |
 | M4 | `HubConfig.notify_enabled`·`hub_config` / `hub_server` 배선 / `hub.py` 상태 3필드 | `test_hub_config`·`test_hub_server`, 기존 서버 테스트 무수정 통과 |
 | M5 | 문서(MN13) · `HUB_FILE_COUNT=37` · run.sh 가드·원장 · 번호·하한 재계수(develop 재수신 후) | `bash tests/run.sh`(메인 세션이 커밋 직전 1회) |
-| M6 | **실기 확인(구현 단계, 사람 눈)**: 이 PC 에서 `notify_enabled:true` → `hub/install.sh --force` → `/hub server restart` → 2분 넘는 턴을 끝내 배너 확인, 첫 권한 질문·출처 표기(스크립트 편집기)·클릭 동작·잠금 화면 미리보기를 기록해 README 한계 문구를 확정 | 관측 결과를 PR 설명에 남긴다 |
+| M6 | **실기 확인(구현 단계, 사람 눈)**: 이 PC 에서 `notify_enabled:true` → `hub/install.sh --force` → `/hub server restart` → 2분 넘는 턴을 끝내 배너 확인, 첫 권한 질문·출처 표기(스크립트 편집기)·클릭 동작·잠금 화면 미리보기를 기록해 README 한계 문구를 확정. **실측(2026-10-15)**: 설치·서버 재기동 대신 워크트리 코드의 `send_notification` 으로 시험 알림 2건(승인 대기 · 빈 부제의 대기)을 보냄 → 둘 다 표시, 권한 질문 없음, 빈 부제 정상, 클릭 시 스크립트 편집기의 파일 열기 창이 뜸, 출처 표기는 사용자가 확인하지 못함. 실제 서버 경로(전이 감지 → 전송)는 설치 뒤 확인 | 관측 결과를 PR 설명에 남긴다 |
 
 GOTCHA:
 - `~/.claude/hub/` 를 감시 디렉터리에 넣지 않는다(자기 유발 수집 루프).
