@@ -22,6 +22,8 @@ sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "..", "hub", "b
 
 import hub_collect  # noqa: E402
 import hub_model  # noqa: E402
+import hub_notify  # noqa: E402
+import hub_notify_send  # noqa: E402
 import hub_parse  # noqa: E402
 import hub_project  # noqa: E402
 import hub_server  # noqa: E402
@@ -859,6 +861,293 @@ class RunUsageApiPollCycleDeepNestingRegressionTest(unittest.TestCase):
             next_state = hub_server._run_usage_api_poll_cycle(1_000, hub_usage.UsageApiPollState(), config)
         self.assertEqual(next_state.last_attempt_at_ms, 1_000)
         self.assertEqual(next_state.consecutive_failures, 1)
+
+
+class _FakeNotifier:
+    """SessionNotifier 의 배선 계약만 흉내내는 더미 — 관측 기록·확인 대기 여부·관측 때 던질 예외."""
+
+    def __init__(self, pending: bool = False, observe_error: Exception | None = None) -> None:
+        self.observed: list[hub_model.HubSnapshot] = []
+        self._pending = pending
+        self._observe_error = observe_error
+
+    def observe(self, snapshot: hub_model.HubSnapshot) -> None:
+        self.observed.append(snapshot)
+        if self._observe_error is not None:
+            raise self._observe_error
+
+    def has_pending(self) -> bool:
+        return self._pending
+
+
+class RunCollectCycleNotifierTest(unittest.TestCase):
+    """MN7 — 수집 성공 때만 알림기에 관측을 넘기고, 알림 쪽 예외가 수집 실패로 기록되지 않는다(docs/prps/hub-macos-notification.md §9.4)."""
+
+    setUp = RunCollectCycleRegistryTest.setUp
+    tearDown = RunCollectCycleRegistryTest.tearDown
+
+    def test_success_passes_the_snapshot_to_the_notifier_once(self) -> None:
+        snapshot = _minimal_snapshot()
+        notifier = _FakeNotifier()
+        with mock.patch.object(hub_collect, "collect_snapshot", return_value=snapshot):
+            hub_server._run_collect_cycle(None, notifier)
+        self.assertEqual(notifier.observed, [snapshot])
+
+    def test_collect_exception_never_reaches_the_notifier(self) -> None:
+        notifier = _FakeNotifier()
+        with mock.patch.object(hub_collect, "collect_snapshot", side_effect=RuntimeError("수집 실패")):
+            hub_server._run_collect_cycle(None, notifier)
+        self.assertEqual(notifier.observed, [])
+
+    def test_notifier_exception_keeps_the_return_value_and_records_no_collect_failure(self) -> None:
+        stderr = io.StringIO()
+        with mock.patch.object(hub_collect, "collect_snapshot", return_value=_minimal_snapshot()), \
+                mock.patch("sys.stderr", stderr):
+            content_key, registry = hub_server._run_collect_cycle(None, _FakeNotifier(observe_error=RuntimeError("알림 쪽 오류")))
+        self.assertIsNotNone(content_key)
+        self.assertEqual(registry, {})
+        self.assertFalse(hub_collect.LAST_COLLECT_ERROR_PATH.exists())
+        self.assertIn("알림 쪽 오류", stderr.getvalue())
+
+    def test_default_notifier_is_none_and_changes_nothing(self) -> None:
+        with mock.patch.object(hub_collect, "collect_snapshot", return_value=_minimal_snapshot()):
+            content_key, _ = hub_server._run_collect_cycle(None)
+        self.assertIsNotNone(content_key)
+
+    def test_refresher_hands_its_notifier_to_every_cycle(self) -> None:
+        notifier = _FakeNotifier()
+        refresher = hub_server._SnapshotRefresher(_DummyHttpd(), notifier)
+        with mock.patch.object(hub_collect, "collect_snapshot", return_value=_minimal_snapshot()), \
+                mock.patch.object(hub_server, "_monotonic_ms", return_value=1_000_000):
+            refresher.collect_if_older_than(1_000_000, 0)
+        self.assertEqual(len(notifier.observed), 1)
+
+
+class ForcedCollectRaceTest(unittest.TestCase):
+    """검수 1회차 C2 — 티커의 강제 수집(max_age=0)이 락을 기다리는 동안 요청 수집이 끝나도, 그 수집이 강제 수집의 진입보다 먼저
+    **시작**했다면(파일 변화보다 앞선 캐시일 수 있다) 강제 수집을 건너뛰면 안 된다. 창이 있는 일반 수집의 이중 검사는 그대로다."""
+
+    def _count_cycles_with_a_waiter(self, waiter_max_age_ms: int) -> int:
+        """요청 수집(창 2000ms)이 진행 중일 때 두 번째 호출이 락을 기다리게 하고, 실제로 돈 수집 횟수를 돌려준다."""
+        started = threading.Event()
+        release_first = threading.Event()
+        waiter_waiting = threading.Event()
+        cycle_starts: list[int] = []
+
+        def fake_cycle(last_key, notifier=None):
+            cycle_starts.append(len(cycle_starts))
+            if len(cycle_starts) == 1:
+                started.set()
+                self.assertTrue(release_first.wait(timeout=5))
+            return last_key, None
+
+        clock = {"now": 1_000}
+        refresher = hub_server._SnapshotRefresher(_DummyHttpd())
+        with mock.patch.object(hub_server, "_run_collect_cycle", side_effect=fake_cycle), \
+                mock.patch.object(hub_server, "_monotonic_ms", side_effect=lambda: clock["now"]):
+            request_thread = threading.Thread(target=refresher.collect_if_older_than, args=(1_000, 2_000))
+            request_thread.start()
+            self.assertTrue(started.wait(timeout=5))      # 요청 수집이 진행 중이다(두 번째 호출의 진입보다 먼저 시작)
+            clock["now"] = 1_100
+
+            def waiter() -> None:
+                waiter_waiting.set()
+                refresher.collect_if_older_than(1_100, waiter_max_age_ms)
+
+            waiter_thread = threading.Thread(target=waiter)
+            waiter_thread.start()
+            self.assertTrue(waiter_waiting.wait(timeout=5))
+            clock["now"] = 1_200
+            release_first.set()
+            request_thread.join(timeout=5)
+            waiter_thread.join(timeout=5)
+        return len(cycle_starts)
+
+    def test_forced_collect_runs_after_a_request_collect_that_started_before_it_entered(self) -> None:
+        self.assertEqual(
+            self._count_cycles_with_a_waiter(hub_server.ACTIVITY_COLLECT_MAX_AGE_MS), 2,
+            "강제 수집이 먼저 시작한 요청 수집을 자기 몫으로 오인해 건너뛰었다",
+        )
+
+    def test_windowed_collect_still_reuses_the_collect_that_finished_while_it_waited(self) -> None:
+        self.assertEqual(self._count_cycles_with_a_waiter(2_000), 1)
+
+
+class MaintenanceLoopNotificationTest(unittest.TestCase):
+    """MN6 — 알림이 켜져 있을 때만 활동 서명으로 즉시 수집하고, 후보가 있으면 확인 수집을 부른다."""
+
+    DIRECTORIES = (Path("/events-stub"), Path("/sessions-stub"))
+
+    def _run_ticks(self, ticks: int, refresher, notifier, signatures=()) -> mock.Mock:
+        """하트비트 touch 가 틱당 2번이라 2N번째에서 멈춘다. 서명 읽기를 side_effect 로 대체한 mock 을 돌려준다."""
+        stop_event = threading.Event()
+        heartbeat_calls = {"n": 0}
+
+        def fake_touch_heartbeat() -> None:
+            heartbeat_calls["n"] += 1
+            if heartbeat_calls["n"] >= 2 * ticks:
+                stop_event.set()
+
+        config = hub_model.HubConfig(server_heartbeat_interval_seconds=0)
+        signature_reader = mock.Mock(side_effect=list(signatures))
+        with mock.patch.object(hub_server_state_read, "touch_server_heartbeat", side_effect=fake_touch_heartbeat), \
+                mock.patch.object(hub_notify_send, "read_activity_signature", signature_reader):
+            hub_server._maintenance_loop(config, stop_event, refresher, notifier, self.DIRECTORIES)
+        return signature_reader
+
+    @staticmethod
+    def _activity_calls(refresher) -> list:
+        """배경 상한 수집을 뺀 수집 호출들의 max_age 인자."""
+        return [call.args[1] for call in refresher.collect_if_older_than.call_args_list
+                if call.args[1] != hub_server.BACKGROUND_COLLECT_MAX_AGE_MS]
+
+    def test_changed_signature_forces_a_collect_regardless_of_the_freshness_window(self) -> None:
+        refresher = mock.Mock()
+        self._run_ticks(2, refresher, _FakeNotifier(), signatures=[frozenset({("e", "a", 1, 1)}), frozenset({("e", "a", 2, 2)})])
+        self.assertEqual(self._activity_calls(refresher), [hub_server.ACTIVITY_COLLECT_MAX_AGE_MS])
+        self.assertEqual(hub_server.ACTIVITY_COLLECT_MAX_AGE_MS, 0)
+
+    def test_unchanged_signature_collects_nothing_extra(self) -> None:
+        refresher = mock.Mock()
+        same = frozenset({("e", "a", 1, 1)})
+        self._run_ticks(3, refresher, _FakeNotifier(), signatures=[same, same, same])
+        self.assertEqual(self._activity_calls(refresher), [])
+
+    def test_first_tick_only_starts_the_comparison(self) -> None:
+        refresher = mock.Mock()
+        self._run_ticks(1, refresher, _FakeNotifier(), signatures=[frozenset({("e", "a", 1, 1)})])
+        self.assertEqual(self._activity_calls(refresher), [])
+
+    def test_pending_candidate_triggers_a_confirmation_collect_with_the_settle_window(self) -> None:
+        refresher = mock.Mock()
+        same = frozenset()
+        self._run_ticks(1, refresher, _FakeNotifier(pending=True), signatures=[same])
+        self.assertEqual(self._activity_calls(refresher), [hub_notify.NOTIFY_SETTLE_MS])
+
+    def test_signature_change_and_pending_candidate_on_the_same_tick_run_both_collects_in_order(self) -> None:
+        """서명 변화 수집이 먼저(창 0), 이어서 확인 수집(확인 지연 창)이 같은 틱에 나간다."""
+        refresher = mock.Mock()
+        self._run_ticks(2, refresher, _FakeNotifier(pending=True),
+                        signatures=[frozenset({("e", "a", 1, 1)}), frozenset({("e", "a", 2, 2)})])
+        self.assertEqual(self._activity_calls(refresher),
+                         [hub_notify.NOTIFY_SETTLE_MS, hub_server.ACTIVITY_COLLECT_MAX_AGE_MS, hub_notify.NOTIFY_SETTLE_MS])
+
+    def test_signature_is_read_with_the_given_directories(self) -> None:
+        reader = self._run_ticks(1, mock.Mock(), _FakeNotifier(), signatures=[frozenset()])
+        reader.assert_called_once_with(self.DIRECTORIES)
+
+    def test_without_a_notifier_the_signature_is_never_read_and_behavior_is_unchanged(self) -> None:
+        refresher = mock.Mock()
+        reader = self._run_ticks(2, refresher, None)
+        reader.assert_not_called()
+        self.assertEqual(self._activity_calls(refresher), [])
+        self.assertEqual(refresher.collect_if_older_than.call_count, 2)
+
+    def test_signature_is_read_before_the_collect_it_triggers(self) -> None:
+        order: list[str] = []
+        refresher = mock.Mock()
+        refresher.collect_if_older_than.side_effect = lambda *_args: order.append("collect")
+        stop_event = threading.Event()
+        beats = {"n": 0}
+
+        def touch() -> None:
+            beats["n"] += 1
+            if beats["n"] >= 4:
+                stop_event.set()
+
+        def read_signature(_directories):
+            order.append("signature")
+            return frozenset({("e", "a", len(order), 1)})
+
+        config = hub_model.HubConfig(server_heartbeat_interval_seconds=0)
+        with mock.patch.object(hub_server_state_read, "touch_server_heartbeat", side_effect=touch), \
+                mock.patch.object(hub_notify_send, "read_activity_signature", side_effect=read_signature):
+            hub_server._maintenance_loop(config, stop_event, refresher, _FakeNotifier(), self.DIRECTORIES)
+        self.assertEqual(order[:2], ["signature", "collect"])   # 첫 틱: 서명 → (배경 상한 수집)
+        self.assertEqual(order[2:4], ["signature", "collect"])  # 둘째 틱: 서명이 먼저, 그 서명이 부른 수집이 뒤
+
+
+class StartNotifierTest(unittest.TestCase):
+    """MN10·MN11 — 알림기는 켜짐 ∧ 지원일 때만 만들고, 만들 때 active_since_ms 를 기록한다."""
+
+    def setUp(self) -> None:
+        self._temp = tempfile.TemporaryDirectory()
+        self.addCleanup(self._temp.cleanup)
+        self.status_path = Path(self._temp.name) / "notify_status.json"
+        patcher = mock.patch.object(hub_notify_send, "NOTIFY_STATUS_PATH", self.status_path)
+        patcher.start()
+        self.addCleanup(patcher.stop)
+
+    def test_off_returns_none_and_writes_nothing(self) -> None:
+        with mock.patch.object(hub_notify_send, "is_notify_supported", return_value=True):
+            notifier = hub_server._start_notifier(hub_model.HubConfig(notify_enabled=False), 1_000)
+        self.assertIsNone(notifier)
+        self.assertFalse(self.status_path.exists())
+
+    def test_on_but_unsupported_returns_none_and_logs_one_line(self) -> None:
+        stderr = io.StringIO()
+        with mock.patch.object(hub_notify_send, "is_notify_supported", return_value=False), mock.patch("sys.stderr", stderr):
+            notifier = hub_server._start_notifier(hub_model.HubConfig(notify_enabled=True), 1_000)
+        self.assertIsNone(notifier)
+        self.assertEqual(len(stderr.getvalue().strip().splitlines()), 1)
+        self.assertFalse(self.status_path.exists())
+
+    def test_on_and_supported_returns_a_notifier_and_records_active_since(self) -> None:
+        with mock.patch.object(hub_notify_send, "is_notify_supported", return_value=True):
+            notifier = hub_server._start_notifier(hub_model.HubConfig(notify_enabled=True), 1_000)
+        self.assertIsInstance(notifier, hub_notify_send.SessionNotifier)
+        self.assertEqual(hub_notify_send.read_notify_status().active_since_ms, 1_000)
+
+    def test_startup_keeps_the_other_fields_of_the_previous_record(self) -> None:
+        hub_notify_send.write_notify_status(hub_notify.NotifyStatusRecord(1, 2, 3, "timeout", None))
+        with mock.patch.object(hub_notify_send, "is_notify_supported", return_value=True):
+            hub_server._start_notifier(hub_model.HubConfig(notify_enabled=True), 1_000)
+        self.assertEqual(hub_notify_send.read_notify_status(), hub_notify.NotifyStatusRecord(1_000, 2, 3, "timeout", None))
+
+    def test_status_write_failure_is_absorbed_and_the_notifier_still_runs(self) -> None:
+        stderr = io.StringIO()
+        with mock.patch.object(hub_notify_send, "is_notify_supported", return_value=True), \
+                mock.patch.object(hub_notify_send, "write_notify_status", side_effect=OSError("disk full")), \
+                mock.patch("sys.stderr", stderr):
+            notifier = hub_server._start_notifier(hub_model.HubConfig(notify_enabled=True), 1_000)
+        self.assertIsInstance(notifier, hub_notify_send.SessionNotifier)
+        self.assertIn("disk full", stderr.getvalue())
+
+    @staticmethod
+    def _titled_snapshot(collected_at_ms: int, working: bool) -> hub_model.HubSnapshot:
+        tier1 = hub_parse.Tier1Snapshot(
+            title="비공개 제목", subtitle="", completed=0, total=1, percent=0, steps=(), matrix_done=None,
+            impl_done=0, impl_total=0, updated_text="-", file_mtime_ms=1,
+        )
+        session = hub_session.SessionView(
+            session_id="s", short_id="s", started_at_ms=1, state="working" if working else "idle",
+            base_state="working" if working else "idle", last_event_at_ms=1, task_excerpt=None, agent_runs=(), tier1=tier1,
+        )
+        project = hub_project.ProjectView(
+            display_name="proj", path="/repo/proj", tier=2, state="working", last_activity_at_ms=1,
+            sessions=(session,), tier1=None, note=None,
+        )
+        return hub_model.HubSnapshot(collected_at_ms=collected_at_ms, projects=(project,), unresolved_dir_names=(), warnings=())
+
+    def test_task_titles_follow_the_prompt_excerpt_switch(self) -> None:
+        """공개 동작으로 확인한다 — 알림기에 작업→대기 전이를 먹이면 전송 스레드가 받는 문구의 부제가 스위치를 따른다."""
+        for excerpt_on, expected_subtitle in ((True, "비공개 제목"), (False, "")):
+            delivered = threading.Event()
+            received = []
+
+            def fake_deliver(texts, now_ms) -> None:
+                received.extend(texts)
+                delivered.set()
+
+            with self.subTest(record_prompt_excerpt=excerpt_on), \
+                    mock.patch.object(hub_notify_send, "is_notify_supported", return_value=True), \
+                    mock.patch.object(hub_notify_send, "deliver_notifications", side_effect=fake_deliver):
+                config = hub_model.HubConfig(notify_enabled=True, record_prompt_excerpt=excerpt_on)
+                notifier = hub_server._start_notifier(config, 1_000)
+                for offset, working in ((0, True), (5 * 60_000, False), (5 * 60_000 + 3_000, False)):
+                    notifier.observe(self._titled_snapshot(10_000 + offset, working))
+                self.assertTrue(delivered.wait(timeout=5))
+                self.assertEqual(received[0].subtitle, expected_subtitle)
 
 
 if __name__ == "__main__":

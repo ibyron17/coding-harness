@@ -171,6 +171,10 @@ class SessionView:
     # 부가 정보라 기본값을 둔다. 더 이상 맨 뒤가 아니다 — 존재만 확인되면 된다(아래
     # session_cost 가 새 맨 뒤).
     background_wait: BackgroundWait | None = None
+    # 승인 대기 표지·macOS 알림의 단일 판정(결정 MN5, docs/prps/hub-macos-notification.md) — `is_awaiting_approval` 이
+    # state·base_state·tier1 로 계산한다. 이미 실린 필드의 함수라 「지금」 파생값이 아니다(snapshot_content_key 안전).
+    # 맨 뒤가 아니다 — 맨 뒤는 T25-150 이 무는 session_cost.
+    is_awaiting_approval: bool = False
     # statusLine 이 알려 준 이 세션의 누적 비용·API 시간·컨텍스트 사용률(⑨, docs/prps/
     # harness-benchmark-adoption.md). 이 함수가 계산하지 않는다 — hub_collect 가 캡처 파일에서 읽어
     # 넘긴다(statusLine 을 켜지 않았거나 이 세션의 캡처가 없으면 None — 정당한 부재). 값은 파일 내용의
@@ -395,6 +399,21 @@ def _display_state(
     return base_state
 
 
+def is_awaiting_approval(
+    state: SessionState,
+    base_state: Literal["working", "idle", "done"],
+    tier1: Tier1Snapshot | None,
+) -> bool:
+    """승인 대기 표지·알림의 단일 판정(결정 MN5 — AW1 규칙): 승인 단계 진행중 ∧ base idle ∧ 한도 초과 아님.
+
+    「사용자 차례인가」는 표시 상태(stale 이 가린다)가 아니라 그 아래 base_state 가 답한다 — 그래서 대기·백그라운드 대기·
+    소식 없음(직전 대기)에서 True 이고, 작업중·소식 없음(직전 작업중)·한도 초과·완료·사실 꺼짐·진행 기록 없음에서 False 다.
+    """
+    if tier1 is None or not tier1.is_approval_step_active:
+        return False
+    return base_state == "idle" and state != "interrupted"
+
+
 # 대시보드가 「끝났다」고 볼 진행률(결정 FT1, docs/prps/hub-ui-4-issues.md §5).
 # hub/README.md 「진행 기록」 데이터 모델 표의 `pass` = 전부 완료(100%)가 이 값의 출처다 —
 # 대시보드 파일에는 완료/종료 상태 필드가 없어서 진행률이 유일한 관측 가능 종료 신호다.
@@ -595,6 +614,7 @@ def compute_session_view(
         task_started_at_ms=task_started_at_ms,
         interruption=interruption,
         background_wait=background_wait,
+        is_awaiting_approval=is_awaiting_approval(state, base_state, tier1),
         session_cost=session_cost,
     )
 

@@ -44,6 +44,7 @@ class HubConfig:
     usage_api_enabled: bool = False                # 사용량 API 폴링 스위치, 기본 off(결정 A6 — 옵트인)
     usage_api_poll_interval_seconds: int = 300     # 폴링 기본 주기(5분, 결정 A3)
     update_check_enabled: bool = True              # 새 릴리스 태그 확인(git ls-remote) 스위치, 기본 on(결정 D5·UN4). false 면 스레드를 안 띄우고 캐시도 안 읽는다
+    notify_enabled: bool = False                   # macOS 알림 스위치, 기본 off(결정 MN10 — 옵트인). 서버 기동 때 읽는다(바꾸면 /hub server restart)
 
 
 # ---- 표시(view) ----

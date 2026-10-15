@@ -16,6 +16,8 @@ import time
 import hub_collect
 import hub_daemon
 import hub_model
+import hub_notify
+import hub_notify_send
 import hub_release_read
 import hub_server
 import hub_server_state
@@ -248,6 +250,19 @@ def _release_check_status() -> dict | None:
     return dataclasses.asdict(record) if record is not None else None
 
 
+def _notify_status_fields(config: hub_model.HubConfig, server: hub_server_state.ServerStatus) -> dict:
+    """진단용 — macOS 알림의 설정·실제 동작·마지막 기록(결정 MN11). 알림 문구는 기록에 없다.
+
+    `notify_active` 는 「켰는데 아직 재기동 안 함」을 드러낸다 — 설정 값(`notify_enabled`)은 서버 기동 때 한 번만 읽는다."""
+    record = hub_notify_send.read_notify_status()
+    server_started_at_ms = server.record.started_at_ms if server.record is not None else None
+    return {
+        "notify_enabled": config.notify_enabled,
+        "notify_active": hub_notify.is_notifier_active(record, server_started_at_ms),
+        "notify_status": dataclasses.asdict(record) if record is not None else None,
+    }
+
+
 def cmd_status(args: argparse.Namespace) -> int:
     """훅 설치 상태 · 이벤트 · 마지막 수집 실패 · 서버 요약 · 사용량 진단을 보고한다(검수 R3-m2)."""
     now_ms = _now_ms()
@@ -283,6 +298,7 @@ def cmd_status(args: argparse.Namespace) -> int:
             "usage_api_last_failure": hub_collect.read_last_usage_api_failure(),
             "update_check_enabled": config.update_check_enabled,
             "release_check": _release_check_status(),
+            **_notify_status_fields(config, server),
         },
         args.json,
     )
