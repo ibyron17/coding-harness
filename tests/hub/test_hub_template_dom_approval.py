@@ -100,7 +100,11 @@ _INTERRUPTION = hub_session.SessionInterruption(interrupted_at_ms=BASE_TIME_MS -
 def _dated(session_id: str, state: str, base_state: str, minutes_ago: int, **fields) -> hub_session.SessionView:
     """세션 하나 — 발췌를 달아 끝난 세션도 화면에 보이게 한다(결정 V2). 필요한 필드만 fields 로 얹는다."""
     base = _session(session_id, state, base_state, BASE_TIME_MS - minutes_ago * _MS_PER_MINUTE, task_excerpt=f"{session_id} 발췌")
-    return dataclasses.replace(base, **fields)
+    session = dataclasses.replace(base, **fields)
+    if "is_awaiting_approval" in fields:   # 서버 판정 키를 일부러 지정한 세션(D43 의 「화면은 서버 판정만 읽는다」 증명)
+        return session
+    # 결정 MN5 — 표지 판정의 정본은 서버(Python)다. 픽스처도 같은 함수로 채워 화면이 받는 모양과 같게 한다.
+    return dataclasses.replace(session, is_awaiting_approval=hub_session.is_awaiting_approval(state, base_state, session.tier1))
 
 
 # D43 — AW1 조건표의 행마다 세션 1개. 키 = 세션 ID, 값 = (표지 개수 기대, 사유). 식별 이름이 곧 행이다.
@@ -115,17 +119,19 @@ _CONDITION_SESSIONS = (
     _dated("fact-off", "idle", "idle", 6, tier1=_tier1(False)),
     _dated("no-tier1", "idle", "idle", 7),
     _dated(_LEGACY_SESSION_ID, "idle", "idle", 8, tier1=_tier1(True)),
+    # 서버 판정 키만 true 이고 화면이 읽을 tier1 사실은 없다 — 화면이 키를 읽는다는 증명(MN5, 변경 전 템플릿은 표지를 그리지 않는다).
+    _dated("server-key-only", "idle", "idle", 9, is_awaiting_approval=True),
 )
-_EXPECTED_BADGE_COUNTS = {"idle": 1, "background": 1, "stale-after-idle": 1}   # 나머지는 0
+_EXPECTED_BADGE_COUNTS = {"idle": 1, "background": 1, "stale-after-idle": 1, "server-key-only": 1}   # 나머지는 0
 _CONDITION_SNAPSHOT = _snapshot((_project(_PROJECT_PATH, "approval", "working", _CONDITION_SESSIONS),))
 
 
 def _drop_fact_for_legacy_session(payload: dict) -> None:
-    """옛 서버의 페이로드 흉내 — 이 세션의 tier1 에서만 새 사실 키를 지운다(키가 없으면 JS 에서 undefined)."""
+    """옛 서버의 페이로드 흉내 — 이 세션에서만 서버 판정 키를 지운다(키가 없으면 JS 에서 undefined, 결정 MN5)."""
     for project in payload["projects"]:
         for session in project["sessions"]:
             if session["session_id"] == _LEGACY_SESSION_ID:
-                del session["tier1"]["is_approval_step_active"]
+                del session["is_awaiting_approval"]
 
 
 def _page_without_legacy_key(snapshot: hub_model.HubSnapshot, probe_body: str) -> str:

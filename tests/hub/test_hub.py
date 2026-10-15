@@ -1,5 +1,6 @@
 """hub.py CLI 엔트리 단위 테스트. 검수 M7(4) — collect 예외를 ok:false 계약으로 변환하는지 확인."""
 
+import dataclasses
 import io
 import json
 import os
@@ -16,6 +17,8 @@ sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "..", "hub", "b
 import hub  # noqa: E402
 import hub_collect  # noqa: E402
 import hub_daemon  # noqa: E402
+import hub_notify  # noqa: E402
+import hub_notify_send  # noqa: E402
 import hub_release  # noqa: E402
 import hub_release_read  # noqa: E402
 import hub_server_state  # noqa: E402
@@ -234,8 +237,12 @@ class CmdStatusServerSummaryTest(unittest.TestCase):
         # 생길 수 있었다(위 RATE_LIMITS_PATH·LAST_COLLECT_ERROR_PATH 격리와 같은 이유).
         hub_collect.LAST_USAGE_API_ERROR_PATH = self.temp_dir / "last_usage_api_error.json"
         hub_settings.SETTINGS_PATH = self.temp_dir / "settings.json"  # 존재하지 않으면 미설치로 판정
+        # 결정 MN11 — cmd_status 가 notify_status.json 을 읽는다. 실제 ~/.claude/hub/notify_status.json 을 읽지 않게 격리한다.
+        self.original_notify_status_path = hub_notify_send.NOTIFY_STATUS_PATH
+        hub_notify_send.NOTIFY_STATUS_PATH = self.temp_dir / "notify_status.json"
 
     def tearDown(self) -> None:
+        hub_notify_send.NOTIFY_STATUS_PATH = self.original_notify_status_path
         hub_collect.HUB_HTML_PATH = self.original_html_path
         hub_collect.CONFIG_PATH = self.original_config_path
         hub_collect.LAST_COLLECT_ERROR_PATH = self.original_error_path
@@ -245,16 +252,16 @@ class CmdStatusServerSummaryTest(unittest.TestCase):
         hub_collect.CLAUDE_GLOBAL_CONFIG_PATH = self.neutralized_account_path   # 중화값으로 복구한다(AC12)
         shutil.rmtree(self.temp_dir, ignore_errors=True)
 
-    def _make_status(self, maintenance_stalled: bool) -> hub_server_state.ServerStatus:
+    def _make_status(self, maintenance_stalled: bool, record: hub_server_state.ServerRecord | None = None) -> hub_server_state.ServerStatus:
         return hub_server_state.ServerStatus(
-            record=None, process_present=True, heartbeat_age_ms=1, alive=not maintenance_stalled,
+            record=record, process_present=True, heartbeat_age_ms=1, alive=not maintenance_stalled,
             http_ok=True, crashed_evidence=False, log_tail=None, orphaned_evidence=False,
             maintenance_stalled=maintenance_stalled, collect_health="ok",
             last_collect_success_age_ms=None,
         )
 
-    def _run_cmd_status(self, maintenance_stalled: bool) -> dict:
-        with mock.patch.object(hub_daemon, "server_status", return_value=self._make_status(maintenance_stalled)), \
+    def _run_cmd_status(self, maintenance_stalled: bool, record: hub_server_state.ServerRecord | None = None) -> dict:
+        with mock.patch.object(hub_daemon, "server_status", return_value=self._make_status(maintenance_stalled, record)), \
              mock.patch.object(hub_collect, "read_recent_events", return_value=([], ())), \
              mock.patch("hub_settings.hook_install_status", return_value={}):
             captured = io.StringIO()
@@ -374,6 +381,42 @@ class CmdStatusServerSummaryTest(unittest.TestCase):
         hub_collect.CONFIG_PATH.write_text(json.dumps({"update_check_enabled": False}))
         payload = self._run_cmd_status(maintenance_stalled=False)
         self.assertFalse(payload["update_check_enabled"])
+
+    def test_notify_fields_default_to_off_inactive_and_no_record(self) -> None:
+        """결정 MN10·MN11 — 알림은 기본 꺼짐이고, 기록이 없으면 notify_status 는 null 이다."""
+        payload = self._run_cmd_status(maintenance_stalled=False)
+        self.assertFalse(payload["notify_enabled"])
+        self.assertFalse(payload["notify_active"])
+        self.assertIsNone(payload["notify_status"])
+
+    def test_notify_enabled_reflects_config(self) -> None:
+        hub_collect.CONFIG_PATH.write_text(json.dumps({"notify_enabled": True}))
+        payload = self._run_cmd_status(maintenance_stalled=False)
+        self.assertTrue(payload["notify_enabled"])
+
+    def _write_notify_status(self, active_since_ms: int) -> hub_notify.NotifyStatusRecord:
+        record = hub_notify.NotifyStatusRecord(active_since_ms, 20, 10, "timeout", None)
+        hub_notify_send.write_notify_status(record)
+        return record
+
+    def test_notify_active_when_the_record_was_written_by_the_running_server(self) -> None:
+        """notify_active — 알림기가 지금 도는 서버 기동 이후에 기록을 남겼다(서버 started_at_ms ≤ active_since_ms)."""
+        record = self._write_notify_status(active_since_ms=1500)
+        payload = self._run_cmd_status(maintenance_stalled=False, record=hub_server_state.ServerRecord(pid=1, port=8794, started_at_ms=1000))
+        self.assertTrue(payload["notify_active"])
+        self.assertEqual(payload["notify_status"], dataclasses.asdict(record))
+
+    def test_notify_inactive_when_the_record_predates_the_running_server(self) -> None:
+        """켰는데 아직 재기동하지 않은 경우 — 옛 기록(서버 기동 이전)이라 notify_active 는 false 다."""
+        self._write_notify_status(active_since_ms=500)
+        payload = self._run_cmd_status(maintenance_stalled=False, record=hub_server_state.ServerRecord(pid=1, port=8794, started_at_ms=1000))
+        self.assertFalse(payload["notify_active"])
+
+    def test_notify_inactive_when_no_server_is_running(self) -> None:
+        self._write_notify_status(active_since_ms=1500)
+        payload = self._run_cmd_status(maintenance_stalled=False, record=None)
+        self.assertFalse(payload["notify_active"])
+        self.assertIsNotNone(payload["notify_status"])
 
     def _write_synthetic_account(self) -> None:
         hub_collect.CLAUDE_GLOBAL_CONFIG_PATH.write_text(

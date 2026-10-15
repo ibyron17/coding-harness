@@ -76,6 +76,8 @@
 
 ### AW2 — 판정 위치: 사실은 서버(★순수 `hub_parse`), 표시 판단은 클라이언트
 
+> **MN5 로 판정이 서버로 옮겨졌다**(docs/prps/hub-macos-notification.md) — 아래 「표시 판단은 클라이언트」 중 승인 대기 판정(사실 ∧ base_state idle ∧ 한도 초과 아님)은 이제 서버(`hub_session.is_awaiting_approval`)가 하고 화면은 그 결과(`session.is_awaiting_approval`)만 읽는다. 사실 필드(`is_approval_step_active`)는 그대로다.
+
 - **서버**: `Tier1Snapshot` 에 `is_approval_step_active: bool = False` 를 **맨 뒤**(`is_committed` 다음)에 더한다. `snapshot_from_events` 가 이미
   만든 `steps` 에서 순수 함수 `is_approval_step_active(steps)` 로 채운다. 단계 이름 리터럴 「승인」은 `hub_parse` 안 **한 곳**
   (`_APPROVAL_PHASE_NAME`)에만 두고 `_PHASE_NAME_BY_COMPLETION_KIND` 의 `approve` 값도 그 상수를 쓴다 — `log approve` 가 끄는 단계와 이 사실이

@@ -141,5 +141,23 @@ class ConfigFromRawTest(unittest.TestCase):
         self.assertEqual(warnings, ())
 
 
+class NotifyEnabledSwitchTest(unittest.TestCase):
+    """결정 MN10(docs/prps/hub-macos-notification.md) — macOS 알림 스위치는 기본 꺼짐(옵트인)이다."""
+
+    def test_defaults_to_off(self) -> None:
+        self.assertFalse(hub_model.HubConfig().notify_enabled)
+
+    def test_config_json_can_turn_it_on(self) -> None:
+        config, warnings = hub_config.config_from_raw({"notify_enabled": True}, hub_model.HubConfig())
+        self.assertTrue(config.notify_enabled)
+        self.assertEqual(warnings, ())
+
+    def test_wrong_type_falls_back_to_default_with_warning(self) -> None:
+        config, warnings = hub_config.config_from_raw({"notify_enabled": "yes"}, hub_model.HubConfig())
+        self.assertFalse(config.notify_enabled)
+        self.assertEqual(len(warnings), 1)
+        self.assertIn("notify_enabled", warnings[0])
+
+
 if __name__ == "__main__":
     unittest.main()

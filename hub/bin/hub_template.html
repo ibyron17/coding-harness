@@ -165,8 +165,8 @@ DZH:HUB 데이터 계약
 
   .tier1-active 줄과 그 잘림 방어(TC2, docs/prps/hub-tier1-clamp-fix-and-session-model.md)는 걷혔다 — 단계명을 옮겨
   받았던 진행률 줄 맨 앞 단계 칩도 걷혔다(결정 LM4·LM12, docs/prps/hub-session-row-layout-and-modal-size.md). 승인을 기다리는 세션은
-  단계 칩이 아니라 첫 줄 상태 배지 뒤의 「◆ 승인 대기」 표지(.badge.approval-wait)로만 알린다 — 서버가 실은 bool 하나
-  (tier1.is_approval_step_active)와 base_state 로 정한다(결정 AW1~AW5, docs/prps/hub-approval-wait-badge.md).
+  단계 칩이 아니라 첫 줄 상태 배지 뒤의 「◆ 승인 대기」 표지(.badge.approval-wait)로만 알린다 — 서버가 판정해 실은 bool 하나
+  (session.is_awaiting_approval, 결정 MN5)로 정한다(결정 AW1~AW5, docs/prps/hub-approval-wait-badge.md).
   세션 줄 안의 순서는 line → meta → 발췌 → 진행률 → 실행 줄 → 워크플로이고 DOM 순서가 곧 시각 순서다(결정 LM2).
 
   세션 모델·effort(요구 2, 같은 문서 결정 MD1~MD10)는 .session-meta 의 세 번째 항목
@@ -1813,13 +1813,11 @@ try{
          + label + '</span>';
   }
 
-  // 승인 대기 표지를 보일 세션인가(결정 AW1) — 서버 사실(진행 기록의 승인 단계가 진행중) ∧ 메인 턴이 끝나 사용자
-  // 차례(base_state idle) ∧ 한도 초과 아님. 「사용자 차례인가」는 표시 상태(stale 이 가린다)가 아니라 그 아래 base_state 가
-  // 답한다. 단계 이름은 화면이 해석하지 않는다 — 서버가 bool 하나로 넘긴다(결정 AW2). 순수 함수 — DOM 에 닿지 않는다.
-  // 키가 없는 옛 서버의 페이로드는 undefined 라 false 다(오늘 화면 그대로 — 페일 클로즈).
+  // 승인 대기 표지를 보일 세션인가(결정 AW1) — 판정은 서버(hub_session.is_awaiting_approval)가 한 곳에서 한다. macOS 알림과 같은
+  // 규칙이다(결정 MN5, docs/prps/hub-macos-notification.md). 화면은 그 결과만 읽는다. 키가 없는 옛 서버의 페이로드는
+  // undefined 라 false 다(오늘 화면 그대로 — 페일 클로즈). 순수 함수 — DOM 에 닿지 않는다.
   function isAwaitingApproval(session){
-    if(!session.tier1 || !session.tier1.is_approval_step_active) return false;
-    return session.base_state === 'idle' && session.state !== 'interrupted';
+    return session.is_awaiting_approval === true;
   }
 
   // 첫 줄 상태 배지 뒤의 승인 대기 표지(결정 AW3·AW4). 해당 없으면 빈 문자열 — 첫 줄이 오늘과 같다. 모양은 .badge 어휘 +

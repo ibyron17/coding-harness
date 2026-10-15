@@ -106,7 +106,9 @@ _ESCAPE_TITLE = "이스케이프 <b>제목</b> & 따옴표\""
 def _dated(session_id: str, state: str, base_state: str, minutes_ago: int, **fields) -> hub_session.SessionView:
     """세션 하나. 기본은 발췌 없는 세션이라 필요한 필드만 fields 로 얹는다."""
     base = _session(session_id, state, base_state, BASE_TIME_MS - minutes_ago * _MS_PER_MINUTE)
-    return dataclasses.replace(base, **fields)
+    session = dataclasses.replace(base, **fields)
+    # 결정 MN5 — 승인 대기 표지는 서버 판정(session.is_awaiting_approval)을 읽는다. 픽스처도 같은 함수로 채워 승인 DOM 테스트와 모양을 맞춘다.
+    return dataclasses.replace(session, is_awaiting_approval=hub_session.is_awaiting_approval(state, base_state, session.tier1))
 
 
 # D25·D26 — 가지(진행률·실행 줄·워크플로)와 발췌의 유무 조합. 식별 이름이 곧 조합이다.
