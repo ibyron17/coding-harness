@@ -61,6 +61,9 @@ _SETTLE_MS = 30                     # 클릭 뒤 동기 렌더가 끝나길 기�
 _PROJECT_PATH = "/repo/approval"
 _TRACK_WIDTH_PX = 320               # 카드 격자의 최소 트랙 — 가장 좁은 실제 폭(PRP §5.3)
 _GEOMETRY_TOLERANCE_PX = 0.5
+# 1px 테두리가 있는 「소식 없음」 배지(21px)와 테두리 없는 안쪽 링 표지(19px)는 baseline 으로 정렬돼 top 이 1px 어긋난다(실측). 표지가 줄바꿈으로
+# 다른 줄에 서면 top 이 줄 높이(약 19px 이상) 벌어지므로 이 여유를 더해도 여전히 잡힌다.
+_BORDERED_STATE_BADGE_TOP_OFFSET_PX = 1
 _BADGE_TEXT = "◆승인 대기"           # 글리프(aria-hidden) + 글자. textContent 에는 둘이 붙어 나온다
 _BADGE_TOOLTIP = "진행 기록이 「승인」 단계에 있고 세션이 사용자 입력을 기다리고 있습니다. 세션에 답하면(승인·수정 요청) 이 표시가 거둬집니다."
 _LEGACY_SESSION_ID = "legacy-no-key"   # 서버 사실 키를 payload 에서 지운 옛 스냅샷 흉내 대상
@@ -306,16 +309,16 @@ class HubApprovalWaitBadgeDomTest(unittest.TestCase):
     def test_d45_badge_adds_no_height_and_stays_on_the_state_badge_line_at_320px(self) -> None:
         # 결정 AW4(안쪽 링 — 실측) — 320px 트랙에서 「대기」 줄에 표지가 붙어도 첫 줄 높이와 상태 배지 중심이 표지 없는 줄과 같다(1px border 였다면 +2px·+1px,
         # 트리 갈고리 정렬 허용치를 소진한다). 「소식 없음 · 직전 대기 + 표지 + 긴 소요」 최악 조합은 시간 글자가 둘째 줄로 감겨도 표지가 상태 배지와 같은
-        # 줄(top 같음)에 서고 행이 가로로 넘치지 않는다.
+        # 줄에 서고(테두리 없는 「대기」 줄은 top 이 같고, 1px 테두리 「소식 없음」 배지 줄은 baseline 정렬로 1px 까지만 어긋난다) 행이 가로로 넘치지 않는다.
         result = run_scenario(_make_page(_GEOMETRY_SNAPSHOT, _GEOMETRY_PROBE), window_width=1440, window_height=900)
         self.assertAlmostEqual(result["cardWidth"], _TRACK_WIDTH_PX, delta=_GEOMETRY_TOLERANCE_PX, msg="카드 트랙이 320px 가 아님(D45 사전조건)")
         plain, badge, stale_long = result["plain"], result["badge"], result["staleLong"]
         self.assertIsNotNone(badge["approvalTop"], "사전조건: 대기 줄에 표지가 없음(D45)")
         self.assertAlmostEqual(badge["lineHeight"], plain["lineHeight"], delta=_GEOMETRY_TOLERANCE_PX, msg="표지가 붙자 첫 줄 높이가 달라짐(D45, AW4 — border 였다)")
         self.assertAlmostEqual(badge["stateCenter"], plain["stateCenter"], delta=_GEOMETRY_TOLERANCE_PX, msg="표지가 붙자 상태 배지 중심이 움직임(D45, AW4)")
-        self.assertAlmostEqual(badge["approvalTop"], badge["stateTop"], delta=_GEOMETRY_TOLERANCE_PX + 1, msg="표지가 상태 배지와 다른 줄에 섬(D45, AW3)")
+        self.assertAlmostEqual(badge["approvalTop"], badge["stateTop"], delta=_GEOMETRY_TOLERANCE_PX, msg="표지가 상태 배지와 다른 줄에 섬(D45, AW3)")
         self.assertIsNotNone(stale_long["approvalTop"], "사전조건: 소식 없음 줄에 표지가 없음(D45)")
-        self.assertAlmostEqual(stale_long["approvalTop"], stale_long["stateTop"], delta=_GEOMETRY_TOLERANCE_PX + 1, msg="320px 최악 조합에서 표지가 배지 줄에서 밀려남(D45, AW3)")
+        self.assertAlmostEqual(stale_long["approvalTop"], stale_long["stateTop"], delta=_GEOMETRY_TOLERANCE_PX + _BORDERED_STATE_BADGE_TOP_OFFSET_PX, msg="320px 최악 조합에서 표지가 배지 줄에서 밀려남(D45, AW3)")
         for name, report in (("대기+표지", badge), ("소식 없음+표지+긴 소요", stale_long)):
             self.assertFalse(report["rowOverflows"], f"{name} 줄이 가로로 넘침(D45)")
 
