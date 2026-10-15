@@ -42,7 +42,7 @@ NOTIFY_KIND_BY_PHASE: Mapping[NotifyPhase, NotifyKind] = MappingProxyType({
 # 한 수집에서 나가는 알림의 순서(MN8).
 NOTIFY_KIND_ORDER: tuple[NotifyKind, ...] = ("interrupted", "awaiting_approval", "turn_ended", "background_wait")
 # 화면 배지 어휘(STATE_GLYPH·STATE_LABEL·BACKGROUND_SESSION_LABEL·APPROVAL_WAIT_*)와 같은 글자 — 규칙이 아니라 어휘라
-# 두 벌이 허용되고, tests/run.sh T25-N3 가 템플릿에 같은 글자가 있는지 교차 확인한다.
+# 두 벌이 허용되고, tests/run.sh T25-287 가 템플릿에 같은 글자가 있는지 교차 확인한다.
 NOTIFY_TITLE_LABEL_BY_KIND: Mapping[NotifyKind, str] = MappingProxyType({
     "interrupted": "■ 한도 초과",
     "awaiting_approval": "◆ 승인 대기",

@@ -209,7 +209,7 @@
   넘지 않는다.
 - 시간 표기: `HH:MM`(오늘) / `M/D HH:MM`(다른 날) — 화면과 같은 규칙. 길이: `N분` / `N시간 M분`(2분 미만은 MN2 로 나오지 않는다).
 - 글리프·라벨은 화면 어휘(`STATE_GLYPH`·`STATE_LABEL`·`BACKGROUND_SESSION_LABEL`·`APPROVAL_WAIT_*`)와 같은 글자를 쓴다 — 규칙이 아니라
-  어휘라 두 벌이 허용되고, 정적 가드 T25-N3 가 화면에 같은 글자가 있는지 교차 확인한다.
+  어휘라 두 벌이 허용되고, 정적 가드 T25-287 가 화면에 같은 글자가 있는지 교차 확인한다.
 - 길이 상한: 제목 60 · 부제 60 · 본문 120 · 작업 제목 40 · 묶음에 나열하는 프로젝트 3.
 
 **hub/README.md 「프라이버시 고지」에 넣을 문장(초안)**:
@@ -321,7 +321,7 @@
 | `tests/hub/test_hub_server.py` | UPDATE | 관측 배선·티커 활동 수집(§9.4) |
 | `tests/hub/test_hub_config.py` | UPDATE | `notify_enabled` 기본·타입 |
 | `tests/hub/test_hub_template_dom_approval.py` | UPDATE | 픽스처가 `is_awaiting_approval` 을 Python 함수로 채움 · 옛 페이로드 흉내가 지우는 키를 `is_awaiting_approval` 로(§9.5) |
-| `tests/run.sh` | UPDATE | T25-10 순수 목록 + `hub_notify.py` · T25-104/T25-149 35→37 · T25-280 ①② 재조준 · 신설 T25-N1~N3 · 그룹 설명 범위 문자열 · `SOURCE_GUARD_ID_FLOOR`·`LEDGER_MUTATION_ROW_FLOOR` |
+| `tests/run.sh` | UPDATE | T25-10 순수 목록 + `hub_notify.py` · T25-104/T25-149 35→37 · T25-280 ①② 재조준 · 신설 T25-285~N3 · 그룹 설명 범위 문자열 · `SOURCE_GUARD_ID_FLOOR`·`LEDGER_MUTATION_ROW_FLOOR` |
 | `tests/mutations.tsv` | UPDATE | 신설 가드 3건의 변조행 |
 
 **영향 없음(확인함)**: 상시 로드 컨텍스트(T26 — `CLAUDE.md`·`rules/README.md`·`rules/common`·`rules/workflow` 무변경) · `hub/rules/dashboard-recording.md`
@@ -333,8 +333,8 @@
 - 다른 세션이 워크트리 `.claude/worktrees/hub-light-sunset`(브랜치 `feat/hub-light-theme-sunset`)에서 `hub/bin/hub_template.html`·`hub/README.md`·
   `tests/run.sh`·`tests/mutations.tsv` 를 미커밋 상태로 고치고 있다.
 - **템플릿 수정은 JS 함수 본문 1곳 + 주석 2곳으로 최소화한다**(CSS·토큰 무변경 — 라이트 테마 작업과 겹치지 않는 구역).
-- **새 검사 번호(T25-N1~N3)와 `SOURCE_GUARD_ID_FLOOR`·`LEDGER_MUTATION_ROW_FLOOR`·T25 그룹 설명의 범위 문자열(`T25-1~T25-281`)·루트 README 문서
-  수는 병합 직전에 develop 을 다시 받아 센다.** 이 문서의 번호는 자리표시자다.
+- **새 검사 번호(T25-285~287)와 `SOURCE_GUARD_ID_FLOOR`(565)·`LEDGER_MUTATION_ROW_FLOOR`(139)·T25 그룹 설명의 범위 문자열(`T25-1~T25-287`)·루트 README 문서
+  수(90)는 develop 병합 뒤 다시 세어 확정했다**(라이트 테마 PR #6 이 T25-282~284 를 먼저 썼다). 본문의 T25-285~287 은 확정 번호다.
 - `hub/README.md` 는 절 단위로 넣어 충돌 구역을 줄인다(새 절은 「새 버전 알림」 뒤·「설정」 앞).
 
 ---
@@ -608,11 +608,11 @@ def _start_notifier(config: hub_model.HubConfig, now_ms: int) -> hub_notify_send
   - T25-10 순수 목록에 `hub_notify.py`.
   - T25-104·T25-149: `37개 파일`·`HUB_FILE_COUNT=37`, 역방향에 `35개 파일`.
   - T25-280 ① 에 `hub_session.py` 의 `is_awaiting_approval: bool = False` 선언 추가, ② 를 `session.is_awaiting_approval` 읽기로 재조준(필드 개명에 눈멀지 않게).
-  - **T25-N1(보안, MN8)**: `hub_notify.py` 의 `NOTIFY_APPLESCRIPT_LINES` 블록에 `on run argv` 가 있고 `{`·`%`·`format(` 이 없다 · `osascript_argv` 본문에
+  - **T25-285(보안, MN8)**: `hub_notify.py` 의 `NOTIFY_APPLESCRIPT_LINES` 블록에 `on run argv` 가 있고 `{`·`%`·`format(` 이 없다 · `osascript_argv` 본문에
     `"--"` 가 있다 · `hub_notify_send.py` 에 `shell=` 가 없고 `subprocess.run(` 의 첫 인자가 `hub_notify.osascript_argv(` 다. 변조행: `"--"` 를 지운다.
-  - **T25-N2(경계, MN6·MN7)**: `hub_notify_send.py` 가 `hub_collect`·`hub_server` 를 임포트하지 않는다 · `hub_server.py` 의 활동 디렉터리 튜플이
+  - **T25-286(경계, MN6·MN7)**: `hub_notify_send.py` 가 `hub_collect`·`hub_server` 를 임포트하지 않는다 · `hub_server.py` 의 활동 디렉터리 튜플이
     `hub_collect.EVENTS_DIR, hub_collect.SESSIONS_DIR` 이고 `HUB_HOME` 이 아니다(자기 유발 루프 방지). 변조행: 디렉터리를 `hub_collect.HUB_HOME` 으로.
-  - **T25-N3(문서·어휘, MN9·MN11·MN13)**: `hub/README.md` 에 `notify_enabled`·`notify_status.json`·`스크립트 편집기`·`알림 센터` · `commands/hub.md` 에
+  - **T25-287(문서·어휘, MN9·MN11·MN13)**: `hub/README.md` 에 `notify_enabled`·`notify_status.json`·`스크립트 편집기`·`알림 센터` · `commands/hub.md` 에
     `notify_status` · `NOTIFY_TITLE_LABEL_BY_KIND` 의 라벨 4개(`한도 초과`·`승인 대기`·`대기`·`백그라운드 대기`)가 템플릿에도 있다. 변조행: README 의
     `notify_status.json` 을 지운다.
   - `tests/mutations.tsv` 변조행 3건, `SOURCE_GUARD_ID_FLOOR`·`LEDGER_MUTATION_ROW_FLOOR` 를 그만큼 올리고 그 근거 주석 1줄(기존 관례).
@@ -693,7 +693,7 @@ EXPECT: 전부 통과. 구현자는 변경이 닿은 테스트 모듈만 돌린�
 - [ ] 같은 전이로 두 번 울리지 않음(반복 수집·재기동)
 - [ ] 승인 대기 진입은 「대기」가 아니라 「◆ 승인 대기」 하나
 - [ ] 허브 탭 화면 무변화(D43~D45 통과), 판정은 Python 한 곳
-- [ ] 사용자 문자열이 AppleScript 소스에 들어가지 않음(T25-N1, argv 단위 테스트)
+- [ ] 사용자 문자열이 AppleScript 소스에 들어가지 않음(T25-285, argv 단위 테스트)
 - [ ] `notify_enabled:false`(기본)면 서버 동작이 오늘과 같음(감시·스레드·파일 쓰기 없음)
 - [ ] `/hub status` 로 켜짐·실제 동작·마지막 실패를 구분 가능
 - [ ] 정본 검증 명령 4종 통과

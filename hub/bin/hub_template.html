@@ -191,14 +191,19 @@ DZH:HUB 데이터 계약
 <style>
   :root{
     color-scheme:light;
-    --bg:#EEF3F8;--surface:#FFFFFF;--ink:#172033;--head:#12335B;--muted:#5A6879;
-    --line:#D9E2EC;--soft:#F4F7FB;
+    --bg:#F8F1DE;--surface:#FFFDF7;--ink:#2B2214;--head:#4A2E0A;--muted:#6A5B44;
+    --line:#E8DDC2;--soft:#FBF6E9;
     /* --accent-soft 는 열린 카드의 면색(.card.card-open)과 실행중 에이전트 칩
        (.agent-chip-running)이 공유한다. 라이트 테마에서 이 값을 정하는 제약은 칩이
        아니라 카드다 — 아래 .card.card-open 주석의 대비 계산을 함께 볼 것. */
-    --accent:#0072B2;--accent-ink:#005B8F;--accent-soft:#DAE9F7;
-    --attention:#B45309;--attention-soft:#FBEEDC;
-    --shadow:0 8px 24px rgba(19,51,91,.06);
+    --accent:#A97300;--accent-ink:#805700;--accent-soft:#FCE596;
+    /* 라이트는 금빛 팔레트(결정 LT1~LT15, docs/prps/hub-light-theme-sunset.md) — 면은 밝게, 글자·테두리는 같은 계열의 깊은 값,
+       밝은 금은 채움 토큰(accent-fill·accent-bar·gloss-edge)에만 싣고 그 위 글자를 짙게 뒤집는다(LT13). 경고는 b* 축 반대편의
+       남보라다(LT4). 값은 대시보드 템플릿과 같아야 한다(T25-283). 다크에서 새 토큰은 기존 토큰의 별칭이다(T25-284). */
+    --accent-fill:linear-gradient(180deg,#FFF0B3 0%,#FFD54A 30%,#F5B700 62%,#E3A600 100%);--on-accent-fill:#3B2A00;
+    --accent-bar:linear-gradient(180deg,#FFF0B3 0%,#FFC21A 40%,#E3A600 75%,#A97300 100%);--gloss-edge:inset 0 1px 0 rgba(255,255,255,.65);
+    --attention:#4B3F99;--attention-soft:#ECE8F8;
+    --shadow:0 8px 24px rgba(74,46,10,.06);
     /* 패널 폭(SP19, 초판 SP4 번복). 밀어내기 폭·.usage 이동량이 같은 값을 쓰게 하는 단일 출처다. */
     --dzh-panel-width:550px;
     /* .wrap 좌우 거터(dashboard-hub-signal-tuning PRP 후속 결정 D19). .wrap 의 padding 과
@@ -217,6 +222,7 @@ DZH:HUB 데이터 계약
       --line:#26364A;--soft:#1B2634;
       --accent:#56B4E9;--accent-ink:#8ACBF0;--accent-soft:#12324A;
       --attention:#E69F00;--attention-soft:#3B2B0D;
+      --accent-fill:var(--accent-ink);--on-accent-fill:var(--bg);--accent-bar:var(--accent);--gloss-edge:0 0 transparent;
       --shadow:0 8px 24px rgba(0,0,0,.45);
     }
   }
@@ -226,6 +232,7 @@ DZH:HUB 데이터 계약
     --line:#26364A;--soft:#1B2634;
     --accent:#56B4E9;--accent-ink:#8ACBF0;--accent-soft:#12324A;
     --attention:#E69F00;--attention-soft:#3B2B0D;
+    --accent-fill:var(--accent-ink);--on-accent-fill:var(--bg);--accent-bar:var(--accent);--gloss-edge:0 0 transparent;
     --shadow:0 8px 24px rgba(0,0,0,.45);
   }
   *{box-sizing:border-box}
@@ -317,13 +324,15 @@ DZH:HUB 데이터 계약
   /* 지금 상세 패널에 열려 있는 카드(결정 OC9). 면색이 판별 채널이고, 테두리는 그 면색이
      혼자 감당하지 못하는 몫을 메운다. 왜 면색 혼자로는 안 됐는가(라이트 테마 실측):
      옛 --accent-soft(#E4F0F8)와 페이지 배경 --bg(#EEF3F8)의 대비는 1.038:1, ΔL* 1.47 로
-     넓은 면적의 식별 한계(ΔL* 약 2) 아래였다 — 열린 카드가 그리드에 뚫린 구멍처럼 보였다.
-     면색을 더 어둡게 하는 데는 천장이 있다: 카드 안에는 --muted(#5A6879) 본문(.path·
-     .session-time)이 있어 그 대비가 4.5:1(WCAG AA) 아래로 내려갈 수 없고, 그 경계가
-     #DAE9F7(muted 4.60:1, ΔL* 3.96)이다. #D2E4F5 부터는 muted 가 4.38:1 로 떨어진다.
-     ΔL* 3.96 은 식별 한계는 넘지만 "카드가 페이지 위에 떠 있다"는 인상까지는 못 되살린다 —
-     그래서 --accent 테두리를 함께 준다(배경 대비 4.64:1, 면색 대비 4.19:1 로 비텍스트
-     3:1 을 넉넉히 넘는다). 초판이 테두리를 피한 이유(hover·card-working 이 이미 쓴다)는
+     넓은 면적의 식별 한계(ΔL* 약 2) 아래였다(파랑 팔레트 시절) — 열린 카드가 그리드에 뚫린
+     구멍처럼 보였다.
+     면색을 더 어둡게 하는 데는 천장이 있다: 카드 안에는 --muted 본문(.path·
+     .session-time)이 있어 그 대비가 4.5:1(WCAG AA) 아래로 내려갈 수 없다. 금빛 팔레트의
+     값은 #FCE596(muted 5.26:1, ΔL* 4.01)이다 — 천장(4.5:1)까지 여유가 있지만 면 무게를
+     파랑 팔레트(ΔL* 3.96)와 같은 급으로 맞췄다(결정 LT3).
+     ΔL* 4.01 은 식별 한계는 넘지만 "카드가 페이지 위에 떠 있다"는 인상까지는 못 되살린다 —
+     그래서 --accent 테두리를 함께 준다(배경 대비 3.62:1, 면색 대비 3.27:1 로 비텍스트
+     3:1 을 넘는다). 초판이 테두리를 피한 이유(hover·card-working 이 이미 쓴다)는
      충돌이 아니라 중복이었다 — 세 상태가 같은 --accent 테두리를 공유하므로 소스 순서상
      뒤에 오는 .card.card-working 이 이 선언을 덮어도 결과 색이 같다. 열림의 판별은 여전히
      면색 단독이고, 보조기술 채널은 JS 가 붙이는 aria-current="true" 다(결정 D4).
@@ -407,31 +416,35 @@ DZH:HUB 데이터 계약
   /* 상태 배지: box-shadow 왼쪽 바 대신 배경/테두리 형태로 상태를 구분한다(색맹 안전 색상+글리프는
      renderStateBadge 가 담당, 검수 M6). working 은 지금 진행 중이라 가장 눈에 띄어야 해서 채움
      배지로, stale 은 경고성이라 점선 테두리로, idle·done 은 평상시라 플랫/윤곽선으로 낮춘다.
-     배경은 --accent-ink 를 쓴다 — 라이트 테마의 --accent(#0072B2)는 --bg 글자색과 대비가
-     4.6:1 로 WCAG AA(4.5:1) 여유가 거의 없다. --accent-ink 는 두 테마 모두 --bg 와의 대비를
-     넉넉히 확보하도록 이미 정의돼 있어(호버 텍스트용) 새 토큰 없이 재사용한다. */
-  .badge.state-working{background:var(--accent-ink);color:var(--bg)}
+     배경은 --accent-fill(라이트는 밝은 금 그라데이션, 다크는 --accent-ink 의 별칭), 글자는
+     --on-accent-fill(라이트는 짙은 금갈색, 다크는 --bg 의 별칭)이다. 밝은 금은 밝은 글자와
+     대비가 안 나와(가장 진한 정지점 #E3A600 대 --bg 1.92:1) 글자를 짙게 뒤집는다 — 정지점
+     최저 6.41:1. 광택은 배경 그라데이션만으로 낸다. box-shadow·animation 은 T25-190(결정 V1)이
+     금지한다(결정 LT11·LT13). */
+  .badge.state-working{background:var(--accent-fill);color:var(--on-accent-fill)}
   .badge.state-idle{background:var(--soft);color:var(--muted)}
   .badge.state-stale{background:var(--attention-soft);color:var(--attention);border:1px dashed var(--attention)}
   /* interrupted(결정 RI10, docs/prps/hub-rate-limit-interruption.md) — 채움 = "지금의
      상태"(working 과 같은 문법). stale(점선 테두리)과는 형태로 갈린다. 색은 --attention 을
-     반전해 배경으로 쓴다 — --surface 글자와의 대비 라이트 5.02:1·다크 7.3:1(계산, WCAG AA
-     4.5:1 이상). --bg 글자는 라이트 4.50:1 로 AA 경계라 쓰지 않는다. 새 색 토큰 0, 애니메이션
-     0(T25-190 의 정신 — halo 는 working 전용). */
+     반전해 배경으로 쓴다 — --surface 글자와의 대비 라이트 8.36:1·다크 7.3:1(계산, WCAG AA
+     4.5:1 이상). --bg 글자는 파랑 팔레트 시절 4.50:1 로 AA 경계였다 — 지금은 7.54:1 이지만
+     규칙은 그대로 --surface 를 쓴다. 광택 없는 평면 채움이다(결정 LT11) — 평상·진행의 광택과
+     형태로 갈린다. 새 색 토큰 0, 애니메이션 0(T25-190 의 정신 — halo 는 working 전용). */
   .badge.state-interrupted{background:var(--attention);color:var(--surface)}
   /* background(결정 BW5·BW10, docs/prps/hub-subagent-background-pause.md) — 「할 일은
      없지만 일이 진행 중이다」를 idle(플랫)과 working(채움) 사이의 중간 형태로 표현한다.
      면색은 열린 카드·실행중 칩과 같은 --accent-soft/--accent-ink 쌍(새 색 토큰 0)이고,
      테두리(--accent)는 열린 카드·열린 행(면색이 같은 --accent-soft, .card.card-open·
      .session-row.card-open 참고 — 이 배지도 그 면 위에 놓일 수 있다) 위에서 윤곽을 지킨다.
-     대비(계산) 라이트 5.87:1·다크 7.52:1, WCAG AA(4.5:1) 여유. 애니메이션 0(T25-190·T25-243
+     대비(계산) 라이트 5.12:1·다크 7.52:1, WCAG AA(4.5:1) 여유. 애니메이션 0(T25-190·T25-243
      의 halo 금지 정신 — glow 는 working 전용). */
   .badge.state-background{background:var(--accent-soft);color:var(--accent-ink);border:1px solid var(--accent)}
   .badge.state-done{background:transparent;color:var(--muted);border:1px solid var(--line)}
-  /* 승인 대기 표지(결정 AW4, docs/prps/hub-approval-wait-badge.md) — 「사용자 조치가 필요하다」는 주황(--attention) 계열이되 한도 초과(채움)·
-     소식 없음(점선)과 흰 면 + 실선 링으로 형태가 갈린다. 면을 --surface 로 칠하는 이유는 대비다: 글자 --attention 이 --surface 위
-     5.02:1(라이트)·7.29:1(다크)로 WCAG AA(4.5:1)를 넘지만 면이 투명이면 열린 행(--accent-soft) 위 4.06:1, --attention-soft 면이면
-     4.39:1 로 11px 글자에 미달이다. 링은 border 가 아니라 안쪽 box-shadow 다 — 실측(320px 트랙)에서 1px border 는 첫 줄을 19→21px 로
+  /* 승인 대기 표지(결정 AW4, docs/prps/hub-approval-wait-badge.md) — 「사용자 조치가 필요하다」는 경고색(--attention) 계열이되 한도 초과(채움)·
+     소식 없음(점선)과 흰 면 + 실선 링으로 형태가 갈린다. 면을 --surface 로 칠하는 처음 이유는 대비였다: 글자 --attention 이 --surface 위
+     8.36:1(라이트)·7.29:1(다크)로 WCAG AA(4.5:1)를 넘는다. 파랑 팔레트에서는 면이 투명이면 열린 행(--accent-soft) 위 4.06:1,
+     --attention-soft 면이면 4.39:1 로 11px 글자에 미달이었다. 금빛 팔레트에서는 열린 행 6.80·--attention-soft 7.07(라이트)로 모두
+     넘지만, 흰 면 + 실선 링은 채움·점선과 갈리는 세 번째 형태라 그대로 둔다. 링은 border 가 아니라 안쪽 box-shadow 다 — 실측(320px 트랙)에서 1px border 는 첫 줄을 19→21px 로
      키우고 상태 배지 중심을 +1px 내려 트리 갈고리 정렬 허용치(≤1px)를 소진했지만, 안쪽 링은 표지 없는 줄과 높이·중심이 같았다.
      링은 흐림·번짐·애니메이션이 없는 1px 테두리 대용이라 halo 금지(T25-190·243·250)와 무관하다. 새 색 토큰 0. 단계 칩(.agent-chip)
      어휘를 쓰지 않는다 — 결정 LM12 가 실행 칩과 헷갈려 걷은 것의 부활이 아니다(결정 AW5). */
@@ -484,7 +497,7 @@ DZH:HUB 데이터 계약
      1810~1814행이 「함께 막아야 할 우회로」로 지목한 것과 철자 가드 회피라는 점에서 같은
      형태이지만, 거기서 G8 이 막던 것은 헤더/본문을 가르는 전폭 하드 디바이더(--line)이고
      이것은 8px 폭 트리 연결선(--muted 50%)이라 목적·색·굵기 인상이 달라 별개로 판단했다.
-     색은 --muted 50% — --line 은 열린 카드 면(--accent-soft) 위에서 ΔL* ≈2 로 사라진다(라이트). */
+     색은 --muted 50% — --line 은 열린 카드 면(--accent-soft) 위에서 ΔL* 약 2.9 로 식별 한계(약 2)를 간신히 넘을 뿐이라 약하다(라이트). */
   .sessions li::before,
   .sessions li::after,
   .session-tier1::before,
@@ -551,9 +564,9 @@ DZH:HUB 데이터 계약
      모서리가 과해 윗줄 칩과 위계가 뒤집힌다. 시작 시각 칸에는 칩을 씌우지 않는다(MC3) —
      스캔의 리더이고, 칩 하나가 가로 12px 을 먹어 세 개를 씌우면 모델 라벨 상한이 실제 최장
      모델명(Sonnet 4.6 = 10자) 아래로 내려간다. box-shadow 구분선과 --line 면색은 기각했다:
-     전자는 열린 카드(.card.card-open, --accent-soft)에서 ΔL* 2.15 로 사라지고, 후자는 라이트
-     테마 텍스트 대비가 4.35:1 로 WCAG AA(4.5:1) 미달이다(§4.5). 이 칩은 반대로 열린 카드에서
-     ΔL* 5.47 로 더 강해진다. 대비 실측: --muted on --soft = 5.30:1(라이트)·6.07:1(다크). */
+     전자는 열린 카드(.card.card-open, --accent-soft)에서 ΔL* 2.15 로 사라지고(파랑 팔레트 시절 실측), 후자는 라이트
+     테마 텍스트 대비가 4.35:1 로 WCAG AA(4.5:1) 미달이다(파랑 팔레트 시절 실측, §4.5). 이 칩은 반대로 열린 카드에서
+     ΔL* 5.74 로 더 강해진다. 대비 계산: --muted on --soft = 6.10:1(라이트)·6.07:1(다크). */
   .session-id,.session-model{background:var(--soft);border-radius:5px;padding:0 6px}
   /* 세션 비용·컨텍스트 칩(⑨ 안 A, docs/prps/harness-benchmark-adoption.md §5-7). 식별 줄의 네 번째 칩이다 — 위 공유 규칙
      (.session-id,.session-model)은 건드리지 않고(T25-153 이 그 셀렉터 리터럴을 문다) 같은 선언을 이 별도 규칙이 반복한다.
@@ -684,7 +697,9 @@ DZH:HUB 데이터 계약
   .usage-row{display:flex;justify-content:space-between;align-items:baseline;font-size:12.5px;color:var(--ink);margin-top:8px}
   .usage-pct{font-weight:700;color:var(--accent-ink)}
   .usage-bar{height:8px;border-radius:999px;background:var(--soft);margin-top:4px;overflow:hidden}
-  .usage-bar>span{display:block;height:100%;background:var(--accent);border-radius:999px}
+  /* 막대는 --accent-bar(라이트는 밝은 금 → 깊은 금 광택 — 아래 띠는 트랙과 3:1, T25-282 ⑦. 다크는 --accent 의 별칭)이고, 윗면 하이라이트
+     --gloss-edge 는 라이트에서만 보인다(다크는 투명 그림자) — 결정 LT11·LT13. */
+  .usage-bar>span{display:block;height:100%;background:var(--accent-bar);box-shadow:var(--gloss-edge);border-radius:999px}
   .usage-reset{font-size:11px;color:var(--muted);margin-top:3px;text-align:right}
   .usage-meta{font-size:11px;color:var(--muted);margin-top:10px;text-align:right}
   /* 만료(조회되지 않음) 상태 — 새 색 토큰을 만들지 않고 기존 --muted·--attention 만 쓴다(R-B). */
@@ -1806,7 +1821,7 @@ try{
   }
 
   // 첫 줄 상태 배지 뒤의 승인 대기 표지(결정 AW3·AW4). 해당 없으면 빈 문자열 — 첫 줄이 오늘과 같다. 모양은 .badge 어휘 +
-  // 주황 안쪽 링이라 서브에이전트 실행 칩(.agent-chip)과 겹치지 않는다(결정 AW5 — LM12 가 걷은 단계 칩의 부활이 아니다).
+  // 경고색 안쪽 링이라 서브에이전트 실행 칩(.agent-chip)과 겹치지 않는다(결정 AW5 — LM12 가 걷은 단계 칩의 부활이 아니다).
   function renderApprovalWaitBadge(session){
     if(!isAwaitingApproval(session)) return '';
     return '<span class="badge approval-wait" data-tooltip="' + escapeHtml(APPROVAL_WAIT_TOOLTIP) + '">'
@@ -1929,7 +1944,7 @@ try{
   }
 
   // 실행 줄 안의 활동 줄(결정 LA9) — 도는 실행이고 활동이 있을 때만, 아니면 빈 문자열(줄 자체가 생기지 않는다). 「새 기록 없음」이면
-  // ▲(소식 없음 배지와 같은 글리프, 낭독기에는 숨긴다 — 문구가 이미 말한다)와 주황 글자 모양이 붙는다.
+  // ▲(소식 없음 배지와 같은 글리프, 낭독기에는 숨긴다 — 문구가 이미 말한다)와 경고색 글자 모양이 붙는다.
   function renderAgentRunActivity(run, nowMs){
     var activity = runningActivityOf(run);
     if(!activity) return '';
