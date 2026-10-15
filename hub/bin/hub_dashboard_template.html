@@ -69,11 +69,15 @@ DZ:DASHBOARD 갱신 맵 (동적 영역 — 셀렉터 기반 정밀 치환, hub/b
 <style>
   :root{
     color-scheme:light;
-    --bg:#EEF3F8;--surface:#FFFFFF;--ink:#172033;--head:#12335B;--muted:#5A6879;
-    --line:#D9E2EC;--soft:#F4F7FB;
-    --accent:#0072B2;--accent-ink:#005B8F;--accent-soft:#E4F0F8;
-    --attention:#B45309;--attention-soft:#FBEEDC;
-    --shadow:0 8px 24px rgba(19,51,91,.06);
+    /* 라이트 값은 hub_template.html 의 라이트 :root 와 같아야 한다(T25-283, 결정 LT2). 새 토큰(채움·막대·광택 가장자리)의 다크 값은
+       기존 토큰의 별칭이다(T25-284, 결정 LT12). */
+    --bg:#F8F1DE;--surface:#FFFDF7;--ink:#2B2214;--head:#4A2E0A;--muted:#6A5B44;
+    --line:#E8DDC2;--soft:#FBF6E9;
+    --accent:#A97300;--accent-ink:#805700;--accent-soft:#FCE596;
+    --accent-fill:linear-gradient(180deg,#FFF0B3 0%,#FFD54A 30%,#F5B700 62%,#E3A600 100%);--on-accent-fill:#3B2A00;
+    --accent-bar:linear-gradient(180deg,#FFF0B3 0%,#FFC21A 40%,#E3A600 75%,#A97300 100%);--gloss-edge:inset 0 1px 0 rgba(255,255,255,.65);
+    --attention:#4B3F99;--attention-soft:#ECE8F8;
+    --shadow:0 8px 24px rgba(74,46,10,.06);
   }
   @media (prefers-color-scheme:dark){
     :root:not([data-theme="light"]){
@@ -82,6 +86,7 @@ DZ:DASHBOARD 갱신 맵 (동적 영역 — 셀렉터 기반 정밀 치환, hub/b
       --line:#26364A;--soft:#1B2634;
       --accent:#56B4E9;--accent-ink:#8ACBF0;--accent-soft:#12324A;
       --attention:#E69F00;--attention-soft:#3B2B0D;
+      --accent-fill:var(--accent-ink);--on-accent-fill:var(--bg);--accent-bar:var(--accent);--gloss-edge:0 0 transparent;
       --shadow:0 8px 24px rgba(0,0,0,.45);
     }
   }
@@ -91,6 +96,7 @@ DZ:DASHBOARD 갱신 맵 (동적 영역 — 셀렉터 기반 정밀 치환, hub/b
     --line:#26364A;--soft:#1B2634;
     --accent:#56B4E9;--accent-ink:#8ACBF0;--accent-soft:#12324A;
     --attention:#E69F00;--attention-soft:#3B2B0D;
+    --accent-fill:var(--accent-ink);--on-accent-fill:var(--bg);--accent-bar:var(--accent);--gloss-edge:0 0 transparent;
     --shadow:0 8px 24px rgba(0,0,0,.45);
   }
   *{box-sizing:border-box}
@@ -118,19 +124,21 @@ DZ:DASHBOARD 갱신 맵 (동적 영역 — 셀렉터 기반 정밀 치환, hub/b
   .card{background:var(--surface);border:1px solid var(--line);border-radius:14px;padding:26px 30px;box-shadow:var(--shadow);margin-bottom:16px}
   h1{font-size:20px;margin:0 0 4px;color:var(--head);letter-spacing:-.4px}
   .bar-outer{height:14px;background:var(--soft);border-radius:999px;overflow:hidden;border:1px solid var(--line)}
-  .bar-inner{height:100%;background:var(--accent);border-radius:999px;transition:width .4s}
+  /* 막대는 --accent-bar(라이트는 밝은 금 → 깊은 금 광택 — 아래 띠는 트랙과 3:1, T25-282 ⑦. 다크는 --accent 의 별칭)이고, 윗면 하이라이트
+     --gloss-edge 는 라이트에서만 보인다(다크는 투명 그림자) — 결정 LT11·LT13. */
+  .bar-inner{height:100%;background:var(--accent-bar);box-shadow:var(--gloss-edge);border-radius:999px;transition:width .4s}
   .pct{font-size:13px;font-weight:700;color:var(--accent-ink);margin-top:6px}
   ol.steps{list-style:none;margin:14px 0 0;padding:0}
   ol.steps li{display:flex;align-items:center;gap:12px;padding:11px 4px;border-bottom:1px solid var(--soft);font-size:15px;flex-wrap:wrap;row-gap:3px}
   ol.steps li:last-child{border-bottom:0}
   .num{width:26px;height:26px;border-radius:8px;display:grid;place-items:center;font-size:13px;font-weight:800;background:var(--soft);color:var(--muted);flex:none}
   li.done .num{background:var(--accent-soft);color:var(--accent-ink);box-shadow:inset 0 0 0 1px var(--accent)}
-  li.active .num{background:var(--accent-ink);color:var(--bg)}
+  li.active .num{background:var(--accent-fill);color:var(--on-accent-fill)}
   li.done{color:var(--muted)}
   li.active{font-weight:700;color:var(--head)}
   .chip{margin-left:auto;font-size:12px;font-weight:800;padding:3px 10px;border-radius:999px;background:var(--soft);color:var(--muted);flex:none}
   li.done .chip{background:var(--accent-soft);color:var(--accent-ink)}
-  li.active .chip{position:relative;background:var(--accent-ink);color:var(--bg)}
+  li.active .chip{position:relative;background:var(--accent-fill);color:var(--on-accent-fill)}
   .step-detail{flex-basis:100%;margin-left:38px;font-size:12.5px;font-weight:400;color:var(--muted);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
   .step-detail:empty{display:none}
   #dz-impl-card:not(:has(#dz-impl-tasks li)){display:none}
@@ -148,18 +156,18 @@ DZ:DASHBOARD 갱신 맵 (동적 영역 — 셀렉터 기반 정밀 치환, hub/b
      ::after 오버레이의 opacity 만 pulse 하는 이유(레이아웃·색 속성은 건드리지 않는다):
      허브 .card.card-working 이 같은 문제(box-shadow 보간 = 매 프레임 리페인트)를 이미 이
      방식으로 풀어 뒀다(같은 파일 계열의 기존 관용구). .chip 자신의 background·color 는
-     건드리지 않는다 — li.active .chip 은 --accent-ink 채움에 --bg 글자라, opacity 나
+     건드리지 않는다 — li.active .chip 은 --accent-fill 채움에 --on-accent-fill 글자라, opacity 나
      background 를 애니메이션하면 글자 대비가 주기적으로 내려간다(WCAG 1.4.3 위반 가능).
      ::after 는 배경 없이 칩 바깥으로만 그림자를 그리므로 칩 안쪽 픽셀을 바꾸지 않아 대비
      계산에 영향이 없다. 진폭 .6→1·주기 4s·@keyframes 이름(dz-step-active-pulse)은 유지한다
      — 허브 glow 와 같은 두 숫자를 공유하는 단일 모션 언어 계약(dashboard-ui-polish-4 PRP
      결정 D5)은 담체가 아니라 리듬을 약속한 것이라 담체가 바뀌어도 깨지지 않는다.
      모션을 끈 사용자에게 남는 정적 채널은 밴드 하나가 아니라 다섯이다 — 칩의 텍스트
-     「진행중」(스크린리더에도 읽히는 유일한 정본) · 칩의 반전 채움(--accent-ink 바탕 +
-     --bg 글자) · 번호 사각형 반전(li.active .num) · 행 굵은 글씨 + --head 색(li.active) ·
+     「진행중」(스크린리더에도 읽히는 유일한 정본) · 칩의 반전 채움(--accent-fill 바탕 +
+     --on-accent-fill 글자 — 라이트는 광택 금) · 번호 사각형 반전(li.active .num) · 행 굵은 글씨 + --head 색(li.active) ·
      칩의 정적 halo(모션만 꺼지고 opacity:1 로 남는다, 아래 reduced-motion 분기). 모션이
      유일한 판별 채널이 되는 순간은 없다.
-     glow 기하 0 0 10px -1px 는 실측(Blink, 라이트 테마)에서 최저점(opacity:.6)도 옛 밴드와
+     glow 기하 0 0 10px -1px 는 실측(Blink, 라이트 테마, 파랑 팔레트 시절)에서 최저점(opacity:.6)도 옛 밴드와
      같은 급(ΔL* 약 6.4 대 5.86)의 신호를 유지하면서 최대점에서는 그 두 배가 되도록 고른
      값이다 — 더 세게 필요해지면 후보 0 0 8px 0 이 유일한 대안이며 승인 없이 바꾸지
      않는다(결정 D4).
@@ -181,17 +189,17 @@ DZ:DASHBOARD 갱신 맵 (동적 영역 — 셀렉터 기반 정밀 치환, hub/b
   .matrix th.group{text-align:left;font-weight:700;color:var(--head);width:34%}
   .matrix td.cell{text-align:center;font-size:12px;font-weight:800;background:var(--soft);color:var(--muted)}
   .matrix td.cell[data-state="done"]{background:var(--accent-soft);color:var(--accent-ink);box-shadow:inset 0 0 0 1px var(--accent)}
-  .matrix td.cell[data-state="active"]{background:var(--accent-ink);color:var(--bg)}
+  .matrix td.cell[data-state="active"]{background:var(--accent-fill);color:var(--on-accent-fill)}
   .matrix td.cell[data-state="na"]{background:var(--surface);color:var(--line)}
   .badge{display:inline-flex;align-items:center;line-height:1;font-size:11px;font-weight:800;padding:4px 9px;border-radius:999px;margin-right:6px}
   .badge.round{background:var(--soft);color:var(--muted)}
   .badge.impl{background:var(--accent-soft);color:var(--accent-ink)}
-  .badge.pass{background:var(--accent-ink);color:var(--bg)}
+  .badge.pass{background:var(--accent-fill);color:var(--on-accent-fill)}
   .badge.fail{background:var(--attention-soft);color:var(--attention);border:1px dashed var(--attention)}
   .badge.commit{background:var(--soft);color:var(--head);border:1px solid var(--line)}
   .dzf{position:absolute;opacity:0;pointer-events:none}
   label[for^="dzf-"]{display:inline-block;font-size:12px;font-weight:700;padding:4px 12px;margin:8px 6px 8px 0;border-radius:999px;background:var(--soft);color:var(--muted);cursor:pointer;border:1px solid var(--line)}
-  .dzf:checked + label{background:var(--accent-ink);color:var(--bg);border-color:var(--accent-ink)}
+  .dzf:checked + label{background:var(--accent-fill);color:var(--on-accent-fill);border-color:var(--accent-ink)}
   .dzf:focus-visible + label{outline:2px solid var(--accent);outline-offset:2px}
   #dzf-impl:checked   ~ #dz-log .entry:not([data-kind="impl"]){display:none}
   #dzf-review:checked ~ #dz-log .entry:not([data-kind="review"]){display:none}

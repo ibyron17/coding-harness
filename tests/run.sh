@@ -593,7 +593,10 @@ readonly MUTATION_HARNESS_GROUP="T37"
 #
 # 131 → 133(hub-approval-wait-badge.md, 결정 AW1~AW5): 신규 가드 T25-280(승인 대기 표지 배선 — 첫 줄 호출)·T25-281(표지가 실행 칩이
 # 아니다)의 변조행 2건을 붙였다. 순증가 2.
-readonly LEDGER_MUTATION_ROW_FLOOR=133
+#
+# 133 → 136(hub-light-theme-sunset.md, 결정 LT2·LT4·LT9·LT12): 신규 가드 T25-282(라이트 의미 쌍 관계)·T25-283(허브·대시보드 라이트 토큰
+# 불일치)·T25-284(다크 별칭)의 변조행 3건을 붙였다. T99-6 은 이 상수 인용을 바꾼 수정에 맞춰 sed 리터럴을 옮겼다. 순증가 3.
+readonly LEDGER_MUTATION_ROW_FLOOR=136
 
 # 원장 면제행 수의 상한 래칫(T37-14 가 실행마다 검사, PRP §12 「면제행이 영구 도피처가
 # 된다」의 두 번째 완화). 착지 시점 실측 390. 신규 가드를 기존 공통 사유로 면제 등록하면
@@ -936,7 +939,10 @@ readonly LEDGER_EXEMPT_ROW_RATCHET=372
 # 557 → 559(hub-approval-wait-badge.md, 결정 AW1~AW5): 신설 2건 T25-280(승인 대기 표지 배선)·T25-281(표지가 실행 칩이 아니다 — LM12 관계).
 # 순증가 2. 개정한 T25-201(data-tooltip 기대값 20 → 21)은 같은 ID 라 개수에 닿지 않는다. collect_guard_ids 를 그대로 재현해 편집
 # 전(557)·후(559) 재측정한다.
-readonly SOURCE_GUARD_ID_FLOOR=559
+#
+# 559 → 562(hub-light-theme-sunset.md, 결정 LT2·LT4·LT9·LT12): 신설 3건 T25-282(라이트 의미 쌍 관계)·T25-283(허브·대시보드 라이트 토큰 불일치)·
+# T25-284(다크 별칭). 순증가 3. collect_guard_ids 를 그대로 재현해 편집 전(559)·후(562) 재측정한다.
+readonly SOURCE_GUARD_ID_FLOOR=562
 
 # 배포 트리(rules/·agents/·commands/)에 남는 "파일명:줄번호" 형태 인용 수의 상한
 # 래칫(T39-4). 배포되는 문서가 다른 파일의 줄 번호를 인용하면, 그 파일을 고치는 수정이
@@ -4165,7 +4171,7 @@ read_python_product_constant() {
 test_hub_docs_and_constants() {
   group_failures=()   # 앞 그룹이 조기 return 했을 때의 잔여물 제거
   local test_name="T25"
-  local test_desc="허브 문서·상수 정합성 (T25-1~T25-281)"
+  local test_desc="허브 문서·상수 정합성 (T25-1~T25-284)"
   log_test_name "$test_name" "$test_desc"
 
   local hub_settings_file="$REPO_ROOT/hub/bin/hub_settings.py"
@@ -6529,6 +6535,191 @@ PYEOF
   # 위 부등식은 색 토큰만 본다 — 규칙이 실제로 두 채널을 쓰는지는 따로 고정해야 한다.
   if ! grep -qF -- '.card.card-open{background:var(--accent-soft);border-color:var(--accent)}' "$hub_template_file"; then
     note_failure "T25-110: .card.card-open 이 면색+테두리 2채널을 함께 쓰지 않음"
+  fi
+
+  # T25-282·T25-283·T25-284(신설, 결정 LT2·LT4·LT9·LT12, docs/prps/hub-light-theme-sunset.md): 라이트 금빛 팔레트의 세 관계.
+  # T25-110 은 원장 면제행이라 개정하지 않고(개정하면 변조행 승급 의무가 생긴다 — PRP §9 X7) 새 관계는 별도 ID 로 둔다. 한 python 이
+  # 두 템플릿을 읽어 pairs=·parity=·alias= 세 줄을 내고, 발화 줄은 가드마다 하나다.
+  #   ① 의미 쌍: 채움 위 글자는 그라데이션 모든 정지점에서 4.5:1, 글자 토큰은 면 위 4.5:1, 경고(남보라)와 평상·채움은 CIELAB b* 의
+  #      부호가 반대(적록 색각이상에서도 갈린다 — LT4), 막대의 한 정지점은 트랙과 비텍스트 3:1.
+  #   ② 허브·대시보드의 라이트 맨몸 :root 선언이 문자 단위로 같다(dzh- 접두 허브 배치 토큰 제외 — LT2).
+  #   ③ 새 토큰의 다크 별칭이 파일마다 정확히 2번(다크 블록 두 벌) 있다 — 별칭이 있어야 바뀐 규칙 8개가 다크에서 옛 계산값이 된다(LT12).
+  # 한계(비망라): 첫 맨몸 :root 블록만 본다. 정지점은 #RRGGBB 만 인식하고 rgb()·색 이름은 세지 않는다. ③ 은 별칭 리터럴의 개수만
+  # 세므로, 별칭이 있어도 규칙이 새 토큰을 쓰지 않는 결함은 못 잡는다.
+  local light_theme_output light_theme_pairs light_theme_parity light_theme_alias
+  light_theme_output=$(python3 - "$hub_template_file" "$REPO_ROOT/hub/bin/hub_dashboard_template.html" <<'PYEOF'
+import re
+import sys
+
+MIN_TEXT_CONTRAST = 4.5            # WCAG 1.4.3 AA — 글자
+MIN_NONTEXT_CONTRAST = 3.0         # WCAG 1.4.11 — 비텍스트(막대 대 트랙)
+MIN_HUE_AXIS_MAGNITUDE = 20.0      # CIELAB b* — 부호가 반대여도 0 근처면 색각이상에서 갈리지 않는다
+HUB_ONLY_TOKEN_PREFIX = "dzh-"     # 허브 배치 토큰(패널 폭·거터) — 대시보드에는 없다
+DARK_ALIAS_LITERALS = (
+    "--accent-fill:var(--accent-ink)",
+    "--on-accent-fill:var(--bg)",
+    "--accent-bar:var(--accent)",
+    "--gloss-edge:0 0 transparent",
+)
+EXPECTED_ALIAS_COUNT = 2           # 다크 블록 두 벌(미디어쿼리 + data-theme)
+SRGB_LINEAR_CUTOFF = 0.04045      # sRGB 전달 함수의 선형 구간 경계(IEC 61966-2-1)
+D65_WHITE_Z = 1.08883              # D65 백색점의 Z(Y=1 기준) — CIE 1976 L*a*b*
+LAB_EPSILON = 0.008856             # CIE 1976 L*a*b* 의 (6/29)^3 — 이 아래는 선형 근사
+LAB_LINEAR_SLOPE = 7.787           # CIE 1976 L*a*b* 선형 구간 기울기 (29/6)^2 / 3
+HEX_COLOR = re.compile(r"#[0-9A-Fa-f]{6}")
+FLAT_TOKENS = (
+    "surface", "soft", "accent", "accent-ink", "accent-soft",
+    "attention", "attention-soft", "on-accent-fill",
+)
+GRADIENT_TOKENS = ("accent-fill", "accent-bar")
+
+
+def linear_channels(hex_color):
+    """#RRGGBB 의 선형 sRGB 채널 3개."""
+    channels = [int(hex_color[index:index + 2], 16) / 255 for index in (1, 3, 5)]
+    return [
+        channel / 12.92 if channel <= SRGB_LINEAR_CUTOFF else ((channel + 0.055) / 1.055) ** 2.4
+        for channel in channels
+    ]
+
+
+def relative_luminance(hex_color):
+    """WCAG 상대 휘도."""
+    red, green, blue = linear_channels(hex_color)
+    return 0.2126 * red + 0.7152 * green + 0.0722 * blue
+
+
+def contrast_ratio(first, second):
+    """두 색의 WCAG 대비비."""
+    first_luminance, second_luminance = relative_luminance(first), relative_luminance(second)
+    return (max(first_luminance, second_luminance) + 0.05) / (min(first_luminance, second_luminance) + 0.05)
+
+
+def lab_b_star(hex_color):
+    """CIELAB b*(파랑-노랑 축, D65) — 양수는 노랑 쪽, 음수는 파랑 쪽. 출처: CIE 1976 L*a*b*, sRGB→XYZ(D65) 행렬의 Y·Z 행."""
+    red, green, blue = linear_channels(hex_color)
+    tristimulus_y = 0.2126 * red + 0.7152 * green + 0.0722 * blue
+    tristimulus_z = (0.0193339 * red + 0.1191920 * green + 0.9503041 * blue) / D65_WHITE_Z
+
+    def lab_f(tristimulus_ratio):
+        if tristimulus_ratio > LAB_EPSILON:
+            return tristimulus_ratio ** (1 / 3)
+        return LAB_LINEAR_SLOPE * tristimulus_ratio + 16 / 116
+
+    return 200 * (lab_f(tristimulus_y) - lab_f(tristimulus_z))
+
+
+def read_source(path):
+    """파일 전체 텍스트."""
+    with open(path, encoding="utf-8") as handle:
+        return handle.read()
+
+
+def light_declarations(source):
+    """첫 맨몸 :root 블록의 --이름:값; 선언(공백 정규화). 블록이 없으면 None."""
+    block = re.search(r":root\{(.*?)\}", source, re.S)
+    if block is None:
+        return None
+    return {
+        name: " ".join(value.split())
+        for name, value in re.findall(r"--([a-z-]+):([^;]+);", block.group(1))
+    }
+
+
+def check_pairs(tokens):
+    """의미 쌍 관계(① ~ ⑦)의 위반 목록."""
+    if tokens is None:
+        return ["허브 라이트 :root 블록을 찾지 못함"]
+    absent = [name for name in FLAT_TOKENS + GRADIENT_TOKENS if name not in tokens]
+    if absent:
+        return ["라이트 :root 에 없는 토큰: " + ", ".join(absent)]
+    flat = {name: tokens[name] for name in FLAT_TOKENS}
+    malformed = [name for name, value in flat.items() if not re.fullmatch(HEX_COLOR, value)]
+    fill_stops = HEX_COLOR.findall(tokens["accent-fill"])
+    bar_stops = HEX_COLOR.findall(tokens["accent-bar"])
+    if malformed or not fill_stops or not bar_stops:
+        return ["#RRGGBB 로 읽히지 않는 토큰 또는 정지점 없음: " + ", ".join(malformed or ["accent-fill/accent-bar"])]
+    problems = []
+    for stop in fill_stops:
+        ratio = contrast_ratio(flat["on-accent-fill"], stop)
+        if ratio < MIN_TEXT_CONTRAST:
+            problems.append(f"① 채움 정지점 {stop} 위 글자 {ratio:.2f}:1 < {MIN_TEXT_CONTRAST}")
+    for label, text_name, face_name in (
+        ("②", "accent-ink", "accent-soft"),
+        ("③", "attention", "surface"),
+        ("④", "attention", "attention-soft"),
+        ("⑤", "attention", "accent-soft"),
+    ):
+        ratio = contrast_ratio(flat[text_name], flat[face_name])
+        if ratio < MIN_TEXT_CONTRAST:
+            problems.append(f"{label} {text_name} 대 {face_name} {ratio:.2f}:1 < {MIN_TEXT_CONTRAST}")
+    attention_b = lab_b_star(flat["attention"])
+    ordinary = [("accent", flat["accent"]), ("accent-ink", flat["accent-ink"])]
+    ordinary += [(f"accent-fill {stop}", stop) for stop in fill_stops]
+    for name, color in ordinary:
+        ordinary_b = lab_b_star(color)
+        same_side = (ordinary_b > 0) == (attention_b > 0)
+        if same_side or min(abs(ordinary_b), abs(attention_b)) < MIN_HUE_AXIS_MAGNITUDE:
+            problems.append(f"⑥ b* {name} {ordinary_b:+.1f} 대 attention {attention_b:+.1f} — 반대편이 아님")
+    best_bar = max(contrast_ratio(stop, flat["soft"]) for stop in bar_stops)
+    if best_bar < MIN_NONTEXT_CONTRAST:
+        problems.append(f"⑦ 막대 정지점 대 트랙 최댓값 {best_bar:.2f}:1 < {MIN_NONTEXT_CONTRAST}")
+    return problems
+
+
+def check_parity(hub_tokens, dashboard_tokens):
+    """두 파일 라이트 선언의 차이 목록."""
+    if hub_tokens is None or dashboard_tokens is None:
+        return ["라이트 :root 블록을 찾지 못함"]
+    hub = {name: value for name, value in hub_tokens.items() if not name.startswith(HUB_ONLY_TOKEN_PREFIX)}
+    dashboard = {
+        name: value for name, value in dashboard_tokens.items() if not name.startswith(HUB_ONLY_TOKEN_PREFIX)
+    }
+    problems = []
+    for name in sorted(set(hub) | set(dashboard)):
+        if name not in dashboard:
+            problems.append(f"--{name} 는 허브에만 있음")
+        elif name not in hub:
+            problems.append(f"--{name} 는 대시보드에만 있음")
+        elif hub[name] != dashboard[name]:
+            problems.append(f"--{name} 값 불일치(허브 {hub[name]} / 대시보드 {dashboard[name]})")
+    return problems
+
+
+def check_aliases(label, source):
+    """다크 별칭 리터럴 개수 위반 목록."""
+    problems = []
+    for literal in DARK_ALIAS_LITERALS:
+        count = source.count(literal)
+        if count != EXPECTED_ALIAS_COUNT:
+            problems.append(f"{label} {literal} {count}개(기대 {EXPECTED_ALIAS_COUNT})")
+    return problems
+
+
+hub_source = read_source(sys.argv[1])
+dashboard_source = read_source(sys.argv[2])
+hub_tokens = light_declarations(hub_source)
+dashboard_tokens = light_declarations(dashboard_source)
+results = {
+    "pairs": check_pairs(hub_tokens),
+    "parity": check_parity(hub_tokens, dashboard_tokens),
+    "alias": check_aliases("허브", hub_source) + check_aliases("대시보드", dashboard_source),
+}
+for key, problems in results.items():
+    print(key + "=" + ("; ".join(problems) if problems else "OK"))
+PYEOF
+)
+  light_theme_pairs=$(sed -n 's/^pairs=//p' <<< "$light_theme_output")
+  light_theme_parity=$(sed -n 's/^parity=//p' <<< "$light_theme_output")
+  light_theme_alias=$(sed -n 's/^alias=//p' <<< "$light_theme_output")
+  if [[ "$light_theme_pairs" != "OK" ]]; then
+    note_failure "T25-282: 라이트 의미 쌍 관계 위반(결정 LT4 — 평상·채움과 경고가 한 색으로 붙거나 글자·막대 대비가 미달) — ${light_theme_pairs:-<출력 없음 — python 이 죽었다>}"
+  fi
+  if [[ "$light_theme_parity" != "OK" ]]; then
+    note_failure "T25-283: 허브·대시보드 라이트 토큰 불일치(결정 LT2 — 상세 패널 iframe 안만 다른 색으로 남는다) — ${light_theme_parity:-<출력 없음 — python 이 죽었다>}"
+  fi
+  if [[ "$light_theme_alias" != "OK" ]]; then
+    note_failure "T25-284: 다크 별칭 개수 불일치(결정 LT12 — 다크 화면이 라이트 금빛으로 바뀐다) — ${light_theme_alias:-<출력 없음 — python 이 죽었다>}"
   fi
 
   # T25-111(결정 WT3, docs/prps/hub-worktree-fold.md): hub_project.py 에 워크트리 경로 마커
