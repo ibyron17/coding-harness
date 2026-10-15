@@ -84,7 +84,7 @@ def read_installed_harness() -> tuple[hub_release.InstalledHarness | None, tuple
     return installed, ()
 
 
-# ---- 릴리스 확인 기록 (서버 스레드만 쓴다) ----
+# ---- 릴리스 확인 기록 (서버의 판정기 `_ReleaseChecker` 락 안에서만 쓴다) ----
 def _is_int(value: object) -> bool:
     return isinstance(value, int) and not isinstance(value, bool)
 

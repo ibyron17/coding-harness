@@ -601,7 +601,13 @@ readonly MUTATION_HARNESS_GROUP="T37"
 # T25-286(활동 감시 대상 — 자기 유발 루프 방지)·T25-287(알림 문서·어휘)의 변조행 3건을 붙였다. 개정한 T25-104·T25-149 는 원래 변조행이라 같은 ID 로
 # 변조 sed 만 바꿨고(35→37), T99-6 은 이 상수 인용을 바꾼 수정에 맞춰 sed 리터럴을 옮겼다. 순증가 3. 라이트 테마 PR(#6)이 먼저 T25-282~284 를 써서 이 기능의
 # 가드는 develop 병합 뒤 T25-285~287 로 확정했다.
-readonly LEDGER_MUTATION_ROW_FLOOR=139
+#
+# 139 → 143(hub-release-check-on-refresh.md, 결정 RR1~RR3·RR9): 신규 가드 T25-288(경로·헤더 이름 서버↔화면 일치)·T25-289(확인 요청이 나가는 두 곳뿐 — 포커스·탭
+# 복귀·인터벌 제외)·T25-290(GET 외 요청 처리기·CORS 허용 헤더 부재)·T25-291(허용 경로 목록·고지 문서)의 변조행 4건을 붙였다. 순증가 4.
+#
+# 143 → 145(hub-release-check-on-refresh.md 2회차 검수 반영, 결정 RR4·RR7·RR11): 신규 가드 T25-292(run_server 의 판정기 배선)·T25-293(허브 페이지 틀 삽입 차단 정책)의 변조행 2건을
+# 붙였다. T99-6 은 이 상수 인용을 바꾼 수정에 맞춰 sed 리터럴을 옮겼다. 순증가 2.
+readonly LEDGER_MUTATION_ROW_FLOOR=145
 
 # 원장 면제행 수의 상한 래칫(T37-14 가 실행마다 검사, PRP §12 「면제행이 영구 도피처가
 # 된다」의 두 번째 완화). 착지 시점 실측 390. 신규 가드를 기존 공통 사유로 면제 등록하면
@@ -951,7 +957,13 @@ readonly LEDGER_EXEMPT_ROW_RATCHET=372
 # 562 → 565(hub-macos-notification.md, 결정 MN6~MN9·MN11): 신설 3건 T25-285(osascript 인자 전달)·T25-286(활동 감시 대상)·T25-287(알림 문서·어휘).
 # 순증가 3. 개정한 T25-10·T25-104·T25-149·T25-280 은 같은 ID 라 개수에 닿지 않는다. collect_guard_ids 를 그대로 재현해 편집 전(562)·후(565)
 # 재측정했다. develop(라이트 테마 PR #6)이 T25-282~284 를 먼저 써서 번호를 285~287 로 확정했다.
-readonly SOURCE_GUARD_ID_FLOOR=565
+#
+# 565 → 569(hub-release-check-on-refresh.md, 결정 RR1~RR3·RR9): 신설 4건 T25-288(경로·헤더 이름 서버↔화면 일치)·T25-289(확인 요청 호출 지점)·T25-290(GET 외 요청
+# 처리기·CORS 허용 헤더 부재)·T25-291(허용 경로 목록·고지 문서). 순증가 4. collect_guard_ids 를 그대로 재현해 편집 전(565)·후(569) 재측정한다.
+#
+# 569 → 571(hub-release-check-on-refresh.md 2회차 검수 반영, 결정 RR4·RR7·RR11): 신설 2건 T25-292(run_server 의 판정기 배선)·T25-293(허브 페이지 틀 삽입 차단 정책). 순증가 2.
+# collect_guard_ids 를 그대로 재현해 편집 전(569)·후(571) 재측정한다.
+readonly SOURCE_GUARD_ID_FLOOR=571
 
 # 배포 트리(rules/·agents/·commands/)에 남는 "파일명:줄번호" 형태 인용 수의 상한
 # 래칫(T39-4). 배포되는 문서가 다른 파일의 줄 번호를 인용하면, 그 파일을 고치는 수정이
@@ -4180,7 +4192,7 @@ read_python_product_constant() {
 test_hub_docs_and_constants() {
   group_failures=()   # 앞 그룹이 조기 return 했을 때의 잔여물 제거
   local test_name="T25"
-  local test_desc="허브 문서·상수 정합성 (T25-1~T25-287)"
+  local test_desc="허브 문서·상수 정합성 (T25-1~T25-293)"
   log_test_name "$test_name" "$test_desc"
 
   local hub_settings_file="$REPO_ROOT/hub/bin/hub_settings.py"
@@ -10690,8 +10702,8 @@ PYEOF
     note_failure "T25-275: hub_release_read.py 가 저장소를 바꾸는 git 하위 명령을 부름(결정 UN1 위반 — ls-remote 만 쓴다)"
   fi
 
-  # T25-276(신설, 결정 UN10): hub/README.md 가 원격 확인의 네트워크 호출을 고지하고 끄는 수단을 적는다 — 서버가 6시간마다
-  # git ls-remote --tags 를 실행한다는 사실·스위치 이름(update_check_enabled)·기록 파일(release_check.json)이 문서에 있다.
+  # T25-276(신설, 결정 UN10): hub/README.md 가 원격 확인의 네트워크 호출을 고지하고 끄는 수단을 적는다 — 서버가 6시간마다(그리고 페이지를
+  # 열거나 새로고침할 때 — 결정 RR1) git ls-remote --tags 를 실행한다는 사실·스위치 이름(update_check_enabled)·기록 파일(release_check.json)이 문서에 있다.
   # 코드는 네트워크 호출을 기본으로 켜 두는데(D5) 고지가 없으면 사용자에게 한 약속이 비는 것이다. commands/hub.md 도 /hub status
   # 필드를 적는다. 원장 행은 스위치 이름을 문다.
   local release_notice_token_276
@@ -10885,6 +10897,98 @@ PYEOF
   if ! grep -qF '"◐ 백그라운드 대기"' "$hub_notify_file_282" || ! grep -qF "BACKGROUND_SESSION_LABEL = '백그라운드 대기'" "$hub_template_file" \
       || ! grep -qF "background:'◐'" "$hub_template_file"; then
     note_failure "T25-287: 알림 제목 「◐ 백그라운드 대기」 가 화면 배지 어휘(BACKGROUND_SESSION_LABEL·STATE_GLYPH)와 어긋남(결정 MN9 위반)"
+  fi
+
+  # T25-288(신설, docs/prps/hub-release-check-on-refresh.md 결정 RR2·RR3): 새 릴리스 즉시 확인 신호의 경로·헤더 이름이 서버(hub_server.py 의
+  # RELEASE_CHECK_REQUEST_PATH·RELEASE_CHECK_REQUEST_HEADER_NAME)와 화면(hub_template.html 의 RELEASE_CHECK_PATH·RELEASE_CHECK_HEADER_NAME)에서
+  # 같은 글자다 — 두 언어라 공유 스코프가 없고, 어긋나면 모든 확인 요청이 404·403 으로 조용히 죽는다. 네 값 중 하나라도 추출이 비면 앵커 실패다.
+  # 원장 행은 화면 경로 상수를 문다.
+  local release_path_server_288 release_header_server_288 release_path_template_288 release_header_template_288
+  release_path_server_288=$(sed -n 's/^RELEASE_CHECK_REQUEST_PATH = "\(.*\)"$/\1/p' "$hub_server_file")
+  release_header_server_288=$(sed -n 's/^RELEASE_CHECK_REQUEST_HEADER_NAME = "\(.*\)"$/\1/p' "$hub_server_file")
+  release_path_template_288=$(sed -n "s/^ *var RELEASE_CHECK_PATH = '\(.*\)';\$/\1/p" "$hub_template_file")
+  release_header_template_288=$(sed -n "s/^ *var RELEASE_CHECK_HEADER_NAME = '\(.*\)';\$/\1/p" "$hub_template_file")
+  if [[ -z "$release_path_server_288" || -z "$release_header_server_288" || -z "$release_path_template_288" || -z "$release_header_template_288" ]]; then
+    record_failure "$test_name" "T25-288: 새 릴리스 확인 신호의 경로·헤더 이름 상수 추출 실패 — 앵커(hub_server.py·hub_template.html 의 상수 선언)가 깨졌다"
+    return 1
+  fi
+  if [[ "$release_path_server_288" != "$release_path_template_288" || "$release_header_server_288" != "$release_header_template_288" ]]; then
+    note_failure "T25-288: 경로·헤더 이름이 서버와 화면에서 다름(서버 ${release_path_server_288}·${release_header_server_288} / 화면 ${release_path_template_288}·${release_header_template_288} — 결정 RR2 위반, 확인 요청이 조용히 죽는다)"
+  fi
+
+  # T25-289(신설, 결정 RR1): 새 릴리스 즉시 확인 요청은 정확히 두 곳에서만 나간다 — 새로고침 버튼 클릭 리스너와 페이지 로드(렌더 IIFE 서버 모드 끝의 1회 호출).
+  # ① requestReleaseCheck( 호출이 정의 줄을 뺀 정확히 2건 ② 그중 하나는 버튼 리스너 줄 ③ 다른 하나는 들여쓰기 2칸의 단독 호출 줄 ④ pollNow() 범위에 없다
+  # (T25-132 와 같은 추출 — pollNow 는 폴링 + 패널 신호 래퍼라 확인이 섞이면 안 된다) ⑤ 포커스·탭 복귀 리스너 줄에 없다(포커스 복귀마다 원격에 묻는 U3 위반) ⑥ 인터벌에
+  # 걸리지 않는다. ⑤ 는 독립 note_failure 다 — 원장 행은 ⑤ 를 문다(그 변조는 ① 의 호출 수 검사도 함께 발화시킨다).
+  local release_check_call_count_289 release_check_standalone_call_count_289 release_check_interval_call_count_289
+  release_check_call_count_289=$(grep -v 'function requestReleaseCheck(' "$hub_template_file" | grep -oF 'requestReleaseCheck(' | wc -l | tr -d ' ')
+  release_check_standalone_call_count_289=$(grep -cE '^  requestReleaseCheck\(\);' "$hub_template_file" || true)
+  if [[ "$release_check_call_count_289" -ne 2 ]]; then
+    note_failure "T25-289: requestReleaseCheck 호출이 ${release_check_call_count_289}건(기대 2 — 새로고침 버튼 1·페이지 로드 1, 결정 RR1)"
+  fi
+  if ! grep -qF "refreshButton.addEventListener('click', function(){ pollNow(true); requestReleaseCheck(); });" "$hub_template_file" \
+      || [[ "$release_check_standalone_call_count_289" -ne 1 ]]; then
+    note_failure "T25-289: 새로고침 버튼 리스너 줄 또는 페이지 로드 단독 호출 줄(들여쓰기 2칸)의 형태가 어긋남(결정 RR1)"
+  fi
+  if grep -qF 'requestReleaseCheck' <<< "$poll_now_fn_body"; then
+    note_failure "T25-289: pollNow() 범위 안에 requestReleaseCheck 가 있음(결정 RR1 위반 — 포커스·탭 복귀까지 확인을 요청한다)"
+  fi
+  if grep -E "addEventListener\('(focus|visibilitychange)'" "$hub_template_file" | grep -qF 'requestReleaseCheck'; then
+    note_failure "T25-289: 포커스·탭 복귀 리스너가 새 릴리스 확인을 요청함(결정 RR1·U3 위반 — 창을 오갈 때마다 원격에 묻는다)"
+  fi
+  release_check_interval_call_count_289=$(grep -cF 'setInterval(requestReleaseCheck' "$hub_template_file" || true)
+  if [[ "$release_check_interval_call_count_289" -ne 0 ]]; then
+    note_failure "T25-289: 1분 인터벌이 requestReleaseCheck 를 부름(결정 RR1 위반 — 폴링마다 원격에 묻는다)"
+  fi
+
+  # T25-290(신설, 결정 RR3 — 역방향): hub_server.py 에 GET 외 메서드 처리기(do_OPTIONS·do_POST·do_PUT·do_PATCH·do_DELETE)와 CORS 허용 헤더(Access-Control-Allow)가 없다.
+  # 교차 출처 위조 방어는 「사용자 정의 헤더 → 사전 요청(OPTIONS) 필요 → 서버가 OPTIONS 를 받지 않아 501」 에 기댄다 — CORS 를 「고치려고」 do_OPTIONS 를 넣으면 그 방어가 무너진다.
+  # 두 단언은 독립 note_failure 다. 원장 행은 앞쪽을 문다.
+  if grep -qE '^    def do_(OPTIONS|POST|PUT|PATCH|DELETE)\(' "$hub_server_file"; then
+    note_failure "T25-290: hub_server.py 에 GET 외 요청 처리기(do_OPTIONS·do_POST 등)가 있음(결정 RR3 위반 — 교차 출처 사전 요청이 통과해 헤더 방어가 무너진다)"
+  fi
+  if grep -qF 'Access-Control-Allow' "$hub_server_file"; then
+    note_failure "T25-290: hub_server.py 가 CORS 허용 응답 헤더를 보냄(결정 RR3 위반 — 다른 웹사이트가 확인 신호를 보낼 수 있게 된다)"
+  fi
+
+  # T25-291(신설, 결정 RR9 — 문서): ① T25-288 이 뽑은 경로 값(/release-check)이 hub/README.md 에 있다 — 보안 절의 허용 경로 목록이 「뿐이다」 를 지킨다 ② hub/README.md 가 페이지
+  # 열기·새로고침 때의 확인을 고지한다(프라이버시 고지·「언제 확인하나」) ③ commands/hub.md 도 적는다. T25-276 의 기존 토큰은 그대로 통과해야 한다. 원장 행은 ① 을 문다.
+  if ! grep -qF -- "$release_path_server_288" "$hub_readme_file"; then
+    note_failure "T25-291: hub/README.md 의 허용 경로 목록에 새 릴리스 확인 경로가 없음(결정 RR9 위반 — 보안 절의 「뿐이다」 가 거짓이 된다)"
+  fi
+  if ! grep -qF '페이지를 열거나 새로고침할 때' "$hub_readme_file"; then
+    note_failure "T25-291: hub/README.md 에 페이지를 열거나 새로고침할 때 확인한다는 고지가 없음(결정 RR9 위반 — 프라이버시 고지가 실제 호출 시점보다 좁다)"
+  fi
+  if ! grep -qF '새로고침할 때' "$hub_command_file"; then
+    note_failure "T25-291: commands/hub.md 의 release_check 설명에 새로고침할 때 확인한다는 문구가 없음(결정 RR9)"
+  fi
+
+  # T25-292(신설, 배선 — 결정 RR4·RR7): run_server() 가 판정기를 서버에 싣고(`httpd.release_checker = _build_release_checker(…)`) 그 판정기를 백그라운드 기동 함수에 넘긴다.
+  # 둘 중 하나가 사라지면 자동 확인(스레드)과 수동 확인(요청 핸들러의 getattr)이 함께 죽는데, 핸들러가 속성 부재를 204 무동작으로 받아들이므로(RS3) 어떤 단위 테스트도 알리지 않는다.
+  # 메시지는 반복문 밖의 고정 문구다. 두 단언은 독립 note_failure 다. 원장 행은 앞쪽(서버에 싣는 줄)을 문다.
+  local run_server_release_wiring_292
+  run_server_release_wiring_292=$(sed -n '/^def run_server(/,$p' "$hub_server_file")
+  if ! grep -qF 'httpd.release_checker = _build_release_checker(config, httpd.snapshot_refresher)' <<< "$run_server_release_wiring_292"; then
+    note_failure "T25-292: run_server() 가 새 릴리스 판정기를 서버에 싣지 않음(결정 RR4 위반 — 수동 확인 요청이 판정기를 못 찾아 204 무동작이 되고 자동 확인도 판정기를 받지 못한다)"
+  fi
+  if ! grep -qF '_start_background_threads(config, stop_event, httpd.snapshot_refresher, notifier, httpd.release_checker)' <<< "$run_server_release_wiring_292"; then
+    note_failure "T25-292: run_server() 가 새 릴리스 판정기를 백그라운드 기동 함수에 넘기지 않음(결정 RR4 위반 — 자동 확인 스레드가 뜨지 않는다)"
+  fi
+
+  # T25-293(신설, 보안 — 결정 RR11): ① 허브 페이지 응답의 정책 상수가 정확히 `frame-ancestors 'self'` 다 — 다른 출처의 iframe 에 허브 페이지가 실리면 그 페이지의 진짜 스크립트가
+  # /release-check 에 헤더를 붙여 보내 위조 방어가 뚫린다 ② `_serve_hub_html()` 이 그 상수를 응답에 단다 ③ 프로젝트 대시보드 응답(`_serve_project_dashboard`)에는 달지 않는다 — 허브 상세 패널이
+  # 같은 출처 iframe 으로 싣는 문서라 이 정책을 걸면 패널이 깨진다. 세 단언은 독립 note_failure 다(본문 범위는 다음 메서드 정의 줄까지). 원장 행은 ① 을 문다.
+  local hub_html_serving_body_293 dashboard_serving_body_293
+  hub_html_serving_body_293=$(sed -n '/^    def _serve_hub_html(/,/^    def _serve_project_dashboard(/p' "$hub_server_file")
+  dashboard_serving_body_293=$(sed -n '/^    def _serve_project_dashboard(/,/^    def _respond_with_html(/p' "$hub_server_file")
+  if ! grep -qxF "HUB_PAGE_CONTENT_SECURITY_POLICY = \"frame-ancestors 'self'\"" "$hub_server_file"; then
+    note_failure "T25-293: 허브 페이지 응답 정책 상수가 frame-ancestors 'self' 가 아님(결정 RR11 위반 — 다른 사이트의 틀에 허브 페이지가 실려 확인 신호 위조 방어가 뚫린다)"
+  fi
+  if ! grep -qF 'HUB_PAGE_CONTENT_SECURITY_POLICY' <<< "$hub_html_serving_body_293"; then
+    note_failure "T25-293: _serve_hub_html() 이 허브 페이지 응답에 틀 삽입 차단 정책을 달지 않음(결정 RR11 위반)"
+  fi
+  if grep -qE 'Content-Security-Policy|HUB_PAGE_CONTENT_SECURITY_POLICY' <<< "$dashboard_serving_body_293"; then
+    note_failure "T25-293: _serve_project_dashboard() 가 틀 삽입 차단 정책을 담음(결정 RR11 위반 — 허브 상세 패널이 같은 출처 iframe 으로 싣는 문서가 깨진다)"
   fi
 
   finish_group "$test_name"
