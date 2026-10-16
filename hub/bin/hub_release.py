@@ -18,6 +18,10 @@ SemVer = tuple[int, int, int]
 
 # 원격 확인 주기 — 상수다(설정 키로 만들지 않는다, 결정 UN4).
 RELEASE_CHECK_INTERVAL_MS = 6 * 60 * 60 * 1000
+# 사용자가 직접 요청한 확인(새로고침 버튼·페이지 열기) 사이의 최소 간격 — 상수다(설정 키 없음, UN4 와 같은 판단).
+# 1분인 이유: 연타·여러 탭 동시 로드를 1회로 합치고, 다른 웹사이트가 이 주소로 요청을 흘려도 git 호출이 시간당 60회를
+# 넘지 않는 상한이다(docs/prps/hub-release-check-on-refresh.md RR8). 자동 확인과 같은 시도 시각을 공유한다(RR4).
+MANUAL_RELEASE_CHECK_MIN_INTERVAL_MS = 60 * 1000
 
 ReleaseCheckFailure = Literal[
     "no_install_record",   # 설치 기록이 없거나 repo_path 를 쓸 수 없다
@@ -54,7 +58,7 @@ class InstalledHarness:
 
 @dataclass(frozen=True)
 class ReleaseCheckRecord:
-    """~/.claude/hub/release_check.json 과 맺은 계약. 서버 스레드만 쓴다."""
+    """~/.claude/hub/release_check.json 과 맺은 계약. 서버의 판정기(`_ReleaseChecker`) 락 안에서만 쓴다."""
 
     last_attempt_at_ms: int
     last_success_at_ms: int | None

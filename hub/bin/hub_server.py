@@ -8,7 +8,9 @@
 (최악 15초 블로킹, hub_usage_fetch.py)이 하트비트와 같은 스레드에 있으면 하트비트 TTL(15초)
 산술이 성립하지 않아(감사 B-2) 전용 스레드로 분리했다. 설치된 하네스의 새 릴리스 태그를 확인하는
 전용 스레드(`_release_check_loop`, docs/prps/harness-versioning.md 결정 UN2)가 하나 더 있고,
-`update_check_enabled` 가 꺼지면 뜨지 않는다.
+`update_check_enabled` 가 꺼지면 뜨지 않는다. 그 스레드와 `/release-check` 요청(새로고침 버튼·페이지
+열기의 즉시 확인 신호)은 같은 판정기(`_ReleaseChecker`)를 쓴다 — 시도 시각 하나를 공유하므로 자동은
+6시간, 수동은 최소 1분 간격이 한 곳에서 지켜진다(docs/prps/hub-release-check-on-refresh.md RR4).
 이 모듈은 I/O 다(HTTP 소켓·파일·시그널) — 순수 로직은 hub_model.py·hub_server_state.py·
 hub_usage.py 의 관련 함수들에 있다. 프로젝트 대시보드 경로(`_serve_project_dashboard`)는
 docs/prps/dashboard-into-hub.md M2(HD5)부터 레지스트리 값(.jsonl)을 읽어 hub_parse·
@@ -44,9 +46,15 @@ import hub_usage
 import hub_usage_fetch
 
 BIND_ADDRESS = "127.0.0.1"
-# 이 둘만 200 이다. 나머지는 전부 404 — 디렉토리를 통째로 서빙하지 않으므로 노출 표면이
-# "이 화이트리스트에 없으면 절대 나가지 않는다"로 고정된다(경로 traversal 여지가 없다).
+# 이 둘만 hub.html 을 서빙한다 — 그 밖의 인식 경로는 프로젝트 대시보드(200)와 새 릴리스 확인 신호(204/403)뿐이고
+# 나머지는 전부 404. 디렉토리를 통째로 서빙하지 않으므로 노출 표면이 "이 목록에 없으면 절대 나가지 않는다"로
+# 고정된다(경로 traversal 여지가 없다).
 ALLOWED_REQUEST_PATHS = ("/", "/hub.html")
+# 새 릴리스 즉시 확인 신호(docs/prps/hub-release-check-on-refresh.md RR2·RR3). 헤더 이름은 안전 목록 밖 헤더라 교차 출처
+# fetch 는 사전 요청(OPTIONS)을 피할 수 없고 이 서버는 OPTIONS 를 받지 않는다(do_OPTIONS 없음 → 501). 화면(hub_template.html)의
+# 같은 글자 상수와 tests/run.sh T25-288 이 대조한다. 접두 `X-Dzh-` 는 템플릿의 `dzh-` 네임스페이스와 같은 계열이다.
+RELEASE_CHECK_REQUEST_PATH = "/release-check"
+RELEASE_CHECK_REQUEST_HEADER_NAME = "X-Dzh-Release-Check"
 # 요청 문자열에서 뽑는 것은 정규식이 확정한 16자리 hex 뿐이다 — 이 문자열은 절대 경로 조립에
 # 쓰이지 않고 오직 dashboard_paths_by_key 딕셔너리의 조회 키로만 쓰인다(결정 N3).
 PROJECT_DASHBOARD_PATH_PATTERN = re.compile(r"^/project/([0-9a-f]{16})/dashboard\.html\Z")
@@ -62,6 +70,10 @@ HTTP_DEFAULT_PORT = 80
 HTTP_OPTIONAL_WHITESPACE = " \t"
 SERVER_LOG_MAX_BYTES = 256 * 1024
 CACHE_CONTROL_NO_STORE = "no-store"
+# 허브 페이지(hub.html)를 다른 출처의 iframe 에 싣지 못하게 한다(결정 RR11, docs/prps/hub-release-check-on-refresh.md). 실린 페이지의
+# 진짜 스크립트가 `/release-check` 에 헤더를 붙여 보내면 서버는 위조와 구별하지 못한다. X-Frame-Options 는 이 지시어로 대체됐다.
+# 프로젝트 대시보드 응답에는 달지 않는다 — 허브 상세 패널이 같은 출처 iframe 으로 싣는다. 최상위 이동·새 창 열기는 막지 않는다(사용자 눈에 보이고 확인은 1분 상한).
+HUB_PAGE_CONTENT_SECURITY_POLICY = "frame-ancestors 'self'"
 
 # ---- 요청 구동 수집 (개정 2) ----
 # 창 안이면 캐시된 결과를 그대로 서빙하고, 넘으면 락을 잡고 1회만 수집한다.
@@ -98,6 +110,14 @@ def _monotonic_ms() -> int:
     return int(time.monotonic() * 1000)
 
 
+def _wall_clock_ms() -> int:
+    """벽시계를 밀리초 정수로 반환한다 — `_ReleaseChecker` 가 락 안에서 읽는다(RR4).
+
+    `_monotonic_ms` 와 같은 이유로 테스트가 이 모듈에 한정해 패치할 수 있게 한 곳으로 모은다. 확인 시도 시각은
+    `release_check.json` 에 저장되므로 단조 시계가 아니라 벽시계다."""
+    return int(time.time() * 1000)
+
+
 def _truncate_log_if_oversized(log_path, max_bytes: int) -> None:
     """server.log 가 max_bytes 를 넘으면 시작 시 잘라낸다(사후 원인 규명 창구가 무한히 크지 않게)."""
     try:
@@ -125,6 +145,7 @@ def is_allowed_host_header(host_header_values: list[str], server_port: int) -> b
 
 class _HubRequestHandler(http.server.BaseHTTPRequestHandler):
     """허용 경로 2개는 hub.html 을, 프로젝트 대시보드 경로는 레지스트리 조회로 서빙한다.
+    `/release-check` 는 전용 헤더가 있을 때만 새 릴리스 확인 신호로 받아 204 로 답하고 헤더가 없으면 403 이다(결정 RR2·RR3).
     그 외는 전부 404(결정 N3 — 요청 문자열로 경로를 조립하지 않는다). Host 가 루프백
     이름:실제 포트가 아니면 경로와 무관하게 403(docs/prps/hub-host-header-guard.md HG1)."""
 
@@ -139,6 +160,9 @@ class _HubRequestHandler(http.server.BaseHTTPRequestHandler):
         못했다."""
         if not is_allowed_host_header(self.headers.get_all("Host", []), self.server.server_address[1]):
             self.send_error(403)
+            return
+        if self.path == RELEASE_CHECK_REQUEST_PATH:    # 정확 일치. 수집 게이트를 걸지 않는다 — 강제 수집은 판정기 몫(RR2·RR5)
+            self._serve_release_check_request()
             return
         if self.path in ALLOWED_REQUEST_PATHS:
             self._refresh_if_stale()
@@ -162,13 +186,29 @@ class _HubRequestHandler(http.server.BaseHTTPRequestHandler):
         if refresher is not None:
             refresher.collect_if_older_than(_monotonic_ms(), SNAPSHOT_FRESHNESS_WINDOW_MS)
 
+    def _serve_release_check_request(self) -> None:
+        """새로고침 버튼·페이지 열기의 즉시 확인 신호(RR2·RR3). 헤더가 없으면 403. 판정기가 있으면 확인(또는 건너뛰기)이 끝난
+        뒤, 없으면(update_check_enabled:false, RR7) 바로 204 — 본문 없음·no-store. 204 에는 Content-Length 를 보내지 않는다(RFC 9110).
+
+        getattr 로 받는다 — `_refresh_if_stale` 과 같은 관례(판정기가 실리지 않은 서버를 단독 구성하는 테스트에서 500 방지)."""
+        if not self.headers.get_all(RELEASE_CHECK_REQUEST_HEADER_NAME):
+            self.send_error(403)
+            return
+        release_checker = getattr(self.server, "release_checker", None)
+        if release_checker is not None:
+            release_checker.check_if_due(hub_release.MANUAL_RELEASE_CHECK_MIN_INTERVAL_MS)
+        self.send_response(204)
+        self.send_header("Cache-Control", CACHE_CONTROL_NO_STORE)
+        self.end_headers()
+
     def _serve_hub_html(self) -> None:
+        """hub.html 을 서빙한다 — 다른 출처가 iframe 으로 싣지 못하게 `frame-ancestors 'self'` 를 단다(결정 RR11)."""
         try:
             body = hub_collect.HUB_HTML_PATH.read_bytes()
         except OSError:
             self.send_error(404)
             return
-        self._respond_with_html(body)
+        self._respond_with_html(body, extra_headers={"Content-Security-Policy": HUB_PAGE_CONTENT_SECURITY_POLICY})
 
     def _serve_project_dashboard(self, dashboard_key: str) -> None:
         """`dashboard_key` 는 정규식이 이미 `[0-9a-f]{16}` 로 검증했다 — 딕셔너리 조회 결과만
@@ -547,46 +587,72 @@ def _usage_api_poll_loop(config: hub_model.HubConfig, stop_event: threading.Even
         stop_event.wait(config.server_heartbeat_interval_seconds)
 
 
-def _run_release_check_gate(now_ms: int, last_attempt_at_ms: int | None) -> int | None:
-    """새 릴리스 태그 확인 게이트 1사이클(docs/prps/harness-versioning.md 결정 UN2).
+class _ReleaseChecker:
+    """새 릴리스 확인의 임계 구역 — 자동(6시간, 전용 스레드)·수동(최소 1분, 요청 스레드) 두 경로가 공유한다(RR4).
 
-    주기(6시간)가 안 지났으면 아무것도 하지 않고 이전 시도 시각을 그대로 돌려준다. 시도했으면 — 사이클이
-    예외로 끝났더라도 — 그 시각을 돌려준다: 시도 시각 갱신이 예외로 무산되면 다음 깨우기가 같은 예외를
-    하트비트 주기마다 반복한다(AR4·감사 B-1 이 사용량 폴링에서 실측한 결함). run_release_check_cycle 은
-    예외를 올리지 않는 계약이지만 그 계약 밖에서 새는 예외까지 여기서 잡아 stderr 에 남긴다.
+    왜 클래스인가: `_SnapshotRefresher` 와 같다 — 여러 스레드가 공유하는 가변 상태(마지막 시도 시각)와 그것을 지키는 락이 한
+    덩어리다. 서버 인스턴스에 싣는다(결정 N3 관례, 전역 가변 상태 금지). 시도 시각이 하나라서 수동 확인도 시도로 기록되고
+    다음 자동 확인은 그때부터 6시간 뒤다(U5). 판정·확인·강제 수집이 전부 락 안이라 git 은 언제나 한 번에 하나만 돈다.
     """
-    if not hub_release.should_attempt_release_check(now_ms, last_attempt_at_ms, hub_release.RELEASE_CHECK_INTERVAL_MS):
-        return last_attempt_at_ms
-    try:
-        hub_release_read.run_release_check_cycle(now_ms)
-    except Exception as error:
-        print(f"릴리스 확인 사이클에서 분류되지 않은 예외: {error}", file=sys.stderr)
-    return now_ms
+
+    def __init__(self, refresher: _SnapshotRefresher, last_attempt_at_ms: int | None) -> None:
+        self._refresher = refresher
+        self._lock = threading.Lock()
+        self._last_attempt_at_ms = last_attempt_at_ms
+
+    def check_if_due(self, min_interval_ms: int) -> bool:
+        """마지막 시도가 min_interval_ms 이상 지났으면 1회 확인하고 스냅샷을 강제 수집한다. 돌았으면 True. 예외를 올리지 않는다.
+
+        시계는 **락 안에서** 읽는다 — 진입 시각을 넘기면 밀린 호출이 더 늦은 시도 시각보다 이른 now 로 판정해 「벽시계 역행」
+        분기(참)를 타고 1분 안에 두 번 묻는다(RR4). 시도 시각은 사이클 **전에** 갱신한다 — 사이클 계약 밖 예외가 갱신을
+        무산시키면 같은 예외가 깨어날 때마다 반복된다(AR4·감사 B-1). 확인이 돌았으면 락 안에서 스냅샷을 강제 수집해, 락을
+        기다리던 호출이 건너뛰고 반환할 때 새 확인 결과가 이미 캐시에 담겨 있게 한다(RR5).
+        """
+        with self._lock:
+            now_ms = _wall_clock_ms()
+            if not hub_release.should_attempt_release_check(now_ms, self._last_attempt_at_ms, min_interval_ms):
+                return False
+            self._last_attempt_at_ms = now_ms
+            try:
+                hub_release_read.run_release_check_cycle(now_ms)
+            except Exception as error:
+                print(f"릴리스 확인 사이클에서 분류되지 않은 예외: {error}", file=sys.stderr)
+            self._refresher.collect_if_older_than(_monotonic_ms(), ACTIVITY_COLLECT_MAX_AGE_MS)
+            return True
 
 
-def _release_check_loop(config: hub_model.HubConfig, stop_event: threading.Event) -> None:
+def _build_release_checker(config: hub_model.HubConfig, refresher: _SnapshotRefresher) -> _ReleaseChecker | None:
+    """update_check_enabled 가 참일 때만 판정기를 만든다(UN4·RR7 — 꺼지면 기록도 읽지 않는다). 기록의 마지막 시도 시각을
+    이어받아, 서버를 자주 재시작해도 6시간·1분 간격이 지켜진다."""
+    if not config.update_check_enabled:
+        return None
+    previous_record = hub_release_read.read_release_check_record()
+    return _ReleaseChecker(refresher, previous_record.last_attempt_at_ms if previous_record else None)
+
+
+def _release_check_loop(config: hub_model.HubConfig, stop_event: threading.Event, checker: _ReleaseChecker) -> None:
     """새 릴리스 태그 확인 전용 데몬 스레드(결정 UN2). 원격 호출(최악 15초 블로킹)을 하트비트 티커에 태우지
     않으려고 사용량 API 폴링(`_usage_api_poll_loop`)처럼 스레드를 따로 둔다(결정 AR5 선례).
 
-    하트비트 주기로 깨어 게이트(`_run_release_check_gate`)만 본다 — 실제 확인 간격은 게이트가 정하므로
-    새 설정 키를 만들지 않는다(YAGNI). 시작할 때 기록의 마지막 시도 시각을 이어받아, 서버를 자주 재시작해도
-    6시간에 한 번을 넘지 않는다. 스레드 사망 = 확인 영구 정지라 최후선은 stderr 만 남긴다(AR4·AR5 선례).
+    하트비트 주기로 깨어 판정기(`_ReleaseChecker`)만 부른다 — 실제 확인 간격은 판정기가 정하므로 새 설정 키를 만들지
+    않는다(YAGNI). 기록의 마지막 시도 시각은 `_build_release_checker` 가 이어받는다. 스레드 사망 = 자동 확인 영구 정지라
+    최후선은 stderr 만 남긴다(AR4·AR5 선례).
     """
-    previous_record = hub_release_read.read_release_check_record()
-    last_attempt_at_ms = previous_record.last_attempt_at_ms if previous_record else None
     while not stop_event.is_set():
         try:
-            last_attempt_at_ms = _run_release_check_gate(int(time.time() * 1000), last_attempt_at_ms)
+            checker.check_if_due(hub_release.RELEASE_CHECK_INTERVAL_MS)
         except Exception as error:
             print(f"릴리스 확인 루프에서 처리되지 않은 예외: {error}", file=sys.stderr)
         stop_event.wait(config.server_heartbeat_interval_seconds)
 
 
-def _start_release_check_thread(config: hub_model.HubConfig, stop_event: threading.Event) -> threading.Thread | None:
-    """`update_check_enabled` 가 참일 때만 확인 스레드를 띄운다(결정 UN4 — 꺼지면 스레드 자체가 없다)."""
-    if not config.update_check_enabled:
+def _start_release_check_thread(
+    config: hub_model.HubConfig, stop_event: threading.Event, checker: _ReleaseChecker | None
+) -> threading.Thread | None:
+    """판정기가 있을 때만(= update_check_enabled) 확인 스레드를 띄운다(결정 UN4 — 꺼지면 스레드 자체가 없다)."""
+    if checker is None:
         return None
-    release_check_thread = threading.Thread(target=_release_check_loop, args=(config, stop_event), daemon=True)
+    release_check_thread = threading.Thread(target=_release_check_loop, args=(config, stop_event, checker), daemon=True)
     release_check_thread.start()
     return release_check_thread
 
@@ -619,6 +685,7 @@ def _start_background_threads(
     stop_event: threading.Event,
     refresher: _SnapshotRefresher,
     notifier: hub_notify_send.SessionNotifier | None,
+    release_checker: _ReleaseChecker | None,
 ) -> None:
     """데몬 스레드를 띄운다 — 유지보수 티커 · 사용량 API 폴링 · (켜져 있으면) 새 릴리스 확인.
 
@@ -636,7 +703,7 @@ def _start_background_threads(
     )
     usage_api_poll_thread.start()
 
-    _start_release_check_thread(config, stop_event)
+    _start_release_check_thread(config, stop_event, release_checker)
 
 
 def run_server(config: hub_model.HubConfig) -> int:
@@ -658,6 +725,7 @@ def run_server(config: hub_model.HubConfig) -> int:
     # 요청 핸들러와 유지보수 티커가 같은 refresher 를 공유한다 —
     # dashboard_paths_by_key 와 같은 관례로 서버 인스턴스에 싣는다(결정 N3).
     httpd.snapshot_refresher = _SnapshotRefresher(httpd, notifier)
+    httpd.release_checker = _build_release_checker(config, httpd.snapshot_refresher)    # 요청 핸들러·확인 스레드가 공유(RR4)
 
     try:
         hub_server_state_read.write_server_record(
@@ -684,7 +752,7 @@ def run_server(config: hub_model.HubConfig) -> int:
 
     signal.signal(signal.SIGTERM, _handle_sigterm)
 
-    _start_background_threads(config, stop_event, httpd.snapshot_refresher, notifier)
+    _start_background_threads(config, stop_event, httpd.snapshot_refresher, notifier, httpd.release_checker)
 
     httpd.serve_forever()
     return 0
