@@ -5,8 +5,9 @@
 주입한다. 알림을 실제로 보내고 상태를 파일에 남기는 일은 I/O 위성 모듈 hub_notify_send.py 가 한다(hub_release.py ↔
 hub_release_read.py, hub_usage.py ↔ hub_usage_fetch.py 와 같은 배치).
 
-근거: docs/prps/hub-macos-notification.md — 알림 규칙(결정 MN1)·소음 기준(MN2)·확인 지연(MN3)·백그라운드 대기(MN4)·
-첫 관측 기준선(MN7)·전달 인자(MN8)·문구와 프라이버시(MN9)·상태 기록(MN11).
+근거: docs/prps/hub-macos-notification.md — 알림 규칙(결정 MN1)·소음 기준(MN2)·확인 지연(MN3)·
+첫 관측 기준선(MN7)·전달 인자(MN8)·문구와 프라이버시(MN9)·상태 기록(MN11). 알림 종류를 승인 대기·한도 초과 둘로 줄인
+개정(AN1·AN2)은 docs/prps/hub-notify-answer-wait.md — 질문·허락 요청·작업 완료는 데스크톱 앱 알림이 맡는다.
 """
 
 import re
@@ -20,7 +21,7 @@ from hub_redact import redact_secret_tokens
 from hub_session import SessionView
 
 NotifyPhase = Literal["working", "background", "waiting", "awaiting_approval", "interrupted", "done"]
-NotifyKind = Literal["turn_ended", "background_wait", "awaiting_approval", "interrupted"]
+NotifyKind = Literal["awaiting_approval", "interrupted"]
 NotifyFailureReason = Literal["osascript_missing", "timeout", "exit_nonzero", "invalid_text"]
 
 # MN2 — 질의응답 한 번(대개 1분 안쪽)은 거르고, 사용자가 다른 창으로 갔을 법한 길이부터 울린다. 측정한 값이 아니라 판단의
@@ -32,22 +33,18 @@ NOTIFY_SETTLE_MS = 3_000
 MS_PER_MINUTE = 60 * 1000
 MINUTES_PER_HOUR = 60
 
-# MN1 표 — 지금 국면이 이 넷 중 하나이고 직전 국면이 working 일 때만 알림 후보가 된다.
+# MN1 표(AN1 개정) — 확정 때의 국면이 이 둘 중 하나일 때만 알림이 나간다. 대기·백그라운드 대기·완료는 알리지 않는다.
 NOTIFY_KIND_BY_PHASE: Mapping[NotifyPhase, NotifyKind] = MappingProxyType({
     "interrupted": "interrupted",
     "awaiting_approval": "awaiting_approval",
-    "waiting": "turn_ended",
-    "background": "background_wait",
 })
 # 한 수집에서 나가는 알림의 순서(MN8).
-NOTIFY_KIND_ORDER: tuple[NotifyKind, ...] = ("interrupted", "awaiting_approval", "turn_ended", "background_wait")
-# 화면 배지 어휘(STATE_GLYPH·STATE_LABEL·BACKGROUND_SESSION_LABEL·APPROVAL_WAIT_*)와 같은 글자 — 규칙이 아니라 어휘라
+NOTIFY_KIND_ORDER: tuple[NotifyKind, ...] = ("interrupted", "awaiting_approval")
+# 화면 배지 어휘(STATE_GLYPH·STATE_LABEL·APPROVAL_WAIT_*)와 같은 글자 — 규칙이 아니라 어휘라
 # 두 벌이 허용되고, tests/run.sh T25-287 가 템플릿에 같은 글자가 있는지 교차 확인한다.
 NOTIFY_TITLE_LABEL_BY_KIND: Mapping[NotifyKind, str] = MappingProxyType({
     "interrupted": "■ 한도 초과",
     "awaiting_approval": "◆ 승인 대기",
-    "turn_ended": "○ 대기",
-    "background_wait": "◐ 백그라운드 대기",
 })
 
 NOTIFY_TITLE_MAX_CHARS = 60
@@ -91,14 +88,12 @@ class SessionObservation:
     project_name: str               # ProjectView.display_name
     task_title: str | None          # session.tier1.title 원문 — 마스킹·자르기는 문구를 조립할 때 한다
     resets_at_ms: int | None        # phase == "interrupted" 일 때만 값이 있다
-    background_task_count: int      # phase == "background" 일 때만 task_count + wakeup_count, 아니면 0
 
 
 @dataclass(frozen=True)
 class PendingNotice:
-    """확인 대기 중인 후보(MN3)."""
+    """확인 대기 중인 후보(MN3) — 종류는 담지 않는다. 확정 시점의 국면이 정한다(AN2)."""
 
-    kind: NotifyKind
     observed_at_ms: int             # 전이를 처음 본 수집 시각
     busy_duration_ms: int           # 그 시각까지의 바쁜 구간 길이
 
@@ -121,7 +116,6 @@ class NotifyEvent:
     task_title: str | None
     busy_duration_ms: int
     resets_at_ms: int | None
-    background_task_count: int
 
 
 @dataclass(frozen=True)
@@ -164,16 +158,12 @@ def _observe_session(session: SessionView, project_name: str) -> SessionObservat
     """세션 1개를 관측값으로 접는다."""
     phase = notify_phase(session)
     resets_at_ms = session.interruption.resets_at_ms if phase == "interrupted" and session.interruption else None
-    background_task_count = 0
-    if phase == "background" and session.background_wait is not None:
-        background_task_count = session.background_wait.task_count + session.background_wait.wakeup_count
     return SessionObservation(
         session_id=session.session_id,
         phase=phase,
         project_name=project_name,
         task_title=session.tier1.title if session.tier1 is not None else None,
         resets_at_ms=resets_at_ms,
-        background_task_count=background_task_count,
     )
 
 
@@ -200,31 +190,31 @@ def _next_busy_since(previous: SessionTrack, phase: NotifyPhase, now_ms: int) ->
 
 
 def _start_pending(previous: SessionTrack, phase: NotifyPhase, now_ms: int) -> SessionTrack:
-    """작업중에서 알림 국면으로 처음 넘어온 수집 — 후보로만 둔다(MN3)."""
+    """작업중에서 벗어난 수집 — 종류 없이 후보로만 둔다(MN3·AN2). 바쁜 구간 시작은 보존한다."""
     busy_since_ms = _busy_since_or_now(previous, now_ms)
-    pending = PendingNotice(
-        kind=NOTIFY_KIND_BY_PHASE[phase], observed_at_ms=now_ms, busy_duration_ms=now_ms - busy_since_ms,
-    )
+    pending = PendingNotice(observed_at_ms=now_ms, busy_duration_ms=now_ms - busy_since_ms)
     return SessionTrack(phase=phase, busy_since_ms=busy_since_ms, pending=pending)
 
 
 def _confirm_pending(
     previous: SessionTrack, observation: SessionObservation, pending: PendingNotice, now_ms: int,
 ) -> tuple[SessionTrack, NotifyEvent | None]:
-    """확인 지연이 지난 후보를 확정한다. 소음 기준(MN2)을 못 넘으면 알림 없이 후보만 거둔다."""
+    """확인 지연이 지난 후보를 확정한다. 종류는 확정 국면이 정하고(AN2), 알림 국면이 아니거나 소음 기준(MN2)을 못 넘으면 후보만 거둔다."""
     settled_track = SessionTrack(
         phase=observation.phase, busy_since_ms=_next_busy_since(previous, observation.phase, now_ms), pending=None,
     )
-    is_loud_enough = pending.kind == "interrupted" or pending.busy_duration_ms >= NOTIFY_MIN_BUSY_EPISODE_MS
+    kind = NOTIFY_KIND_BY_PHASE.get(observation.phase)
+    if kind is None:
+        return settled_track, None
+    is_loud_enough = kind == "interrupted" or pending.busy_duration_ms >= NOTIFY_MIN_BUSY_EPISODE_MS
     if not is_loud_enough:
         return settled_track, None
     event = NotifyEvent(
-        kind=pending.kind,
+        kind=kind,
         project_name=observation.project_name,
         task_title=observation.task_title,
         busy_duration_ms=pending.busy_duration_ms,
         resets_at_ms=observation.resets_at_ms,
-        background_task_count=observation.background_task_count,
     )
     return settled_track, event
 
@@ -241,11 +231,12 @@ def advance_session_track(
         if now_ms - pending.observed_at_ms < NOTIFY_SETTLE_MS:
             return previous, None
         return _confirm_pending(previous, observation, pending, now_ms)
-    # 후보가 있었는데 국면이 바뀌었다 — 새 국면이 알림 국면이면 보존한 바쁜 구간 시작으로 그 국면의 후보를 다시 시작한다(앞 후보는
+    # 후보가 있었는데 국면이 바뀌었다 — 새 국면이 working 이 아니면 보존한 바쁜 구간 시작으로 그 국면의 후보를 다시 시작한다(앞 후보는
     # 확정 전에 사라지므로 한 전이에 알림은 하나다). 새 국면이 working 이면(복귀) 후보를 버린다. 후보는 working 에서만 생기므로
-    # 「후보가 있다」는 「작업중에서 막 나왔다」와 같은 뜻이다(결정 MN3, 검수 1회차 C1).
+    # 「후보가 있다」는 「작업중에서 막 나왔다」와 같은 뜻이다. 후보는 종류와 무관하게 만든다 — 대기를 거쳐 3초 안에 승인 대기로
+    # 이어지는 전이를 놓치지 않으려는 것이다(결정 MN3, 검수 1회차 C1, AN2).
     came_from_working = previous.phase == "working" or pending is not None
-    if came_from_working and phase in NOTIFY_KIND_BY_PHASE:
+    if came_from_working and phase != "working":
         return _start_pending(previous, phase, now_ms), None
     return SessionTrack(phase=phase, busy_since_ms=_next_busy_since(previous, phase, now_ms)), None
 
@@ -318,12 +309,7 @@ def _message_for(event: NotifyEvent, clock_label: Callable[[int], str]) -> str:
         if event.resets_at_ms is None:
             return _INTERRUPTED_MESSAGE
         return f"{_INTERRUPTED_MESSAGE} · {clock_label(event.resets_at_ms)} 초기화 예정"
-    elapsed = duration_label(event.busy_duration_ms)
-    if event.kind == "awaiting_approval":
-        return f"{elapsed} 작업 뒤 승인을 기다립니다"
-    if event.kind == "background_wait":
-        return f"{elapsed} 작업 뒤 백그라운드 작업 {event.background_task_count}개를 기다립니다"
-    return f"{elapsed} 작업을 마치고 입력을 기다립니다"
+    return f"{duration_label(event.busy_duration_ms)} 작업 뒤 승인을 기다립니다"
 
 
 def _group_message(events: Sequence[NotifyEvent]) -> str:

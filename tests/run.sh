@@ -10869,8 +10869,8 @@ PYEOF
   fi
 
   # T25-287(신설, 문서·어휘 — 결정 MN9·MN11·MN13): ① hub/README.md 에 notify_enabled·notify_status.json·스크립트 편집기·알림 센터가 있다(프라이버시
-  # 고지가 알림 문구의 노출 위치를 알린다) ② commands/hub.md 에 notify_status 가 있다 ③ 알림 제목 라벨 4개(NOTIFY_TITLE_LABEL_BY_KIND)가 화면 배지 어휘
-  # (STATE_LABEL·STATE_GLYPH·BACKGROUND_SESSION_LABEL·APPROVAL_WAIT_*)와 같은 글자다 — 규칙이 아니라 어휘라 두 벌이 허용되고 이 가드가 교차 확인한다.
+  # 고지가 알림 문구의 노출 위치를 알린다) ② commands/hub.md 에 notify_status 가 있다 ③ 알림 제목 라벨 2개(NOTIFY_TITLE_LABEL_BY_KIND — 승인 대기·한도 초과만,
+  # hub-notify-answer-wait AN1·AN5)가 화면 배지 어휘(STATE_LABEL·STATE_GLYPH·APPROVAL_WAIT_*)와 같은 글자다 — 규칙이 아니라 어휘라 두 벌이 허용되고 이 가드가 교차 확인한다.
   # 메시지는 반복문 밖의 고정 문구다. 원장 행은 ① 의 notify_status.json 을 문다.
   if ! grep -qF 'notify_enabled' "$hub_readme_file" || ! grep -qF '스크립트 편집기' "$hub_readme_file" \
       || ! grep -qF '알림 센터' "$hub_readme_file"; then
@@ -10889,14 +10889,6 @@ PYEOF
   if ! grep -qF '"◆ 승인 대기"' "$hub_notify_file_282" || ! grep -qF "APPROVAL_WAIT_LABEL = '승인 대기'" "$hub_template_file" \
       || ! grep -qF "APPROVAL_WAIT_GLYPH = '◆'" "$hub_template_file"; then
     note_failure "T25-287: 알림 제목 「◆ 승인 대기」 가 화면 표지 어휘(APPROVAL_WAIT_LABEL·APPROVAL_WAIT_GLYPH)와 어긋남(결정 MN9 위반)"
-  fi
-  if ! grep -qF '"○ 대기"' "$hub_notify_file_282" || ! grep -qF "idle:'대기'" "$hub_template_file" \
-      || ! grep -qF "idle:'○'" "$hub_template_file"; then
-    note_failure "T25-287: 알림 제목 「○ 대기」 가 화면 배지 어휘(STATE_LABEL·STATE_GLYPH)와 어긋남(결정 MN9 위반)"
-  fi
-  if ! grep -qF '"◐ 백그라운드 대기"' "$hub_notify_file_282" || ! grep -qF "BACKGROUND_SESSION_LABEL = '백그라운드 대기'" "$hub_template_file" \
-      || ! grep -qF "background:'◐'" "$hub_template_file"; then
-    note_failure "T25-287: 알림 제목 「◐ 백그라운드 대기」 가 화면 배지 어휘(BACKGROUND_SESSION_LABEL·STATE_GLYPH)와 어긋남(결정 MN9 위반)"
   fi
 
   # T25-288(신설, docs/prps/hub-release-check-on-refresh.md 결정 RR2·RR3): 새 릴리스 즉시 확인 신호의 경로·헤더 이름이 서버(hub_server.py 의
