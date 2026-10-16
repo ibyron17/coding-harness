@@ -96,6 +96,18 @@ class ShouldAttemptReleaseCheckTest(unittest.TestCase):
     def test_default_interval_is_six_hours(self) -> None:
         self.assertEqual(hub_release.RELEASE_CHECK_INTERVAL_MS, 6 * 60 * 60 * 1000)
 
+    def test_manual_min_interval_is_one_minute(self) -> None:
+        self.assertEqual(hub_release.MANUAL_RELEASE_CHECK_MIN_INTERVAL_MS, 60 * 1000)
+
+    def test_manual_interval_is_shorter_than_the_automatic_interval(self) -> None:
+        """수동 간격이 자동 주기보다 길면 수동 확인이 자동 확인에 가려 의미가 없다(RR8)."""
+        self.assertLess(hub_release.MANUAL_RELEASE_CHECK_MIN_INTERVAL_MS, hub_release.RELEASE_CHECK_INTERVAL_MS)
+
+    def test_manual_interval_boundary(self) -> None:
+        manual_interval_ms = hub_release.MANUAL_RELEASE_CHECK_MIN_INTERVAL_MS
+        self.assertFalse(hub_release.should_attempt_release_check(5000 + 59_999, 5000, manual_interval_ms))
+        self.assertTrue(hub_release.should_attempt_release_check(5000 + 60_000, 5000, manual_interval_ms))
+
 
 class NextReleaseCheckRecordTest(unittest.TestCase):
     def setUp(self) -> None:
