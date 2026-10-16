@@ -1,5 +1,5 @@
 """hub_notify 단위 테스트(★순수 — 시계를 패치하지 않고 now_ms 를 인자로 넘긴다).
-docs/prps/hub-macos-notification.md §9.1, 결정 MN1~MN4·MN7~MN9·MN11."""
+docs/prps/hub-macos-notification.md §9.1, 결정 MN1~MN3·MN7~MN9·MN11, docs/prps/hub-notify-answer-wait.md AN1·AN2."""
 
 import dataclasses
 import os
@@ -22,7 +22,7 @@ SECOND_MS = 1_000
 def _observation(phase: str, session_id: str = "s1", project: str = "proj", **fields) -> hub_notify.SessionObservation:
     values = {
         "session_id": session_id, "phase": phase, "project_name": project,
-        "task_title": None, "resets_at_ms": None, "background_task_count": 0,
+        "task_title": None, "resets_at_ms": None,
     }
     values.update(fields)
     return hub_notify.SessionObservation(**values)
@@ -72,10 +72,13 @@ def _project(name: str, *sessions: hub_session.SessionView) -> hub_project.Proje
 
 
 def _event(kind: str, project: str = "proj", **fields) -> hub_notify.NotifyEvent:
-    values = dict(kind=kind, project_name=project, task_title=None, busy_duration_ms=5 * MINUTE_MS,
-                  resets_at_ms=None, background_task_count=0)
+    values = dict(kind=kind, project_name=project, task_title=None, busy_duration_ms=5 * MINUTE_MS, resets_at_ms=None)
     values.update(fields)
     return hub_notify.NotifyEvent(**values)
+
+
+def _has_pending(track: hub_notify.SessionTrack) -> bool:
+    return hub_notify.has_pending({"s1": track})
 
 
 def _clock(epoch_ms: int) -> str:
@@ -147,12 +150,15 @@ class ObserveSessionsTest(unittest.TestCase):
         first, second = hub_notify.observe_sessions(snapshot)
         self.assertEqual((first.resets_at_ms, second.resets_at_ms), (BASE_MS + 5 * MINUTE_MS, None))
 
-    def test_background_carries_task_and_wakeup_count_only_then(self) -> None:
+    def test_background_session_is_observed_without_a_task_count(self) -> None:
+        """AN1 — 백그라운드 대기는 알림을 만들지 않으므로 작업 수를 관측하지 않는다."""
         wait = hub_session.BackgroundWait(since_ms=BASE_MS, until_ms=BASE_MS + MINUTE_MS, task_count=2, wakeup_count=1)
-        snapshot = _snapshot(_project("p", _session("s", "background", "idle", background_wait=wait),
-                                      _session("t", "idle", "idle")))
-        first, second = hub_notify.observe_sessions(snapshot)
-        self.assertEqual((first.background_task_count, second.background_task_count), (3, 0))
+        snapshot = _snapshot(_project("p", _session("s", "background", "idle", background_wait=wait)))
+        (observation,) = hub_notify.observe_sessions(snapshot)
+        self.assertEqual((observation.phase, observation.resets_at_ms), ("background", None))
+        for dataclass_type in (hub_notify.SessionObservation, hub_notify.NotifyEvent):
+            with self.subTest(dataclass_type=dataclass_type.__name__):
+                self.assertNotIn("background_task_count", [field.name for field in dataclasses.fields(dataclass_type)])
 
 
 class SessionTrackTest(unittest.TestCase):
@@ -169,49 +175,61 @@ class SessionTrackTest(unittest.TestCase):
         track, _ = _step(None, "working", self.T0)
         self.assertEqual(track.busy_since_ms, self.T0)
 
-    def test_working_to_waiting_confirms_after_settle(self) -> None:
+    def test_working_to_approval_confirms_after_settle(self) -> None:
         track, events = _run([
             ("working", self.T0),
-            ("waiting", self.T0 + 5 * MINUTE_MS),
-            ("waiting", self.T0 + 5 * MINUTE_MS + hub_notify.NOTIFY_SETTLE_MS),
+            ("awaiting_approval", self.T0 + 5 * MINUTE_MS),
+            ("awaiting_approval", self.T0 + 5 * MINUTE_MS + hub_notify.NOTIFY_SETTLE_MS),
         ])
-        self.assertEqual([(e.kind, e.busy_duration_ms) for e in events], [("turn_ended", 5 * MINUTE_MS)])
+        self.assertEqual([(e.kind, e.busy_duration_ms) for e in events], [("awaiting_approval", 5 * MINUTE_MS)])
         self.assertIsNone(track.pending)
 
     def test_second_observation_only_makes_a_pending_candidate(self) -> None:
-        _, events = _run([("working", self.T0), ("waiting", self.T0 + 5 * MINUTE_MS)])
+        _, events = _run([("working", self.T0), ("awaiting_approval", self.T0 + 5 * MINUTE_MS)])
         self.assertEqual(events, [])
+
+    def test_leaving_working_for_a_silent_phase_is_silent_after_the_settle_delay(self) -> None:
+        """AN1 — 대기·백그라운드·완료로 나가는 전이는 후보까지는 만들고(확인 수집 1회) 알림 없이 거둔다."""
+        settle = hub_notify.NOTIFY_SETTLE_MS
+        for silent_phase in ("waiting", "background", "done"):
+            with self.subTest(phase=silent_phase):
+                pending_track, _ = _run([("working", self.T0), (silent_phase, self.T0 + 5 * MINUTE_MS)])
+                settled_track, events = _run([("working", self.T0), (silent_phase, self.T0 + 5 * MINUTE_MS),
+                                              (silent_phase, self.T0 + 5 * MINUTE_MS + settle)])
+                self.assertTrue(_has_pending(pending_track))
+                self.assertEqual(events, [])
+                self.assertFalse(_has_pending(settled_track))
 
     def test_settle_boundary(self) -> None:
         settle = hub_notify.NOTIFY_SETTLE_MS
-        before = _run([("working", self.T0), ("waiting", self.T0 + 5 * MINUTE_MS),
-                       ("waiting", self.T0 + 5 * MINUTE_MS + settle - 1)])[1]
-        at = _run([("working", self.T0), ("waiting", self.T0 + 5 * MINUTE_MS),
-                   ("waiting", self.T0 + 5 * MINUTE_MS + settle)])[1]
+        before = _run([("working", self.T0), ("awaiting_approval", self.T0 + 5 * MINUTE_MS),
+                       ("awaiting_approval", self.T0 + 5 * MINUTE_MS + settle - 1)])[1]
+        at = _run([("working", self.T0), ("awaiting_approval", self.T0 + 5 * MINUTE_MS),
+                   ("awaiting_approval", self.T0 + 5 * MINUTE_MS + settle)])[1]
         self.assertEqual((len(before), len(at)), (0, 1))
 
     def test_unsettled_observation_keeps_the_same_candidate_clock(self) -> None:
         """확인 전 수집이 후보 시각을 밀지 않는다 — 3초는 처음 본 시각부터 잰다."""
         first_seen = self.T0 + 5 * MINUTE_MS
-        _, events = _run([("working", self.T0), ("waiting", first_seen), ("waiting", first_seen + 2 * SECOND_MS),
-                          ("waiting", first_seen + 3 * SECOND_MS)])
+        _, events = _run([("working", self.T0), ("awaiting_approval", first_seen),
+                          ("awaiting_approval", first_seen + 2 * SECOND_MS), ("awaiting_approval", first_seen + 3 * SECOND_MS)])
         self.assertEqual(len(events), 1)
 
     def test_return_to_working_before_confirmation_drops_the_candidate_and_keeps_busy_start(self) -> None:
-        track, events = _run([("working", self.T0), ("waiting", self.T0 + 5 * MINUTE_MS),
+        track, events = _run([("working", self.T0), ("awaiting_approval", self.T0 + 5 * MINUTE_MS),
                               ("working", self.T0 + 5 * MINUTE_MS + 5 * SECOND_MS)])
         self.assertEqual(events, [])
         self.assertEqual((track.phase, track.busy_since_ms, track.pending), ("working", self.T0, None))
 
     def test_busy_under_two_minutes_is_silent_and_resets_busy_start(self) -> None:
-        track, events = _run([("working", self.T0), ("waiting", self.T0 + 2 * MINUTE_MS - SECOND_MS),
-                              ("waiting", self.T0 + 2 * MINUTE_MS + 2 * SECOND_MS)])
+        track, events = _run([("working", self.T0), ("awaiting_approval", self.T0 + 2 * MINUTE_MS - SECOND_MS),
+                              ("awaiting_approval", self.T0 + 2 * MINUTE_MS + 2 * SECOND_MS)])
         self.assertEqual(events, [])
         self.assertIsNone(track.busy_since_ms)
 
     def test_busy_exactly_two_minutes_notifies(self) -> None:
-        _, events = _run([("working", self.T0), ("waiting", self.T0 + hub_notify.NOTIFY_MIN_BUSY_EPISODE_MS),
-                          ("waiting", self.T0 + hub_notify.NOTIFY_MIN_BUSY_EPISODE_MS + hub_notify.NOTIFY_SETTLE_MS)])
+        _, events = _run([("working", self.T0), ("awaiting_approval", self.T0 + hub_notify.NOTIFY_MIN_BUSY_EPISODE_MS),
+                          ("awaiting_approval", self.T0 + hub_notify.NOTIFY_MIN_BUSY_EPISODE_MS + hub_notify.NOTIFY_SETTLE_MS)])
         self.assertEqual(len(events), 1)
 
     def test_interrupted_notifies_even_when_short(self) -> None:
@@ -219,7 +237,7 @@ class SessionTrackTest(unittest.TestCase):
                           ("interrupted", self.T0 + 30 * SECOND_MS + hub_notify.NOTIFY_SETTLE_MS)])
         self.assertEqual([e.kind for e in events], ["interrupted"])
 
-    def test_approval_wins_over_turn_ended(self) -> None:
+    def test_working_to_awaiting_approval_notifies(self) -> None:
         _, events = _run([("working", self.T0), ("awaiting_approval", self.T0 + 5 * MINUTE_MS),
                           ("awaiting_approval", self.T0 + 5 * MINUTE_MS + hub_notify.NOTIFY_SETTLE_MS)])
         self.assertEqual([e.kind for e in events], ["awaiting_approval"])
@@ -237,23 +255,35 @@ class SessionTrackTest(unittest.TestCase):
                          [("awaiting_approval", 5 * MINUTE_MS), ("awaiting_approval", 4 * MINUTE_MS)])
 
     def test_busy_episode_survives_background_wait(self) -> None:
+        """AN2 — 백그라운드 대기는 알리지 않지만 바쁜 구간은 이어져, 짧은 마무리 턴의 승인 대기가 소음 기준을 넘는다."""
         settle = hub_notify.NOTIFY_SETTLE_MS
         t_bg = self.T0 + 10 * MINUTE_MS
         t_wake = t_bg + 5 * MINUTE_MS
         t_end = t_wake + MINUTE_MS
         _, events = _run([
             ("working", self.T0), ("background", t_bg), ("background", t_bg + settle),
-            ("working", t_wake), ("waiting", t_end), ("waiting", t_end + settle),
+            ("working", t_wake), ("awaiting_approval", t_end), ("awaiting_approval", t_end + settle),
         ])
-        self.assertEqual([e.kind for e in events], ["background_wait", "turn_ended"])
-        self.assertEqual(events[1].busy_duration_ms, 16 * MINUTE_MS)
+        self.assertEqual([(e.kind, e.busy_duration_ms) for e in events], [("awaiting_approval", 16 * MINUTE_MS)])
+
+    def test_background_and_working_cycle_never_notifies(self) -> None:
+        """AN2 — 모니터를 건 세션의 「background → working → background」 순환(klago e5588c1a 재현)은 알림 0건."""
+        settle = hub_notify.NOTIFY_SETTLE_MS
+        steps = [("working", self.T0)]
+        moment = self.T0 + 10 * MINUTE_MS
+        for _ in range(5):
+            steps += [("background", moment), ("background", moment + settle),
+                      ("working", moment + 5 * MINUTE_MS), ("working", moment + 5 * MINUTE_MS + MINUTE_MS)]
+            moment += 6 * MINUTE_MS + 10 * SECOND_MS
+        _, events = _run(steps)
+        self.assertEqual(events, [])
 
     def test_background_to_waiting_is_silent(self) -> None:
         settle = hub_notify.NOTIFY_SETTLE_MS
         _, events = _run([("working", self.T0), ("background", self.T0 + 5 * MINUTE_MS),
                           ("background", self.T0 + 5 * MINUTE_MS + settle),
                           ("waiting", self.T0 + 95 * MINUTE_MS), ("waiting", self.T0 + 95 * MINUTE_MS + settle)])
-        self.assertEqual([e.kind for e in events], ["background_wait"])
+        self.assertEqual(events, [])
 
     def test_working_to_done_is_silent(self) -> None:
         _, events = _run([("working", self.T0), ("done", self.T0 + 5 * MINUTE_MS),
@@ -262,17 +292,19 @@ class SessionTrackTest(unittest.TestCase):
 
     def test_repeated_observations_after_confirmation_stay_silent(self) -> None:
         settle = hub_notify.NOTIFY_SETTLE_MS
-        steps = [("working", self.T0), ("waiting", self.T0 + 5 * MINUTE_MS), ("waiting", self.T0 + 5 * MINUTE_MS + settle)]
-        steps += [("waiting", self.T0 + 5 * MINUTE_MS + settle + index * 5 * SECOND_MS) for index in range(1, 4)]
+        steps = [("working", self.T0), ("awaiting_approval", self.T0 + 5 * MINUTE_MS),
+                 ("awaiting_approval", self.T0 + 5 * MINUTE_MS + settle)]
+        steps += [("awaiting_approval", self.T0 + 5 * MINUTE_MS + settle + index * 5 * SECOND_MS) for index in range(1, 4)]
         _, events = _run(steps)
         self.assertEqual(len(events), 1)
 
-    def test_waiting_to_working_to_waiting_notifies_with_the_new_episode_only(self) -> None:
+    def test_waiting_to_working_to_approval_notifies_with_the_new_episode_only(self) -> None:
         settle = hub_notify.NOTIFY_SETTLE_MS
         start = self.T0 + 10 * MINUTE_MS
         end = start + 3 * MINUTE_MS
-        _, events = _run([("waiting", self.T0), ("working", start), ("waiting", end), ("waiting", end + settle)])
-        self.assertEqual([(e.kind, e.busy_duration_ms) for e in events], [("turn_ended", 3 * MINUTE_MS)])
+        _, events = _run([("waiting", self.T0), ("working", start),
+                          ("awaiting_approval", end), ("awaiting_approval", end + settle)])
+        self.assertEqual([(e.kind, e.busy_duration_ms) for e in events], [("awaiting_approval", 3 * MINUTE_MS)])
 
     def _restart_scenario(self, phases_in_pending_window: list[str]):
         """working 5분 뒤 phases 를 1초 간격으로 넣고, 5초 간격 수집을 5번 더 한다 — 확인 대기 중 국면이 다른 알림 국면으로 바뀌는 재현(C1)."""
@@ -285,17 +317,22 @@ class SessionTrackTest(unittest.TestCase):
         steps += [(last_phase, moment + index * 5 * SECOND_MS) for index in range(1, 6)]
         return _run(steps)
 
-    def test_candidate_restarts_when_waiting_turns_into_background_wait(self) -> None:
-        _, events = self._restart_scenario(["waiting", "background"])
-        self.assertEqual([(e.kind, e.busy_duration_ms) for e in events], [("background_wait", 5 * MINUTE_MS + SECOND_MS)])
-
     def test_candidate_restarts_when_waiting_turns_into_awaiting_approval(self) -> None:
+        """C1·AN2 — 대기는 알림 국면이 아니어도 후보를 만들어야 3초 안에 이어진 승인 대기를 놓치지 않는다."""
         _, events = self._restart_scenario(["waiting", "awaiting_approval"])
-        self.assertEqual([e.kind for e in events], ["awaiting_approval"])
+        self.assertEqual([(e.kind, e.busy_duration_ms) for e in events], [("awaiting_approval", 5 * MINUTE_MS + SECOND_MS)])
 
     def test_candidate_restarts_when_waiting_turns_into_interrupted(self) -> None:
         _, events = self._restart_scenario(["waiting", "interrupted"])
         self.assertEqual([e.kind for e in events], ["interrupted"])
+
+    def test_candidate_restarts_when_background_turns_into_interrupted(self) -> None:
+        _, events = self._restart_scenario(["background", "interrupted"])
+        self.assertEqual([e.kind for e in events], ["interrupted"])
+
+    def test_waiting_then_background_stays_silent(self) -> None:
+        _, events = self._restart_scenario(["waiting", "background"])
+        self.assertEqual(events, [])
 
     def test_restarted_candidate_replaces_the_earlier_one_so_one_transition_notifies_once(self) -> None:
         track, events = self._restart_scenario(["waiting", "awaiting_approval"])
@@ -304,17 +341,22 @@ class SessionTrackTest(unittest.TestCase):
 
     def test_restarted_candidate_waits_for_its_own_settle_delay(self) -> None:
         first_seen = self.T0 + 5 * MINUTE_MS
-        _, events = _run([("working", self.T0), ("waiting", first_seen), ("background", first_seen + SECOND_MS),
-                          ("background", first_seen + SECOND_MS + hub_notify.NOTIFY_SETTLE_MS - 1)])
+        _, events = _run([("working", self.T0), ("waiting", first_seen), ("awaiting_approval", first_seen + SECOND_MS),
+                          ("awaiting_approval", first_seen + SECOND_MS + hub_notify.NOTIFY_SETTLE_MS - 1)])
         self.assertEqual(events, [])
 
     def test_event_carries_the_confirming_observation_details(self) -> None:
         settle = hub_notify.NOTIFY_SETTLE_MS
         track, _ = _step(None, "working", self.T0)
-        track, _ = _step(track, "background", self.T0 + 5 * MINUTE_MS, background_task_count=1)
-        _, event = _step(track, "background", self.T0 + 5 * MINUTE_MS + settle,
-                         project="proj-x", task_title="제목", background_task_count=2)
-        self.assertEqual((event.project_name, event.task_title, event.background_task_count), ("proj-x", "제목", 2))
+        track, _ = _step(track, "interrupted", self.T0 + 5 * MINUTE_MS)
+        _, event = _step(track, "interrupted", self.T0 + 5 * MINUTE_MS + settle,
+                         project="proj-x", task_title="제목", resets_at_ms=self.T0)
+        self.assertEqual((event.project_name, event.task_title, event.resets_at_ms), ("proj-x", "제목", self.T0))
+
+    def test_pending_candidate_carries_no_kind(self) -> None:
+        """AN2 — 종류는 확정 시점의 국면이 정한다. 후보는 시각과 바쁜 구간 길이만 든다."""
+        self.assertEqual([field.name for field in dataclasses.fields(hub_notify.PendingNotice)],
+                         ["observed_at_ms", "busy_duration_ms"])
 
     def test_tracks_are_immutable_values(self) -> None:
         track, _ = _step(None, "working", self.T0)
@@ -356,9 +398,9 @@ class AdvanceTracksTest(unittest.TestCase):
         names = ["a", "b"]
         tracks, _ = hub_notify.advance_tracks(None, [_observation("working", name) for name in names], self.T0)
         pending, _ = hub_notify.advance_tracks(
-            tracks, [_observation("waiting", name) for name in names], self.T0 + 5 * MINUTE_MS)
+            tracks, [_observation("awaiting_approval", name) for name in names], self.T0 + 5 * MINUTE_MS)
         _, events = hub_notify.advance_tracks(
-            pending, [_observation("waiting", name) for name in names], self.T0 + 5 * MINUTE_MS + settle)
+            pending, [_observation("awaiting_approval", name) for name in names], self.T0 + 5 * MINUTE_MS + settle)
         self.assertEqual(len(events), 2)
 
     def test_has_pending_reflects_candidates(self) -> None:
@@ -408,19 +450,10 @@ class ComposeNotificationsTest(unittest.TestCase):
     def _compose(self, events, include_task_title: bool = True):
         return hub_notify.compose_notifications(events, include_task_title, _clock)
 
-    def test_turn_ended_text(self) -> None:
-        (text,) = self._compose([_event("turn_ended", "alpha", task_title="설계 정리", busy_duration_ms=65 * MINUTE_MS)])
-        self.assertEqual((text.title, text.subtitle, text.message),
-                         ("○ 대기 · alpha", "설계 정리", "1시간 5분 작업을 마치고 입력을 기다립니다"))
-
     def test_approval_text(self) -> None:
-        (text,) = self._compose([_event("awaiting_approval", "alpha", busy_duration_ms=23 * MINUTE_MS)])
-        self.assertEqual((text.title, text.message), ("◆ 승인 대기 · alpha", "23분 작업 뒤 승인을 기다립니다"))
-
-    def test_background_wait_text(self) -> None:
-        (text,) = self._compose([_event("background_wait", "alpha", busy_duration_ms=23 * MINUTE_MS, background_task_count=2)])
-        self.assertEqual((text.title, text.message),
-                         ("◐ 백그라운드 대기 · alpha", "23분 작업 뒤 백그라운드 작업 2개를 기다립니다"))
+        (text,) = self._compose([_event("awaiting_approval", "alpha", task_title="설계 정리", busy_duration_ms=23 * MINUTE_MS)])
+        self.assertEqual((text.title, text.subtitle, text.message),
+                         ("◆ 승인 대기 · alpha", "설계 정리", "23분 작업 뒤 승인을 기다립니다"))
 
     def test_interrupted_text_with_reset_time(self) -> None:
         (text,) = self._compose([_event("interrupted", "alpha", resets_at_ms=BASE_MS)])
@@ -432,16 +465,16 @@ class ComposeNotificationsTest(unittest.TestCase):
         self.assertEqual(text.message, "사용량 한도로 멈췄습니다")
 
     def test_task_title_off_gives_empty_subtitle(self) -> None:
-        (text,) = self._compose([_event("turn_ended", task_title="비밀 작업")], include_task_title=False)
+        (text,) = self._compose([_event("awaiting_approval", task_title="비밀 작업")], include_task_title=False)
         self.assertEqual(text.subtitle, "")
 
     def test_missing_task_title_gives_empty_subtitle(self) -> None:
-        (text,) = self._compose([_event("turn_ended", task_title=None)])
+        (text,) = self._compose([_event("awaiting_approval", task_title=None)])
         self.assertEqual(text.subtitle, "")
 
     def test_task_title_is_masked_and_clipped_to_forty_chars(self) -> None:
         secret_title = "sk-ant-abcdefghijklmnopqrstuvwxyz 로 " + "가" * 60
-        (text,) = self._compose([_event("turn_ended", task_title=secret_title)])
+        (text,) = self._compose([_event("awaiting_approval", task_title=secret_title)])
         self.assertIn("[REDACTED]", text.subtitle)
         self.assertNotIn("sk-ant", text.subtitle)
         self.assertEqual(len(text.subtitle), hub_notify.NOTIFY_TASK_TITLE_MAX_CHARS + 1)
@@ -450,62 +483,71 @@ class ComposeNotificationsTest(unittest.TestCase):
     def test_leading_whitespace_cannot_push_a_token_fragment_past_the_scrub_window(self) -> None:
         """S1 — 공백 접기가 스크럽 창 자르기보다 먼저라, 앞 공백이 1,961자여도 토큰이 통째로 마스킹된다."""
         title = " " * 1961 + "ghp_" + "a" * 36
-        (text,) = self._compose([_event("turn_ended", task_title=title)])
+        (text,) = self._compose([_event("awaiting_approval", task_title=title)])
         self.assertEqual(text.subtitle, "[REDACTED]")
         self.assertNotIn("ghp_", text.subtitle)
 
     def test_title_longer_than_the_scrub_window_is_dropped_whole(self) -> None:
         """S1 — 창(NOTIFY_TASK_TITLE_SCRUB_INPUT_MAX_CHARS)을 넘는 제목은 자르지 않고 통째로 버린다(자른 경계의 시크릿 조각을 막는다)."""
         limit = hub_notify.NOTIFY_TASK_TITLE_SCRUB_INPUT_MAX_CHARS
-        (over,) = self._compose([_event("turn_ended", task_title="가" * (limit + 1))])
-        (at_limit,) = self._compose([_event("turn_ended", task_title="가" * limit)])
+        (over,) = self._compose([_event("awaiting_approval", task_title="가" * (limit + 1))])
+        (at_limit,) = self._compose([_event("awaiting_approval", task_title="가" * limit)])
         self.assertEqual(over.subtitle, "")
         self.assertEqual(len(at_limit.subtitle), hub_notify.NOTIFY_TASK_TITLE_MAX_CHARS + 1)
 
     def test_secret_straddling_the_scrub_window_never_reaches_the_subtitle(self) -> None:
         """S1 — 긴 PEM 블록이 앞을 마스킹으로 줄여도, 창 경계에 걸린 토큰 조각이 부제 앞으로 오지 않는다."""
         title = "-----BEGIN PRIVATE KEY-----" + "A" * 1960 + " ghp_" + "b" * 36
-        (text,) = self._compose([_event("turn_ended", task_title=title)])
+        (text,) = self._compose([_event("awaiting_approval", task_title=title)])
         self.assertNotIn("ghp_", text.subtitle)
 
     def test_lone_surrogate_in_project_name_becomes_a_replacement_character(self) -> None:
         """S3 — 고립 서로게이트가 argv 로 가면 subprocess 가 UnicodeEncodeError 를 낸다."""
-        (text,) = self._compose([_event("turn_ended", "a\ud800b")])
-        self.assertEqual(text.title, "○ 대기 · a\ufffdb")
+        (text,) = self._compose([_event("awaiting_approval", "a\ud800b")])
+        self.assertEqual(text.title, "◆ 승인 대기 · a\ufffdb")
         text.title.encode("utf-8")
 
     def test_grouping_by_kind_with_deduplicated_project_list(self) -> None:
         texts = self._compose([
-            _event("interrupted", "a"), _event("interrupted", "a"), _event("interrupted", "b"), _event("turn_ended", "c"),
+            _event("interrupted", "a"), _event("interrupted", "a"), _event("interrupted", "b"), _event("awaiting_approval", "c"),
         ])
-        self.assertEqual([text.title for text in texts], ["■ 한도 초과 · 세션 3개", "○ 대기 · c"])
+        self.assertEqual([text.title for text in texts], ["■ 한도 초과 · 세션 3개", "◆ 승인 대기 · c"])
         self.assertEqual((texts[0].subtitle, texts[0].message), ("", "a · b"))
 
     def test_group_lists_three_projects_then_rest_count(self) -> None:
-        events = [_event("turn_ended", f"p{index}") for index in range(1, 6)]
+        events = [_event("awaiting_approval", f"p{index}") for index in range(1, 6)]
         (text,) = self._compose(events)
-        self.assertEqual((text.title, text.message), ("○ 대기 · 세션 5개", "p1 · p2 · p3 외 2"))
+        self.assertEqual((text.title, text.message), ("◆ 승인 대기 · 세션 5개", "p1 · p2 · p3 외 2"))
 
     def test_output_order_follows_kind_order(self) -> None:
-        texts = self._compose([_event("background_wait"), _event("turn_ended"), _event("awaiting_approval"), _event("interrupted")])
-        self.assertEqual([text.title.split(" ")[1] for text in texts], ["한도", "승인", "대기", "백그라운드"])
+        texts = self._compose([_event("awaiting_approval"), _event("interrupted")])
+        self.assertEqual([text.title.split(" ")[1] for text in texts], ["한도", "승인"])
 
     def test_no_events_gives_no_texts(self) -> None:
         self.assertEqual(self._compose([]), ())
 
     def test_long_project_name_is_clipped_in_title(self) -> None:
-        (text,) = self._compose([_event("turn_ended", "긴" * 200)])
+        (text,) = self._compose([_event("awaiting_approval", "긴" * 200)])
         self.assertLessEqual(len(text.title), hub_notify.NOTIFY_TITLE_MAX_CHARS + 1)
 
     def test_control_characters_in_project_name_are_sanitized(self) -> None:
-        (text,) = self._compose([_event("turn_ended", "a\nb\x00c")])
-        self.assertEqual(text.title, "○ 대기 · a b c")
+        (text,) = self._compose([_event("awaiting_approval", "a\nb\x00c")])
+        self.assertEqual(text.title, "◆ 승인 대기 · a b c")
 
     def test_labels_match_the_screen_vocabulary(self) -> None:
         self.assertEqual(
             dict(hub_notify.NOTIFY_TITLE_LABEL_BY_KIND),
-            {"interrupted": "■ 한도 초과", "awaiting_approval": "◆ 승인 대기", "turn_ended": "○ 대기", "background_wait": "◐ 백그라운드 대기"},
+            {"interrupted": "■ 한도 초과", "awaiting_approval": "◆ 승인 대기"},
         )
+
+    def test_only_approval_and_limit_kinds_exist(self) -> None:
+        """AN1 — 알림 종류 집합이 둘뿐이다(대기·백그라운드 종류의 되살아남을 문다)."""
+        expected_kinds = {"interrupted", "awaiting_approval"}
+        self.assertEqual(set(hub_notify.NOTIFY_KIND_ORDER), expected_kinds)
+        self.assertEqual(set(hub_notify.NOTIFY_TITLE_LABEL_BY_KIND), expected_kinds)
+        self.assertEqual(set(hub_notify.NOTIFY_KIND_BY_PHASE.values()), expected_kinds)
+        self.assertEqual(set(hub_notify.NOTIFY_KIND_BY_PHASE), {"interrupted", "awaiting_approval"})
+        self.assertEqual(len(hub_notify.NOTIFY_KIND_ORDER), len(expected_kinds))
 
 
 class OsascriptArgvTest(unittest.TestCase):

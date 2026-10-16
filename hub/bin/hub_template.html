@@ -30,7 +30,9 @@ DZH:HUB 데이터 계약
   두 모드 모두 #dzh-refresh 버튼과 포커스 복귀 시에도 같은 즉시 갱신 경로를 탄다. 그 즉시 갱신
   경로는 열린 상세 패널의 iframe 도 함께 태운다(docs/prps/hub-panel-immediate-refresh.md
   결정 IR1) — 대시보드가 갱신 훅을 노출하면 부분 치환(스크롤 유지), 없으면 새로고침
-  버튼에서만 문서를 재로딩한다(결정 IR5).
+  버튼에서만 문서를 재로딩한다(결정 IR5). 서버 모드에서는 #dzh-refresh 클릭과 페이지 로드만
+  /release-check 로 새 릴리스 즉시 확인을 요청한다 — 포커스·탭 복귀·1분 폴링은 요청하지 않는다
+  (docs/prps/hub-release-check-on-refresh.md 결정 RR1). 204 를 받으면 한 번 더 폴링한다(RR5·RR6).
 
   불변식 H1⁗(정본: docs/prps/hub-detail-side-panel.md 결정 SP6 → 조항 개정 docs/prps/
   hub-session-modal-and-partial-update.md 결정 PU8). 폴링·틱이 내용을 갱신하는 대상은
@@ -3260,6 +3262,25 @@ try{
     document.dispatchEvent(new CustomEvent(IMMEDIATE_REFRESH_EVENT_NAME,
                                            {detail:{isExplicitRequest:isExplicitRequest}}));
   }
+  // 새 릴리스 즉시 확인 신호(docs/prps/hub-release-check-on-refresh.md 결정 RR1·RR2·RR6). 경로·헤더 이름은 hub_server.py 의
+  // RELEASE_CHECK_REQUEST_PATH·RELEASE_CHECK_REQUEST_HEADER_NAME 과 같은 글자다(T25-288). 헤더가 교차 출처 위조를 막는
+  // 장치라 빼면 서버가 403 으로 거절한다(RR3).
+  var RELEASE_CHECK_PATH = '/release-check';
+  var RELEASE_CHECK_HEADER_NAME = 'X-Dzh-Release-Check';
+  var isReleaseCheckInFlight = false;   // 탭당 1건 — 느린 확인(최대 15초) 중 연타가 연결 상한을 점유하지 않게(RR6)
+  // 새로고침 버튼과 페이지 로드에서만 부른다 — 포커스·탭 복귀·1분 폴링은 부르지 않는다(RR1, T25-289). 서버는 확인이
+  // 끝난(또는 건너뛴) 뒤 204 로 답하고 그 사이 스냅샷을 다시 모아 두므로, 그때 한 번 폴링하면 새 결과가 보인다(RR5).
+  // 실패는 여기서 표시하지 않는다 — 연결 끊김은 poll() 이, 확인 실패 사유는 /hub status 가 알린다(UN2).
+  function requestReleaseCheck(){
+    if(isReleaseCheckInFlight) return;
+    isReleaseCheckInFlight = true;
+    var headers = {};
+    headers[RELEASE_CHECK_HEADER_NAME] = '1';
+    fetch(RELEASE_CHECK_PATH, {cache:'no-store', headers:headers})
+      .then(function(res){ if(res.ok) poll(); })
+      .catch(function(){})   // 네트워크 오류와 성공 핸들러의 동기 예외 모두 여기서 삼킨다 — 아래 해제가 반드시 돌게(poll() 과 같은 관용구)
+      .then(function(){ isReleaseCheckInFlight = false; });
+  }
   // 폴링 게이트 이력: 최초엔 "작업중 세션 유무"가 게이트였다(8db1395). 허브를 보조 화면에
   // 띄워두고 터미널에서 작업하는 패턴에서 구멍이 있었다 — 그 창은 visible 이어도 focus 는
   // 못 받으므로, 작업중 세션이 0개인 동안 새로 시작된 세션을 아무도 못 잡았다(실사용 보고).
@@ -3275,7 +3296,8 @@ try{
   // boolean 리터럴로 명시한다(아래 세 줄).
   document.addEventListener('visibilitychange', function(){ if(document.visibilityState==='visible') pollNow(false); });
   window.addEventListener('focus', function(){ pollNow(false); });
-  refreshButton.addEventListener('click', function(){ pollNow(true); });
+  refreshButton.addEventListener('click', function(){ pollNow(true); requestReleaseCheck(); });
+  requestReleaseCheck();   // 페이지를 새로 열 때 1회(브라우저 새로고침·자가 리로드 포함, RR1)
 })();
 
 (function(){

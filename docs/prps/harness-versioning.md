@@ -330,6 +330,8 @@ build_manifest_json()
 - 서버가 꺼져 있으면 확인하지 않는다(`/hub` 의 1회 수집 경로는 네트워크를 쓰지 않는다).
 - `/harness-update` 직후에는 새 확인이 필요 없다 — 비교는 **수집 시점**에 "설치 기록(매번 새로 읽음)
   vs 캐시된 최신 버전"으로 하므로 업데이트가 끝나면 다음 수집에서 알림이 사라진다.
+- **개정(docs/prps/hub-release-check-on-refresh.md RR1·RR4)**: 페이지 로드·새로고침 버튼이 최소 1분 간격의 즉시 확인을 요청한다.
+  자동·즉시 확인은 같은 시도 시각을 공유한다 — 「6시간에 한 번」은 자동 확인의 주기다.
 
 **UN3 — 비교 규칙.** `is_update_available = latest 가 있고 (installed 가 없거나 latest > installed)`.
 설치 기록에 버전이 없는(도입 이전) 설치는 어떤 릴리스보다 오래된 것으로 본다. `installed > latest`
@@ -453,7 +455,7 @@ class InstalledHarness:
 
 @dataclass(frozen=True)
 class ReleaseCheckRecord:
-    """~/.claude/hub/release_check.json 과 맺은 계약. 서버 스레드만 쓴다."""
+    """~/.claude/hub/release_check.json 과 맺은 계약. 서버의 판정기(`_ReleaseChecker`) 락 안에서만 쓴다."""
     last_attempt_at_ms: int
     last_success_at_ms: int | None
     latest_version: str | None              # 마지막 성공에서 본 최신 릴리스. 실패가 지우지 않는다
