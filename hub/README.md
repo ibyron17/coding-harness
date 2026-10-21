@@ -75,7 +75,7 @@ Code 프로젝트**의 진행 상황(프로젝트/세션/단계)을
 hub/install.sh
 ```
 
-`~/.claude/hub/bin/` 에 37개 파일을, `~/.claude/rules/hub/` 에 규칙 1개(허브 사용자만 받는
+`~/.claude/hub/bin/` 에 38개 파일을, `~/.claude/rules/hub/` 에 규칙 1개(허브 사용자만 받는
 진행 기록 지침, [`rules/dashboard-recording.md`](rules/dashboard-recording.md))를 설치한다.
 `--scope` 인자가 없다 — 설치 위치는 이 둘뿐이며, 머신 전역 자산이라 프로젝트마다 사본을
 두지 않는다.
@@ -273,6 +273,9 @@ hub/install.sh --force      # 1. 설치본 갱신
   이름(`resume_title`)으로 인라인한다(재개 횟수는 훅 이벤트에서 세는 정수 하나다). 재개 요청의 본문(`message`)은
   메모리에만 올라오고 싣거나 저장하지 않는다. 이 이름도 시크릿 마스킹 + 120자 상한을 거치고, 끄는 스위치도 같은
   `record_prompt_excerpt: false` 이다. 재개된 실행이 없는 세션은 이 읽기를 하지 않는다.
+- **보고 게이트**(`hub_handback_guard.py`)는 허브가 등록하지 않는다 — 배포 에이전트 3종(design-architect·implementer·
+  code-reviewer)이 보고하는 순간에만 돈다. 그 서브에이전트의 기록에서 호스트의 백그라운드 시작 문장(작업 ID·출력 파일
+  경로)만 찾고, `lsof` 로 그 출력 파일을 쥔 프로세스가 있는지만 본다. 아무것도 저장하지 않고 아무 프로세스도 끄지 않는다.
 
 ## 화면 배치
 
@@ -735,7 +738,7 @@ hub/install.sh --uninstall
 
 ```
 ~/.claude/hub/
-├── bin/                        # hub/install.sh 가 배포하는 실행 코드 37개 파일(`hub_live_session.py` 등)
+├── bin/                        # hub/install.sh 가 배포하는 실행 코드 38개 파일(`hub_live_session.py` 등 — `hub_handback_guard.py` 는 허브가 등록하지 않는 보고 게이트다)
 ├── config.json                 # 선택
 ├── rate_limits.json             # statusLine 등록 또는 usage_api_enabled 폴링이 채우는 한도 캡처
 ├── session_costs/<session_id>.json  # statusLine 등록이 채우는 세션별 비용·컨텍스트 캡처(세션당 파일 하나)

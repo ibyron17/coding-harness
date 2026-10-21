@@ -27,6 +27,7 @@ try:
         iso as _iso,
         jsonl_bytes as _window,
         line as _line,
+        moved_phrase as _moved_phrase,
         output_phrase as _output_phrase,
         result_line as _result_line,
         use_line as _use_line,
@@ -40,6 +41,7 @@ except ImportError:  # 파일을 직접 실행한 경로(패키지 문맥이 없
         iso as _iso,
         jsonl_bytes as _window,
         line as _line,
+        moved_phrase as _moved_phrase,
         output_phrase as _output_phrase,
         result_line as _result_line,
         use_line as _use_line,
@@ -354,6 +356,134 @@ class BackgroundOutputPathsTest(unittest.TestCase):
         torn = json.dumps(self._tool_result_line(_output_phrase(SESSION_ID, "abc"))).encode("utf-8")[:-15]
 
         self.assertEqual(hub_activity.background_output_paths(torn, SESSION_ID), ())
+
+
+class HostBackgroundLaunchesTest(unittest.TestCase):
+    """host_background_launches — 호스트의 두 시작 문장(PRP background-task-orphans BG-G2)만 인정한다. 상한이 없다."""
+
+    def _launches_for(self, *bodies: object, session_id: str = SESSION_ID) -> tuple[hub_activity.BackgroundLaunch, ...]:
+        lines = [_result_line(BASE_MS + index, f"u{index}", body) for index, body in enumerate(bodies)]
+        return hub_activity.host_background_launches(_window(*lines), session_id)
+
+    def _expected(self, task_id: str) -> hub_activity.BackgroundLaunch:
+        return hub_activity.BackgroundLaunch(task_id=task_id, output_path=f"/t/x/{SESSION_ID}/tasks/{task_id}.output")
+
+    def test_the_run_in_background_sentence_yields_a_launch(self) -> None:
+        launches = self._launches_for(_output_phrase(SESSION_ID, "bfrtiwey5"))
+
+        self.assertEqual(launches, (self._expected("bfrtiwey5"),))
+
+    def test_the_timeout_moved_sentence_yields_a_launch(self) -> None:
+        launches = self._launches_for(_moved_phrase(SESSION_ID, "b2l1gdl7h"))
+
+        self.assertEqual(launches, (self._expected("b2l1gdl7h"),))
+
+    def test_a_text_block_list_body_is_read_like_a_string_body(self) -> None:
+        body = [{"type": "text", "text": _moved_phrase(SESSION_ID, "b2l1gdl7h")}]
+
+        self.assertEqual(self._launches_for(body), (self._expected("b2l1gdl7h"),))
+
+    def test_both_sentences_in_one_window_come_newest_first(self) -> None:
+        launches = self._launches_for(_moved_phrase(SESSION_ID, "older"), _output_phrase(SESSION_ID, "newer"))
+
+        self.assertEqual(launches, (self._expected("newer"), self._expected("older")))
+
+    def test_the_same_task_reported_twice_collapses_to_one(self) -> None:
+        launches = self._launches_for(_output_phrase(SESSION_ID, "abc"), _output_phrase(SESSION_ID, "abc"))
+
+        self.assertEqual(launches, (self._expected("abc"),))
+
+    def test_there_is_no_upper_bound_on_the_number_of_launches(self) -> None:
+        task_ids = [f"t{index}" for index in range(hub_activity.BACKGROUND_OUTPUT_MAX_FILES + 3)]
+
+        launches = self._launches_for(*[_output_phrase(SESSION_ID, task_id) for task_id in task_ids])
+
+        self.assertEqual({launch.task_id for launch in launches}, set(task_ids))
+        self.assertEqual(len(launches), len(task_ids))
+
+    def test_a_path_under_another_session_is_excluded(self) -> None:
+        launches = self._launches_for(_output_phrase("other-session", "abc"), _moved_phrase("other-session", "def"))
+
+        self.assertEqual(launches, ())
+
+    def test_the_marker_without_a_paired_id_is_excluded(self) -> None:
+        good_path = f"/t/x/{SESSION_ID}/tasks/abc.output"
+        bodies = {
+            "marker only": f"Output is being written to: {good_path}",
+            "ID names another task": f"Command running in background with ID: zzz. Output is being written to: {good_path}",
+            "moved sentence names another task": (
+                f"Command did not complete within its 120s timeout and was moved to the background (ID: zzz). "
+                f"Output is being written to: {good_path}."
+            ),
+        }
+        for label, body in bodies.items():
+            with self.subTest(label):
+                self.assertEqual(self._launches_for(body), ())
+
+    def test_a_host_sentence_quoted_in_the_middle_of_a_body_is_excluded(self) -> None:
+        """검수 1회차 지적 1 — 다른 기록을 Read·grep·cat 해 남의 시작 문장이 본문 중간에 실려도 내 작업이 아니다."""
+        for label, sentence in {
+            "running": _output_phrase(SESSION_ID, "sibling1"),
+            "moved": _moved_phrase(SESSION_ID, "sibling2"),
+        }.items():
+            quoted_line = json.dumps(_result_line(BASE_MS, "toolu_s", sentence))
+            quoted_bodies = {
+                "after a Read line number": f"     42\t{sentence}",
+                "after a grep file prefix": f"agent-sibling.jsonl:42:{sentence}",
+                "inside a JSON dump of the sibling line": f"agent-sibling.jsonl:42:{quoted_line}",
+                "after a leading sentence": f"결과 확인\n{sentence}",
+                "after a leading space": f" {sentence}",
+            }
+            for quote_label, body in quoted_bodies.items():
+                with self.subTest(sentence=label, quoted=quote_label):
+                    self.assertEqual(self._launches_for(body), ())
+
+    def test_a_second_text_block_starting_with_the_host_sentence_is_not_the_body_start(self) -> None:
+        body = [{"type": "text", "text": "머리말"}, {"type": "text", "text": _output_phrase(SESSION_ID, "abc")}]
+
+        self.assertEqual(self._launches_for(body), ())
+
+    def test_the_moved_sentence_needs_its_timeout_lead_in(self) -> None:
+        bare = f"was moved to the background (ID: abc). Output is being written to: /t/x/{SESSION_ID}/tasks/abc.output."
+
+        self.assertEqual(self._launches_for(bare), ())
+
+    def test_a_bare_id_plus_marker_that_is_not_one_of_the_two_host_sentences_is_excluded(self) -> None:
+        good_path = f"/t/x/{SESSION_ID}/tasks/abc.output"
+
+        launches = self._launches_for(f"ID: abc. Output is being written to: {good_path}")
+
+        self.assertEqual(launches, ())
+
+    def test_example_sentences_quoted_from_documentation_are_excluded(self) -> None:
+        examples = {
+            "placeholder id": "Command running in background with ID: <id>. Output is being written to: <path>",
+            "placeholder path": "Command running in background with ID: abc. Output is being written to: /path/to/<id>.output",
+            "relative path": f"Command running in background with ID: abc. Output is being written to: t/{SESSION_ID}/tasks/abc.output",
+            "no output suffix": f"Command running in background with ID: abc. Output is being written to: /t/{SESSION_ID}/tasks/abc",
+        }
+        for label, body in examples.items():
+            with self.subTest(label):
+                self.assertEqual(self._launches_for(body), ())
+
+    def test_a_sentence_outside_a_tool_result_block_is_ignored(self) -> None:
+        phrase = _moved_phrase(SESSION_ID, "abc")
+        outside = _line("assistant", BASE_MS, [{"type": "text", "text": phrase}])
+
+        self.assertEqual(hub_activity.host_background_launches(_window(outside), SESSION_ID), ())
+
+    def test_a_torn_line_is_skipped_without_raising(self) -> None:
+        torn = json.dumps(_result_line(BASE_MS, "u0", _moved_phrase(SESSION_ID, "abc"))).encode("utf-8")[:-15]
+
+        self.assertEqual(hub_activity.host_background_launches(torn, SESSION_ID), ())
+
+    def test_the_display_function_keeps_its_eight_file_cap(self) -> None:
+        bodies = [_output_phrase(SESSION_ID, f"t{index}") for index in range(10)]
+        lines = [_result_line(BASE_MS + index, f"u{index}", body) for index, body in enumerate(bodies)]
+
+        paths = hub_activity.background_output_paths(_window(*lines), SESSION_ID)
+
+        self.assertEqual(len(paths), hub_activity.BACKGROUND_OUTPUT_MAX_FILES)
 
 
 class SummarizeBackgroundOutputsTest(unittest.TestCase):

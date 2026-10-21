@@ -963,7 +963,11 @@ readonly LEDGER_EXEMPT_ROW_RATCHET=372
 #
 # 569 → 571(hub-release-check-on-refresh.md 2회차 검수 반영, 결정 RR4·RR7·RR11): 신설 2건 T25-292(run_server 의 판정기 배선)·T25-293(허브 페이지 틀 삽입 차단 정책). 순증가 2.
 # collect_guard_ids 를 그대로 재현해 편집 전(569)·후(571) 재측정한다.
-readonly SOURCE_GUARD_ID_FLOOR=571
+#
+# 571 → 572(background-task-orphans.md §6.5): 신설 1건 T31-12(서브에이전트 보고 게이트 배선 — 에이전트 3종 frontmatter hooks·TaskStop·정리 문구·스크립트 실재).
+# 순증가 1. collect_guard_ids 를 그대로 재현해 편집 전(571)·후(572) 재측정한다. 원장에는 변조행이 아니라 면제행 1건으로 등록했다(T31-10·T31-11 과 같은
+# 사용자 결정 2026-10-08, 전체 검사 시간 보호) — 변조 검증은 구현 시 수동 1회(같은 문서 §8.1-4).
+readonly SOURCE_GUARD_ID_FLOOR=572
 
 # 배포 트리(rules/·agents/·commands/)에 남는 "파일명:줄번호" 형태 인용 수의 상한
 # 래칫(T39-4). 배포되는 문서가 다른 파일의 줄 번호를 인용하면, 그 파일을 고치는 수정이
@@ -6270,12 +6274,13 @@ PYEOF
   # hub_activity.py 를 더해 31 → 32 로, docs/prps/harness-benchmark-adoption.md ⑨ 가
   # hub_session_cost.py 를 더해 32 → 33 으로, docs/prps/harness-versioning.md 단계 B 가
   # hub_release.py·hub_release_read.py 를 더해 33 → 35 로, docs/prps/hub-macos-notification.md 가
-  # hub_notify.py·hub_notify_send.py 를 더해 35 → 37 로 다시 바꿨다, T25-149 참조):
-  # hub/README.md 가 37개 파일을 고지하고, hub-dashboard.md 모듈 구성표가 hub_session.py·
+  # hub_notify.py·hub_notify_send.py 를 더해 35 → 37 로, docs/prps/background-task-orphans.md 가
+  # hub_handback_guard.py 를 더해 37 → 38 로 다시 바꿨다, T25-149 참조):
+  # hub/README.md 가 38개 파일을 고지하고, hub-dashboard.md 모듈 구성표가 hub_session.py·
   # hub_session_facts.py·hub_live_session.py 를 안다. 역방향 — 옛 "12개 파일" 고지가 남아
   # 있으면 안 된다.
-  if ! grep -qF "37개 파일" "$hub_readme_file"; then
-    note_failure "T25-104: hub/README.md 에 37개 파일 고지가 없음"
+  if ! grep -qF "38개 파일" "$hub_readme_file"; then
+    note_failure "T25-104: hub/README.md 에 38개 파일 고지가 없음"
   fi
   if grep -qF "35개 파일" "$hub_readme_file"; then
     note_failure "T25-104: hub/README.md 에 옛 35개 파일 고지가 남아 있음"
@@ -7539,19 +7544,20 @@ PYEOF
   # 31로, docs/prps/hub-live-activity.md 결정 LA14 가 hub_activity.py 를 더해 32로,
   # docs/prps/harness-benchmark-adoption.md ⑨ 가 hub_session_cost.py 를 더해 33으로,
   # docs/prps/harness-versioning.md 단계 B 가 hub_release.py·hub_release_read.py 를 더해 35로,
-  # docs/prps/hub-macos-notification.md 가 hub_notify.py·hub_notify_send.py 를 더해 37로 갱신):
-  # hub/install.sh 의 HUB_FILE_COUNT 가 37 이다. T25-1 은
+  # docs/prps/hub-macos-notification.md 가 hub_notify.py·hub_notify_send.py 를 더해 37로,
+  # docs/prps/background-task-orphans.md 가 hub_handback_guard.py 를 더해 38로 갱신):
+  # hub/install.sh 의 HUB_FILE_COUNT 가 38 이다. T25-1 은
   # "선언값==실제 파일 수"라는 일반 교차 검사라, 값이 이전 수에 머문 채 실제 파일 수도
   # 우연히 그 수로 되돌아가면(새 파일을 추가하며 다른 파일을 실수로 지운 경우) 잡지 못하는
-  # 사각이 있다 — 이 값 자체를 37로 고정해 그 사각을 없앤다. hub/README.md 「파일 배치」의
-  # 파일 수 서술도 함께 37로 갱신됐는지 본다.
+  # 사각이 있다 — 이 값 자체를 38로 고정해 그 사각을 없앤다. hub/README.md 「파일 배치」의
+  # 파일 수 서술도 함께 38로 갱신됐는지 본다.
   local declared_hub_file_count
   declared_hub_file_count=$(grep -oE '^readonly HUB_FILE_COUNT=[0-9]+' "$hub_install_file" | grep -oE '[0-9]+$')
-  if [[ "$declared_hub_file_count" -ne 37 ]]; then
-    note_failure "T25-149: hub/install.sh 의 HUB_FILE_COUNT=$declared_hub_file_count(기대 37)"
+  if [[ "$declared_hub_file_count" -ne 38 ]]; then
+    note_failure "T25-149: hub/install.sh 의 HUB_FILE_COUNT=$declared_hub_file_count(기대 38)"
   fi
-  if ! grep -qF '37개 파일' "$hub_readme_file"; then
-    note_failure "T25-149: hub/README.md 「파일 배치」에 '37개 파일' 서술이 없음"
+  if ! grep -qF '38개 파일' "$hub_readme_file"; then
+    note_failure "T25-149: hub/README.md 「파일 배치」에 '38개 파일' 서술이 없음"
   fi
 
   # T25-150(정+역, 결정 FT7·GOTCHA 8 — 갱신: docs/prps/hub-subagent-background-pause.md 결정
@@ -11788,10 +11794,18 @@ PYEOF
 # 토큰의 존재만 보고, 같은 뜻을 다른 낱말로 되돌리는 편집이나 토큰은 두고 의미를 뒤집는 편집,
 # 에이전트가 계약을 실제로 지키는지는 보지 못한다. 위양성이 나면 고칠 것은 대상 문단이 아니라
 # 이 토큰 목록이다.
+#
+# T31-12(docs/prps/background-task-orphans.md §6.5)는 서브에이전트 보고 게이트의 배선을 고정한다 — 세 작업
+# 에이전트(design-architect·implementer·code-reviewer)가 본문에 백그라운드 정리 문구(「moved to the background」)를 갖고,
+# frontmatter 에 TaskStop 도구와 hooks 배선(matcher "SubagentHandback"·hub_handback_guard.py·fail-open 꼬리 `|| true`)을
+# 갖는지, 그리고 그 스크립트 파일이 실재하는지(개명하면 에이전트 정의가 존재하지 않는 파일을 부르게 되는데 훅은 조용히
+# 아무것도 안 한다 — 프로젝트 메모리 「개명하면 정적 가드가 눈이 먼다」)를 본다. 등록 방식·한계는 T31-10 과 같다(면제행,
+# 구현 시 수동 변조 1회) — 문구·배선의 **존재만** 본다. 훅이 실제로 발화하는지·호스트 계약(입력 키·transcript 경로·결과 문장)이
+# 유지되는지·서브에이전트가 정리 문구를 지키는지는 보지 못한다(PRP §8.2 설치 후 수락 시험의 몫).
 test_rules_workflow_guardrails() {
   group_failures=()   # 앞 그룹이 조기 return 했을 때의 잔여물 제거
   local test_name="T31"
-  local test_desc="워크플로우 지침 고정 래칫 (T31-1~T31-11)"
+  local test_desc="워크플로우 지침 고정 래칫 (T31-1~T31-12)"
   log_test_name "$test_name" "$test_desc"
 
   # ---- T31-1: rules/workflow/ 4파일 존재 — 파일명 리터럴 고정, 개명·누락이 곧 실패 ----
@@ -11941,6 +11955,36 @@ test_rules_workflow_guardrails() {
       note_failure "T31-11: ${evidence_contract_pairs[evidence_pair_index]} 에 증거 계약 토큰 '${evidence_contract_pairs[evidence_pair_index + 1]}' 이 없음(재현 의무·미검증 주장 순서·사유 범주 요구가 삭제됐거나 옛 수정안 양식으로 되돌아갔을 수 있다)"
     fi
   done
+
+  # ---- T31-12 (docs/prps/background-task-orphans.md §6.5): 보고 게이트 배선. 세 작업 에이전트 각각에 대해 ① 본문에
+  # 백그라운드 정리 문구 토큰 ② frontmatter(T31-10 과 같은 첫 --- 쌍)의 tools 에 TaskStop 이 한 토큰으로 ③ frontmatter 에
+  # 훅 이벤트 키 줄(`  PreToolUse:` 줄 정확 일치 — 검수 1회차 지적 2) · 배선 토큰 3종(matcher·스크립트 이름·fail-open 꼬리 — 꼬리가 없으면 스크립트 파일이 없을 때 python3 가 종료 코드 2 를
+  # 내고 PreToolUse 에서 2 는 보고 차단이다) · 교차 파일: 스크립트가 실재한다. 한계는 그룹 머리 주석 참고.
+  local gate_agent_name gate_agent_file gate_agent_frontmatter gate_agent_tool_tokens gate_wiring_token
+  for gate_agent_name in design-architect implementer code-reviewer; do
+    gate_agent_file="$REPO_ROOT/agents/${gate_agent_name}.md"
+    if ! grep -qF -- 'moved to the background' "$gate_agent_file" 2> /dev/null; then
+      note_failure "T31-12: agents/${gate_agent_name}.md 본문에 백그라운드 정리 문구 토큰 'moved to the background' 가 없음(서브에이전트가 타임아웃으로 옮겨진 명령도 자기 백그라운드라는 인식이 사라졌다)"
+    fi
+    gate_agent_frontmatter=$(awk '/^---$/ { fence_count++; next } fence_count == 1 { print } fence_count >= 2 { exit }' \
+      "$gate_agent_file" 2> /dev/null || true)
+    gate_agent_tool_tokens=$(grep -E '^tools:' <<< "$gate_agent_frontmatter" | sed 's/^tools://' | tr ',' '\n' \
+      | sed 's/^[[:space:]]*//; s/[[:space:]]*$//' || true)
+    if ! grep -qx 'TaskStop' <<< "$gate_agent_tool_tokens"; then
+      note_failure "T31-12: agents/${gate_agent_name}.md frontmatter 의 tools 에 TaskStop 이 없음(보고 게이트가 안내하는 끄는 수단을 서브에이전트가 쓸 수 없다)"
+    fi
+    if ! grep -qx '  PreToolUse:' <<< "$gate_agent_frontmatter"; then
+      note_failure "T31-12: agents/${gate_agent_name}.md frontmatter 에 훅 이벤트 키 줄 '  PreToolUse:' 이 없음(다른 이벤트로 바뀌면 보고가 전달된 뒤에 돌거나 아예 안 돌아 게이트가 보고를 막지 못한다)"
+    fi
+    for gate_wiring_token in 'matcher: "SubagentHandback"' 'hub_handback_guard.py' '|| true'; do
+      if ! grep -qF -- "$gate_wiring_token" <<< "$gate_agent_frontmatter"; then
+        note_failure "T31-12: agents/${gate_agent_name}.md frontmatter 에 보고 게이트 배선 토큰 '${gate_wiring_token}' 이 없음(서브에이전트가 제 백그라운드 작업을 남긴 채 보고할 수 있다)"
+      fi
+    done
+  done
+  if [[ ! -f "$REPO_ROOT/hub/bin/hub_handback_guard.py" ]]; then
+    note_failure "T31-12: hub/bin/hub_handback_guard.py 가 없음(에이전트 frontmatter 훅이 존재하지 않는 스크립트를 부른다 — 개명·삭제됐으면 가드 토큰과 함께 고쳐야 한다)"
+  fi
 
   finish_group "$test_name"
 }
