@@ -51,3 +51,12 @@ def output_phrase(session_id: str, task_id: str, directory: str = "tasks", root:
         f"Command running in background with ID: {task_id}. "
         f"Output is being written to: {root}/{session_id}/{directory}/{task_id}.output"
     )
+
+
+def moved_phrase(session_id: str, task_id: str, root: str = "/t/x") -> str:
+    """타임아웃에 포그라운드 명령이 백그라운드로 옮겨졌을 때 호스트가 적는 결과 본문(실측 문장, 경로 뒤에 마침표가 붙는다)."""
+    return (
+        f"Command did not complete within its 120s timeout and was moved to the background (ID: {task_id}). "
+        f"Output is being written to: {root}/{session_id}/tasks/{task_id}.output. "
+        "You will be notified when it completes. To check interim output, use Read on that file path."
+    )

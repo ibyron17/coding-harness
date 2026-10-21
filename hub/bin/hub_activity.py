@@ -9,6 +9,8 @@ snapshot_content_key 는 오늘과 똑같이 안정적이다. 호스트 기록(a
 형식이라 이 모듈 하나에 가둔다(hub_transcript.py·hub_subagent.py 와 같은 이유). 문자열을 밖으로 내보내지 않는다 —
 도구 이름은 5값 종류로 접어 분류에만 쓰고 버리며, 출력 파일 경로는 I/O 층이 파일 상태를 보는 데에만 쓰고 어떤
 데이터 클래스에도 담기지 않는다. 해석 실패는 예외가 아니라 None·빈 값이다(계약 B — fail-open, 결정 LA12).
+유일한 예외는 BackgroundLaunch(작업 ID·출력 경로) 다 — 보고 게이트(hub_handback_guard.py, docs/prps/
+background-task-orphans.md BG-M)가 소유 판정에 쓰는 내부 값이고 스냅샷·화면으로 나가지 않는다.
 
 임포트는 hub_transcript.epoch_ms_from_iso8601 하나뿐이다("Z" 처리 사본을 만들지 않으려고, 결정 LA14).
 `_json_object_or_none`·표지 줄 선별은 hub_subagent.py 의 사적 헬퍼와 같은 방식의 작은 사본이다 — 사적 심볼을
@@ -65,6 +67,17 @@ _OUTPUT_PHRASE_PATTERN = re.compile(
 _OUTPUT_STEM_PATTERN = re.compile(r"[A-Za-z0-9_-]{1,64}")
 _PATH_PIECES_TO_REJECT = ("", ".", "..")
 _MINIMUM_PATH_PIECES = 3                   # <세션>/tasks/<id>.output 의 세 조각
+# 호스트가 백그라운드 작업을 시작했을 때 결과 본문에 적는 두 문장(실측 2.1.304, docs/prps/background-task-orphans.md BG-G2) —
+# 타임아웃으로 옮겨진 포그라운드 명령과 run_in_background 명령. 소유 판정에는 이 두 문장만, **본문 맨 앞에서 시작할 때만** 인정한다 —
+# 서브에이전트가 같은 세션의 다른 기록을 Read·grep 해 남의 시작 문장이 본문 중간(줄 번호·`파일:` 접두·JSON 덤프 안)에 실린 것을
+# 내 작업으로 오인하지 않게 한다(검수 1회차 지적 1. 실측: 호스트가 쓴 문장은 본문 위치 0 또는 「Command did not complete within its
+# Ns timeout and 」 바로 뒤에서만 나왔고 인용은 모두 그 밖이었다).
+_LAUNCH_SENTENCE_PATTERN = re.compile(
+    r"(?:Command did not complete within its \d+s timeout and was moved to the background \(ID: ("
+    + _OUTPUT_STEM_PATTERN.pattern + r")\)"
+    r"|Command running in background with ID: (" + _OUTPUT_STEM_PATTERN.pattern + r"))"
+    r"\. " + re.escape(BACKGROUND_OUTPUT_MARKER.decode("ascii")) + r":? */\S+?\.output(?!\w)"
+)
 
 
 @dataclass(frozen=True)
@@ -319,6 +332,47 @@ def background_output_paths(window: bytes, session_id: str) -> tuple[str, ...]:
     """
     distinct_paths = _distinct(_output_paths_backwards(window, session_id))
     return tuple(itertools.islice(distinct_paths, BACKGROUND_OUTPUT_MAX_FILES))
+
+
+@dataclass(frozen=True)
+class BackgroundLaunch:
+    """호스트가 시작했다고 적은 백그라운드 작업 하나. 보고 게이트(hub_handback_guard)의 내부 값이다 — 스냅샷으로 나가지 않는다."""
+
+    task_id: str
+    output_path: str
+
+
+def _launches_in_body(body: str, session_id: str) -> Iterator[BackgroundLaunch]:
+    match = _LAUNCH_SENTENCE_PATTERN.match(body)
+    if match is None:
+        return
+    output_path = _valid_output_path(match.group(0), session_id)
+    if output_path is not None:
+        yield BackgroundLaunch(task_id=match.group(1) or match.group(2), output_path=output_path)
+
+
+def _launches_backwards(window: bytes, session_id: str) -> Iterator[BackgroundLaunch]:
+    for line in _marker_lines_backwards(window):
+        payload = _json_object_or_none(line)
+        if payload is None:
+            continue
+        for body in _tool_result_bodies(payload):
+            yield from _launches_in_body(body, session_id)
+
+
+def host_background_launches(window: bytes, session_id: str) -> tuple[BackgroundLaunch, ...]:
+    """tool_result 본문에서 호스트의 두 백그라운드 시작 문장(BG-G2)만 찾아 형태 검증을 통과한 것을 낸다.
+
+    파일에서 뒤의 것부터, 같은 작업은 한 번만, 개수 상한 없음 — 표시용 background_output_paths(8개 상한)와 달리 소유 판정용이라
+    작업이 하나라도 빠지면 안 된다. 예외를 던지지 않는다.
+    """
+    seen: set[str] = set()
+    launches: list[BackgroundLaunch] = []
+    for launch in _launches_backwards(window, session_id):
+        if launch.task_id not in seen:
+            seen.add(launch.task_id)
+            launches.append(launch)
+    return tuple(launches)
 
 
 def summarize_background_outputs(file_stats: Sequence[tuple[int, int]]) -> BackgroundOutputView | None:
