@@ -45,9 +45,8 @@
 
 | 대상 | 동기화 연산 | 근거 |
 |------|------------|------|
-| `#dz-title` · `#dz-progress-pct` · `#dz-updated` | `textContent` 대입 | 순수 텍스트 노드 |
-| `#dz-progress-bar` | `style` 속성 대입 | 인라인 `width:N%` 만 바뀐다. 속성 대입이라 CSS transition 이 살아 있다 |
-| `#dz-steps, #dz-matrix` (둘 중 존재하는 것) | `outerHTML` 대입 | **선형/매트릭스 분기를 하나의 연산으로 흡수**한다. 한 파일에 하나만 존재한다는 불변식 1 덕분에 셀렉터 하나로 족하다 |
+| `#dz-updated` | `textContent` 대입 | 순수 텍스트 노드 |
+| `#dz-tasks` | `outerHTML` 대입 | **개정(docs/prps/hub-dashboard-multi-task.md MT7).** 작업마다 진행 카드(제목·막대·진행률·단계 목록)가 따로 있고 카드 수·순서·접힘이 바뀐다 — 옛 `#dz-title`(textContent)·`#dz-progress-pct`(textContent)·`#dz-progress-bar`(style)·`#dz-steps, #dz-matrix`(outerHTML) 부분 치환 네 갈래를 이 통째 교체 하나로 대체했다(카드가 여러 장이면 id 가 겹친다). 카드 안에 사용자 상태가 없어 통째 교체가 안전하다. 대가: 진행 막대 `width` 의 CSS transition 이 갱신 때 동작하지 않고(새 요소), 펼쳐 둔 접힌 카드는 문자열이 바뀐 갱신에서 다시 접히고, 페이지를 연 뒤 첫 갱신은 내용이 같아도 한 번 교체해 그때도 한 번 다시 접힌다 |
 | `#dz-log` | `innerHTML` 대입 | 항목 prepend·`<details open>` 회수까지 파일이 곧 정답이다. **여는 태그의 속성(`data-server-port`)은 `innerHTML` 대입 대상이 아니어서 폴링이 건드리지 않는다** — 라이브 DOM 의 값은 파일보다 낡을 수 있으며, 그래도 되는 이유는 불변식 8 이다 |
 | `input[name="dzf"]` · `label[for^="dzf-"]` · `<style>` | **치환하지 않는다** | 라디오를 재삽입하면 사용자가 고른 유형 필터가 1분마다 초기화된다 |
 | `#dz-pip-btn` · `#dz-pip-hint` · `#dz-theme-toggle` | **치환하지 않는다** | `.wrap` 바깥 = 동기화 영역 밖 |

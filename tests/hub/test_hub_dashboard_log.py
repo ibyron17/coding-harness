@@ -33,18 +33,14 @@ import hub_dashboard_render  # noqa: E402
 import hub_parse  # noqa: E402
 import hub_project  # noqa: E402
 
-# 템플릿 앵커 9종을 정확히 1회씩 담은 최소 픽스처 — 실제 hub_dashboard_template.html 의
+# 템플릿 앵커 6종을 정확히 1회씩 담은 최소 픽스처 — 실제 hub_dashboard_template.html 의
 # 발행 전 원본과 문자 단위로 같다(hub_dashboard_render.ANCHOR_* 상수 참고). 아래 순수 로직
 # 테스트(RenderFromEventsTest 등)가 이 최소 픽스처를 쓴다. 헬퍼 I/O 테스트는 hub_dashboard_log
 # 가 SCRIPT_DIR 기준으로 찾는 실제 배포 템플릿을 그대로 쓴다(HD3 — 프로젝트 폴백이 없어져
 # 이 픽스처를 프로젝트 로컬에 심어 둘 수 없다).
 _SANDBOX_TEMPLATE = (
     '  <span class="project-name" id="dz-project-name">프로젝트</span>\n'
-    '    <h1 id="dz-title">세션 제목</h1>\n'
-    '    <div class="bar-outer"><div class="bar-inner" id="dz-progress-bar" style="width:0%"></div></div>\n'
-    '    <div class="pct" id="dz-progress-pct">0/0 · 0%</div>\n'
-    '    <ol class="steps" id="dz-steps">\n'
-    '    </ol>\n'
+    '  <div id="dz-tasks"></div>\n'
     '    <div class="pct" id="dz-impl-count">0/0 · 0%</div>\n'
     '    <ol class="steps" id="dz-impl-tasks">\n'
     '    </ol>\n'
@@ -98,7 +94,7 @@ class DerivePhaseStatesTest(unittest.TestCase):
             self._event("pass"),
         )
 
-        states = hub_dashboard_render.derive_phase_states(self.PHASES, events)
+        states = hub_parse.derive_phase_states(self.PHASES, events)
 
         self.assertEqual(states, ("done", "done", "done", "done"))
 
@@ -106,7 +102,7 @@ class DerivePhaseStatesTest(unittest.TestCase):
         phases = ("구현", "검수")
         events = (self._event("impl"), self._event("pass"))
 
-        states = hub_dashboard_render.derive_phase_states(phases, events)
+        states = hub_parse.derive_phase_states(phases, events)
 
         self.assertEqual(states, ("done", "done"))
 
@@ -118,8 +114,8 @@ class DerivePhaseStatesTest(unittest.TestCase):
             self._event("pass"),
         )
 
-        states_after_fail = hub_dashboard_render.derive_phase_states(self.PHASES, events[:2])
-        states_after_recovery = hub_dashboard_render.derive_phase_states(self.PHASES, events)
+        states_after_fail = hub_parse.derive_phase_states(self.PHASES, events[:2])
+        states_after_recovery = hub_parse.derive_phase_states(self.PHASES, events)
 
         self.assertEqual(states_after_fail, ("done", "done", "active", "wait"))
         self.assertEqual(states_after_recovery, ("done", "done", "done", "done"))
@@ -128,7 +124,7 @@ class DerivePhaseStatesTest(unittest.TestCase):
         """`impl` 만 기록해도 설계·승인이 앞서 완료된 것으로 본다(그 단계까지 완료 원칙)."""
         events = (self._event("impl"),)
 
-        states = hub_dashboard_render.derive_phase_states(self.PHASES, events)
+        states = hub_parse.derive_phase_states(self.PHASES, events)
 
         self.assertEqual(states, ("done", "done", "done", "active"))
 
@@ -139,7 +135,7 @@ class DerivePhaseStatesTest(unittest.TestCase):
             hub_dashboard_render.DashboardEvent(time_ms=2, kind="step", index=2, state="active"),
         )
 
-        states = hub_dashboard_render.derive_phase_states(phases, events)
+        states = hub_parse.derive_phase_states(phases, events)
 
         self.assertEqual(states, ("done", "active", "wait", "wait"))
 
@@ -147,19 +143,19 @@ class DerivePhaseStatesTest(unittest.TestCase):
         phases = ("원인 분석", "설계", "구현", "검수")
         events = (self._event("approve"),)  # "승인" 은 이 비표준 목록에 없다
 
-        states = hub_dashboard_render.derive_phase_states(phases, events)
+        states = hub_parse.derive_phase_states(phases, events)
 
         self.assertEqual(states, ("active", "wait", "wait", "wait"))
 
     def test_no_events_yields_first_phase_active(self) -> None:
-        states = hub_dashboard_render.derive_phase_states(self.PHASES, ())
+        states = hub_parse.derive_phase_states(self.PHASES, ())
 
         self.assertEqual(states, ("active", "wait", "wait", "wait"))
 
     def test_repeating_same_event_is_idempotent(self) -> None:
         events = (self._event("impl"), self._event("impl"), self._event("impl"))
 
-        states = hub_dashboard_render.derive_phase_states(self.PHASES, events)
+        states = hub_parse.derive_phase_states(self.PHASES, events)
 
         self.assertEqual(states, ("done", "done", "done", "active"))
 
@@ -349,7 +345,7 @@ class RenderLogEntryLinesTest(unittest.TestCase):
 
 
 class BuildPublishedValuesTest(unittest.TestCase):
-    """build_published_values — 이벤트 → 앵커 9종 값. impl 슬롯 None 고정, owner_token 앞 8자리."""
+    """build_published_values — 이벤트 → 앵커 6종 값. impl 슬롯 None 고정, owner_token 앞 8자리."""
 
     SESSION_ID = "d4973ae5-cf0c-4cf2-b560-cb3606bc1cd2"
 
@@ -361,8 +357,11 @@ class BuildPublishedValuesTest(unittest.TestCase):
 
         values = hub_dashboard_render.build_published_values((init_event, step_event), self.SESSION_ID)
 
-        self.assertEqual(values.progress_text_html, "1/3 · 33%")
-        self.assertEqual(values.progress_width, "33%")
+        self.assertIn('      <div class="pct">1/3 · 33%</div>', values.task_block_lines)
+        self.assertIn(
+            '      <div class="bar-outer"><div class="bar-inner" style="width:33%"></div></div>',
+            values.task_block_lines,
+        )
 
     def test_impl_slots_are_always_none(self) -> None:
         init_event = hub_dashboard_render.DashboardEvent(
@@ -521,7 +520,7 @@ class _HelperIOTestCase(unittest.TestCase):
         return buffer.getvalue().strip()
 
     def _init(self, title: str = "제목", phases: str = "구현|검수") -> str:
-        return self._run(hub_dashboard_log.cmd_init, title, phases)
+        return self._run(hub_dashboard_log.cmd_init, [title, phases])
 
 
 class HelperNoSessionAndDisabledTest(_HelperIOTestCase):

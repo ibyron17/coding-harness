@@ -4,7 +4,7 @@
 > 상태: **승인 (2026-10-21)** — 사용자 선택: 판별 방식 (e) monitor 종류 통째로 제외. V0(PW4) 는 메인이 착수 전 확인(통과, §PW4 끝).
 > 기준: `origin/develop` `06c2b06`, 브랜치 `fix/hub-bg-wait-artifact-watch`(워크트리 `.claude/worktrees/hub-bg-wait-watch`) · 작업 경로: 전체 경로
 > 결정 접두 **PW**(미사용 확인 — `docs/prps`·`hub`·`tests`·`commands`·`rules`·`agents`·README·CLAUDE.md grep 0건).
-> 신설 정적 가드 예정 번호 **T25-294**(이 브랜치의 최대 T25-293). 병합 직전 develop 의 최대 번호·`SOURCE_GUARD_ID_FLOOR`·
+> 신설 정적 가드 번호 **T25-295**(설계 시점 예정 T25-294 였으나 develop 의 `hub-dashboard-multi-task`(PR #13)가 T25-294 를 먼저 써서 병합 때 옮겼다 — 아래 표의 FLOOR 수치는 설계 시점 값이고, 병합 후 확정 값은 `LEDGER_MUTATION_ROW_FLOOR` 153·`SOURCE_GUARD_ID_FLOOR` 576·루트 README PRP 수 95). 병합 직전 develop 의 최대 번호·`SOURCE_GUARD_ID_FLOOR`·
 > `LEDGER_MUTATION_ROW_FLOOR`·루트 README 의 PRP 수를 다시 센다 — 다른 워크트리(`hub-dashboard-multi-task`)가 같은 자리를 쓸 수 있다.
 > **목업 없음** — 새 마크업·클래스·색·배치가 0이다. 바뀌는 것은 영향받는 세션이 이미 있는 두 배지 중 어느 것을 받느냐뿐이다
 > (「◐ 백그라운드 대기」 → 「○ 대기」, 30분 뒤 「▲ 소식 없음」). 두 배지의 모습은 BW 목업(장면 1)이 승인받은 그대로다.
@@ -108,7 +108,7 @@
 | PW2 | 훅·이벤트 줄·프라이버시 무변경 — `bt` 는 호스트 라벨 그대로 `monitor` 를 계속 센다. 판정만 바꾼다 |
 | PW3 | 같은 식의 소비자(표시·출력 파일 탐색 게이트·툴팁 작업 수)가 함께 바뀐다. 상한·사다리·live 집합은 그대로 |
 | PW4 | V0 게이트 — 착수 전 현행 호스트에서 스크립트 Monitor 가 `shell` 로 보고되는지 확인. 실패하면 (e) 를 멈추고 부록 A 로 |
-| PW5 | 정적 가드 T25-294(역) 신설 + T25-251 원장 행 리터럴 갱신, FLOOR 2개 +1 |
+| PW5 | 정적 가드 T25-295(역) 신설 + T25-251 원장 행 리터럴 갱신, FLOOR 2개 +1 |
 | PW6 | 문서 — README 「화면 배치」 항목, hub-dashboard.md·BW PRP 개정 블록, 루트 README PRP 수. 프라이버시·설치 고지 무변경 |
 
 ### PW1. 판별 — `monitor` 를 깨우는 종류에서 뺀다
@@ -173,8 +173,8 @@
 | `hub/bin/hub_session.py` | `WAKING_BACKGROUND_TASK_TYPES` 를 `frozenset({"shell", "workflow"})` 로, 위 주석을 PW1 근거로 개정(§6) | ±1줄 + 주석 ~4줄 |
 | `tests/hub/test_hub_session.py` | 기대값 개정 2건 + 신설 클래스 `PassiveSubscriptionTest`(§7) | +~90 |
 | `tests/hub/test_hub_hook.py` | `BackgroundProjectionTest` 에 관측 페이로드 고정 테스트 1건(PW2 고정) | +~25 |
-| `tests/run.sh` | T25-294 블록, `test_desc` 범위 `T25-1~T25-294`, `SOURCE_GUARD_ID_FLOOR` 572→573·`LEDGER_MUTATION_ROW_FLOOR` 145→146 과 각 이력 주석 | +~15 |
-| `tests/mutations.tsv` | T25-251 행 sed 리터럴 갱신, T25-294 변조행 신설 | ±1 +1 |
+| `tests/run.sh` | T25-295 블록, `test_desc` 범위 `T25-1~T25-295`, `SOURCE_GUARD_ID_FLOOR` 572→573·`LEDGER_MUTATION_ROW_FLOOR` 145→146 과 각 이력 주석 | +~15 |
+| `tests/mutations.tsv` | T25-251 행 sed 리터럴 갱신, T25-295 변조행 신설 | ±1 +1 |
 | `hub/README.md` | 「화면 배치」 백그라운드 대기 항목(§7.1) | ~+3 |
 | `docs/prps/hub-dashboard.md` | 「상태 판정 규칙」의 BW 개정 블록 뒤에 PW 개정 블록 | +3 |
 | `docs/prps/hub-subagent-background-pause.md` | BW4 절 끝에 개정 블록(이 저장소의 「개정됨」 관례) | +4 |
@@ -205,7 +205,7 @@ WAKING_BACKGROUND_TASK_TYPES: frozenset[str] = frozenset({"shell", "workflow"})
 GOTCHA:
 1. `tests/mutations.tsv` 의 T25-251 행 sed 는 `frozenset({"shell", "monitor", "workflow"})` 리터럴을 문다 — 상수를 바꾸면 변조가
    적용되지 않는다. 같은 커밋에서 새 리터럴로 고친다(§8).
-2. 주석 첫 줄에 `monitor` 가 들어가도 T25-251·T25-294 는 `^WAKING_BACKGROUND_TASK_TYPES` **선언 줄만** 뽑아 보므로 무해하다.
+2. 주석 첫 줄에 `monitor` 가 들어가도 T25-251·T25-295 는 `^WAKING_BACKGROUND_TASK_TYPES` **선언 줄만** 뽑아 보므로 무해하다.
    주석을 선언 줄 뒤에 붙이지 않는다(같은 줄 주석 금지).
 3. 임포트 실험은 `python3 -B`(pycache 가 commands 파일 수를 흔든다 — 메모리).
 
@@ -267,13 +267,13 @@ GOTCHA:
 
 | 항목 | 내용 |
 |---|---|
-| **T25-294 PW-G1(신설, 역)** | T25-251 이 이미 뽑은 `waking_background_task_types_line_251` 을 재사용한다. 그 줄이 비어 있지 않고 `"monitor"` 를 담으면 `note_failure "T25-294: WAKING_BACKGROUND_TASK_TYPES 에 monitor 가 있음(끝나지 않는 수동 구독 — 결정 PW1 위반)"`. 줄이 비면 T25-251 이 이미 보고하므로 여기서는 중복 보고하지 않는다. 위치는 T25-251 블록 바로 뒤, 주석에 근거 한 줄 |
-| T25-294 원장 변조행 | `T25-294	hub/bin/hub_session.py	s/WAKING_BACKGROUND_TASK_TYPES: frozenset\[str\] = frozenset({"shell", "workflow"})/WAKING_BACKGROUND_TASK_TYPES: frozenset[str] = frozenset({"shell", "monitor", "workflow"})/	T25	WAKING_BACKGROUND_TASK_TYPES 에 monitor 가 있음	<결함: 깨우는 종류에 monitor 가 되돌아오면(BW4 의 keepalive 집합 논리로 "맞추는" 수정) 아티팩트 감시를 건 세션이 턴마다 90분씩 「백그라운드 대기」로 가려진다>		test_hub_docs_and_constants` — `expect_token` 은 실패 보고 줄에서 1건만 나와야 한다(T25-251 의 "subagent/teammate 가 있음" 과 겹치지 않음) |
+| **T25-295 PW-G1(신설, 역)** | T25-251 이 이미 뽑은 `waking_background_task_types_line_251` 을 재사용한다. 그 줄이 비어 있지 않고 `"monitor"` 를 담으면 `note_failure "T25-295: WAKING_BACKGROUND_TASK_TYPES 에 monitor 가 있음(끝나지 않는 수동 구독 — 결정 PW1 위반)"`. 줄이 비면 T25-251 이 이미 보고하므로 여기서는 중복 보고하지 않는다. 위치는 T25-251 블록 바로 뒤, 주석에 근거 한 줄 |
+| T25-295 원장 변조행 | `T25-295	hub/bin/hub_session.py	s/WAKING_BACKGROUND_TASK_TYPES: frozenset\[str\] = frozenset({"shell", "workflow"})/WAKING_BACKGROUND_TASK_TYPES: frozenset[str] = frozenset({"shell", "monitor", "workflow"})/	T25	WAKING_BACKGROUND_TASK_TYPES 에 monitor 가 있음	<결함: 깨우는 종류에 monitor 가 되돌아오면(BW4 의 keepalive 집합 논리로 "맞추는" 수정) 아티팩트 감시를 건 세션이 턴마다 90분씩 「백그라운드 대기」로 가려진다>		test_hub_docs_and_constants` — `expect_token` 은 실패 보고 줄에서 1건만 나와야 한다(T25-251 의 "subagent/teammate 가 있음" 과 겹치지 않음) |
 | T25-251 원장 행 개정 | sed 를 새 리터럴 기준으로: `s/…frozenset({"shell", "workflow"})/…frozenset({"shell", "workflow", "subagent"})/`. 기대 토큰·결함 설명 그대로(GOTCHA 1) |
-| `test_desc` | `"허브 문서·상수 정합성 (T25-1~T25-293)"` → `T25-294`(4185행의 낡은 하위 주석 "T25-1~T25-274" 는 이번 범위 밖이라 두고 언급만) |
-| `SOURCE_GUARD_ID_FLOOR` | 572 → **573**, 이력 주석 "572 → 573(hub-bg-wait-passive-watch.md, 결정 PW1): 신설 1건 T25-294 …" — `collect_guard_ids` 를 재현해 편집 전·후 재측정해 차집합 +1 을 확인한다 |
-| `LEDGER_MUTATION_ROW_FLOOR` | 145 → **146**, 이력 주석(T25-294 변조행 1건) |
-| 문서 토큰 가드 | **신설하지 않는다** — README 문장은 설명이고, 행동은 단위 테스트(PW-L1~L5·G1)와 T25-294 가 문다. T25-252 의 기존 토큰은 이번 개정 문구에 닿지 않는다 |
+| `test_desc` | `"허브 문서·상수 정합성 (T25-1~T25-293)"` → `T25-295`(4185행의 낡은 하위 주석 "T25-1~T25-274" 는 이번 범위 밖이라 두고 언급만) |
+| `SOURCE_GUARD_ID_FLOOR` | 572 → **573**, 이력 주석 "572 → 573(hub-bg-wait-passive-watch.md, 결정 PW1): 신설 1건 T25-295 …" — `collect_guard_ids` 를 재현해 편집 전·후 재측정해 차집합 +1 을 확인한다 |
+| `LEDGER_MUTATION_ROW_FLOOR` | 145 → **146**, 이력 주석(T25-295 변조행 1건) |
+| 문서 토큰 가드 | **신설하지 않는다** — README 문장은 설명이고, 행동은 단위 테스트(PW-L1~L5·G1)와 T25-295 가 문다. T25-252 의 기존 토큰은 이번 개정 문구에 닿지 않는다 |
 | 비용 | 변조행 1건 ≈ T25 그룹 단독 재실행 1회(원장 머리 환산 6초 남짓). 기본 실행(K6)은 이번에 닿은 행만 판정한다 |
 
 - 가드가 필요한 이유(관례 근거): BW4 의 다른 제외 결정(subagent·teammate)도 T25-251 역검사로 물려 있다. 이번 제외는 BW4 의
@@ -312,7 +312,7 @@ GOTCHA:
 | 1 | V0(PW4) | 통과 기록을 구현 보고에 남긴다. 실패면 멈추고 보고 |
 | 2 | §7.1 신설·개정 테스트 → 변경 전 코드에서 PW-L1·L2·L3·L4·L5·G1 과 개정 2건이 **실패**함을 확인(RED) | `python3 -B -m unittest tests.hub.test_hub_session tests.hub.test_hub_hook` |
 | 3 | 상수·주석 개정 → GREEN | 같은 명령 |
-| 4 | T25-294·원장·FLOOR 2개·`test_desc` → T25-294 를 손으로 되돌려(monitor 재추가) 실패, 복원해 통과 | 변조행 수동 1회 |
+| 4 | T25-295·원장·FLOOR 2개·`test_desc` → T25-295 를 손으로 되돌려(monitor 재추가) 실패, 복원해 통과 | 변조행 수동 1회 |
 | 5 | 문서 4곳 | — |
 | 6 | 전체 검증(메인이 커밋 직전 1회) | 아래 |
 
@@ -347,10 +347,10 @@ bash -n install.sh && bash -n hub/install.sh
 |---|---|
 | 판별 | 훅 `_task_type_counts` 에서 정규화 결과가 `monitor` 인 항목에 한해, 신설 `_is_artifact_live_watch(task: dict) -> bool`(설명이 문자열이고 `ARTIFACT_LIVE_WATCH_DESCRIPTION_PREFIX` 로 시작하는가 — 값을 담아 두거나 넘기지 않는다)이 참이면 종류를 `artifact_watch` 로 센다 |
 | 상수(`hub_session_facts.py`) | `ARTIFACT_LIVE_WATCH_TASK_TYPE = "artifact_watch"`(패턴 `[a-z_]{1,32}` 통과) · `ARTIFACT_LIVE_WATCH_DESCRIPTION_PREFIX = "live updates for artifact "`(F3 관측 원문, 대소문자 그대로) |
-| 판정 | `WAKING_BACKGROUND_TASK_TYPES` 무변경 — `artifact_watch` 는 원래 집합 밖이라 세지 않는다. PW-G1(T25-294 역)은 쓰지 않는다 |
+| 판정 | `WAKING_BACKGROUND_TASK_TYPES` 무변경 — `artifact_watch` 는 원래 집합 밖이라 세지 않는다. PW-G1(T25-295 역)은 쓰지 않는다 |
 | 이벤트 줄(R3) | `bt` 모양 그대로, 새 키 이름 하나. 재검증(`_parse_background_report`)은 패턴만 보므로 무변경. `KIND_MAX`(8) 의 한 자리를 쓴다. 이전 판 허브가 새 줄을 읽으면 모르는 비깨움 종류 → 올바르게 「대기」. **옛 줄의 `monitor:1` 은 소급되지 않는다** — 배포 뒤 마지막 보고마다 최대 90분 더 오표시(이벤트 창이 지나면 사라진다) |
 | BW2 개정 | "각 작업에서 읽는 것은 `type` 한 필드뿐" → "`type`, 그리고 `type` 이 `monitor` 인 항목에 한해 설명이 고정 머리로 시작하는지 1비트. 설명은 기록하지 않는다" |
-| 가드 | T25-249 개정(같은 ID): `hub_hook.py` 전역 `"description"` 리터럴 금지에 `_is_artifact_live_watch` 본문 1곳 예외 + 그 본문에 `.startswith(` 가 있고 `fields`·설명 값을 반환하는 줄이 없다는 역검사. T25-294(정, 신설): `_task_type_counts` 가 `_is_artifact_live_watch(` 를 경유. FLOOR·LEDGER +1 은 같다 |
+| 가드 | T25-249 개정(같은 ID): `hub_hook.py` 전역 `"description"` 리터럴 금지에 `_is_artifact_live_watch` 본문 1곳 예외 + 그 본문에 `.startswith(` 가 있고 `fields`·설명 값을 반환하는 줄이 없다는 역검사. T25-295(정, 신설): `_task_type_counts` 가 `_is_artifact_live_watch(` 를 경유. FLOOR·LEDGER +1 은 같다 |
 | 고지 | README 「훅 옵트인」·「프라이버시 고지」에 "종류가 `monitor` 인 항목은 설명 첫머리가 아티팩트 실시간 감시 문구인지만 비교하고 설명은 남기지 않는다" · `commands/hub.md` 설치 고지 ① 에 같은 한 구절 |
 | 테스트 | 훅 H-A1(아티팩트 문구 → `artifact_watch`, 설명·URL 미기록) · H-A2(다른 문구의 monitor → `monitor`) · H-A3(같은 문구라도 `type:"shell"` → `shell`) · H-A4(설명이 문자열 아님 → `monitor`). 파싱: `artifact_watch` 키 수용. 판정: `artifact_watch` 만 → idle, `monitor` 만 → background(유지) |
 | 취약성 | 호스트가 설명 문구를 바꾸면 `monitor` 로 되돌아가 지금 결함이 돌아온다(경보 없음). 문구 변경을 잡는 장치는 두지 않는다 — 호스트 문자열을 감시할 수단이 없다 |

@@ -336,7 +336,17 @@ readonly ALWAYS_ON_CONTEXT_BUDGET_BYTES=54892
 # `log fail` 의 상세 머리에 검수 Verdict 의 사유 범주(`[실행,검증]` 등)를 옮겨 적도록 바뀌었다. 「3회 FAIL = 설계 문제」
 # 가설을 자체 기록으로 검증하려는 데이터 수집이다. 이 파일은 허브 사용자에게만 상시 로드되고 T26 밖이다. 편집 후
 # wc -c 로 재측정한 실측치다(1415).
-readonly HUB_DASHBOARD_RULE_BUDGET_BYTES=1415
+#
+# 1415 → 1789(+374B, docs/prps/hub-dashboard-multi-task.md MT10 — 동시 작업 이름표): 한 세션이 작업을 둘 이상 동시에 하면
+# 기록이 한 덩어리로 섞여 한 작업의 검수 통과가 다른 작업까지 100% 로 만들었다(klago-ui-oneffice-micro 실사례). 그 해결의
+# 사용법(나중 작업마다 서브커맨드 바로 뒤 `--task '<이름표>'`, 이름표 init 은 기존 기록을 지우지 않음, 이름표 없는 호출은 첫
+# 작업 몫, 요약 한 줄에는 한 작업만)과 NOTASK 회복 경로(그 이름표로 init 부터) 괄호 하나가 이 파일에만 들어갈 수 있다 —
+# 호출 규약을 가르치는 유일한 자리다. 허브 사용자 세션에만 상시 로드되고 T26 밖이다(사용자 승인, 설계 확정 시). 편집 후
+# wc -c 로 재측정한 실측치다(1789).
+#
+# 1789 → 1786(hub-dashboard-multi-task.md 재검수 반영): 「요약 한 줄에는 한 작업만」 원문 뜻을 되살리며 다른 표현을 줄여 승인 한도(1789) 안에서 3B 를
+# 내렸다. 내리는 방향이라 의무는 아니지만 실측치로 래칫을 다시 고정한다(1786).
+readonly HUB_DASHBOARD_RULE_BUDGET_BYTES=1786
 
 # T33-2 가 두 파일에서 정확히 1회씩 찾는 런처 정규형 — hub/rules/dashboard-recording.md
 # 「헬퍼 스크립트」 절과 hub/README.md 「진행 기록」 절이 공유하는 문자열이어야 한다(docs/prps/
@@ -608,9 +618,18 @@ readonly MUTATION_HARNESS_GROUP="T37"
 # 143 → 145(hub-release-check-on-refresh.md 2회차 검수 반영, 결정 RR4·RR7·RR11): 신규 가드 T25-292(run_server 의 판정기 배선)·T25-293(허브 페이지 틀 삽입 차단 정책)의 변조행 2건을
 # 붙였다. T99-6 은 이 상수 인용을 바꾼 수정에 맞춰 sed 리터럴을 옮겼다. 순증가 2.
 #
-# 145 → 146(hub-bg-wait-passive-watch.md, 결정 PW1): 신규 가드 T25-294(깨우는 종류에 monitor 가 없다 — 역)의 변조행 1건을 붙였다. T25-251 은 원래 변조행이라 같은 ID 로
-# 변조 sed 리터럴만 새 상수 값에 맞춰 옮겼다. T99-6 은 이 상수 인용을 바꾼 수정에 맞춰 sed 리터럴을 옮겼다. 순증가 1.
-readonly LEDGER_MUTATION_ROW_FLOOR=146
+# 145 → 150(hub-dashboard-multi-task.md, 결정 MT2·MT7~MT9): 신규 가드 T22-177(작업 카드 CSS — 새 색 토큰 0)·T25-294(세션 줄이 접힌 작업을 거르는 필드)·
+# T34-7(--task 가 표·기록기·규칙 파일 세 곳에 있다)의 변조행 3건을 붙였고, 개정한 T22-139·T25-6 을 면제행에서 변조행으로 승급시켰다(원장 자신의 승급 규칙 —
+# 개정·수정 시 변조행으로 승급). 개정한 T25-263 은 원래 변조행이라 같은 ID 로 변조 sed 만 바꿨다. T99-6 은 이 상수 인용을 바꾼 수정에 맞춰 sed
+# 리터럴을 옮겼다. 순증가 5.
+#
+# 150 → 152(hub-dashboard-multi-task.md 1회차 검수 반영): 개정한 T22-24(렌더러의 <ol class="steps">)·T22-53(템플릿 syncTasks 의 getElementById)이 단일 파일 변조로
+# 재현됨이 확인돼 면제행에서 변조행으로 승급시켰다. T99-6 은 이 상수 인용을 바꾼 수정에 맞춰 sed 리터럴을 옮겼다. 순증가 2.
+#
+# 152 → 153(hub-bg-wait-passive-watch.md, 결정 PW1): 신규 가드 T25-295(깨우는 종류에 monitor 가 없다 — 역)의 변조행 1건을 붙였다. T25-251 은 원래 변조행이라 같은 ID 로
+# 변조 sed 리터럴만 새 상수 값에 맞춰 옮겼다. T99-6 은 이 상수 인용을 바꾼 수정에 맞춰 sed 리터럴을 옮겼다. 순증가 1. 동시 작업(hub-dashboard-multi-task)이 먼저 T25-294 를
+# 써서 이 기능의 가드는 develop 병합 뒤 T25-295 로 확정했다.
+readonly LEDGER_MUTATION_ROW_FLOOR=153
 
 # 원장 면제행 수의 상한 래칫(T37-14 가 실행마다 검사, PRP §12 「면제행이 영구 도피처가
 # 된다」의 두 번째 완화). 착지 시점 실측 390. 신규 가드를 기존 공통 사유로 면제 등록하면
@@ -701,7 +720,16 @@ readonly LEDGER_MUTATION_ROW_FLOOR=146
 # 373 → 372 로 내린 이유(hub-session-row-layout-and-modal-size.md, 결정 LM4 — T25-148 삭제): 그 가드는 .tier1-active 의
 # display:-webkit-box·line-clamp:2(TC2)를 지키던 면제행이었는데 대상 줄이 걷혀 가드와 면제행을 함께 지웠다(역방향은 신설
 # T25-263 이 흡수한다). 내리는 방향이라 의무는 아니지만 위 항목들과 나란히 적는다.
-readonly LEDGER_EXEMPT_ROW_RATCHET=372
+#
+# 372 → 370 으로 내린 이유(hub-dashboard-multi-task.md, 결정 MT7 — T22-139·T25-6 변조행 승급): 그 PRP 가 렌더러·템플릿의 앵커와 단계 줄 생산자를 작업 카드
+# 묶음(#dz-tasks)으로 바꾸며 두 가드의 검사 내용을 개정했다 — 원장 자신의 승급 규칙(개정·수정 시 변조행으로 승급)을 그대로 적용해 변조행으로 승급시켰다.
+# 같은 PRP 가 개정한 T22-2 는 검사 대상 토큰(dz-tasks·task-card·task-folded·dz-log·dz-updated)이 둘 이상의 파일에 걸쳐 있어(합본 검색) 한 파일만 바꾸는
+# 변조 sed 로 재현되지 않아 면제행으로 남겼다. 내리는 방향이라 의무는 아니지만 위 항목들과 나란히 적는다.
+#
+# 370 → 368 로 내린 이유(hub-dashboard-multi-task.md 1회차 검수 반영 — T22-24·T22-53 변조행 승급): 위 문단이 면제 사유로 든 「한 파일만 바꾸는 변조로
+# 재현되지 않는다」는 T22-24(<ol class="steps"> 는 렌더러에만 있다)·T22-53(syncTasks 본문은 템플릿에만 있다)에는 사실이 아니었다 — 검수자가 단일 파일
+# 변조로 재현됨을 확인해 두 가드를 변조행으로 승급시켰다. 내리는 방향이라 의무는 아니지만 위 항목들과 나란히 적는다.
+readonly LEDGER_EXEMPT_ROW_RATCHET=368
 
 # 소스에서 추출되는 서브체크 ID 수의 하한(T37-11 이 실행마다 검사). 실측 399 — S3b 가
 # 신규 가드 5종(T28-4 · T31-6 · T36-8 · T36-9 · T36-10)을 붙여 394 에서 올렸다(그 394 는
@@ -970,10 +998,13 @@ readonly LEDGER_EXEMPT_ROW_RATCHET=372
 # 571 → 572(background-task-orphans.md §6.5): 신설 1건 T31-12(서브에이전트 보고 게이트 배선 — 에이전트 3종 frontmatter hooks·TaskStop·정리 문구·스크립트 실재).
 # 순증가 1. collect_guard_ids 를 그대로 재현해 편집 전(571)·후(572) 재측정한다. 원장에는 변조행이 아니라 면제행 1건으로 등록했다(T31-10·T31-11 과 같은
 # 사용자 결정 2026-10-08, 전체 검사 시간 보호) — 변조 검증은 구현 시 수동 1회(같은 문서 §8.1-4).
+# 572 → 575(hub-dashboard-multi-task.md, 결정 MT2·MT8·MT9): 신설 3건 T22-177(작업 카드 CSS — 새 색 토큰 0)·T25-294(세션 줄이 접힌 작업을 거르는 필드)·
+# T34-7(--task 가 표·기록기·규칙 파일 세 곳에 있다). 순증가 3. 개정한 T22-2·T22-24·T22-53·T22-137·T22-139·T25-6·T25-263·T25-281·T34-6 은 같은 ID 라 개수에
+# 닿지 않는다. collect_guard_ids 를 그대로 재현해 편집 전(572)·후(575) 재측정했다.
 #
-# 572 → 573(hub-bg-wait-passive-watch.md, 결정 PW1): 신설 1건 T25-294(깨우는 종류에 monitor 가 없다). 순증가 1.
-# collect_guard_ids 를 그대로 재현해 편집 전(572)·후(573) 재측정한다 — 차집합은 T25-294 하나다.
-readonly SOURCE_GUARD_ID_FLOOR=573
+# 575 → 576(hub-bg-wait-passive-watch.md, 결정 PW1): 신설 1건 T25-295(깨우는 종류에 monitor 가 없다). 순증가 1.
+# collect_guard_ids 를 그대로 재현해 편집 전(575)·후(576) 재측정한다 — 차집합은 T25-295 하나다.
+readonly SOURCE_GUARD_ID_FLOOR=576
 
 # 배포 트리(rules/·agents/·commands/)에 남는 "파일명:줄번호" 형태 인용 수의 상한
 # 래칫(T39-4). 배포되는 문서가 다른 파일의 줄 번호를 인용하면, 그 파일을 고치는 수정이
@@ -3096,7 +3127,7 @@ test_manifest_fields_complete() {
 test_dashboard_template_integrity() {
   group_failures=()   # 앞 그룹이 조기 return 했을 때의 잔여물 제거
   local test_name="T22"
-  local test_desc="dashboard 템플릿 무결성 + harness-update.md·frontmatter 3종 문면 정합성 (T22-1~T22-175, dashboard-native-data-source PRP 로 재작성)"
+  local test_desc="dashboard 템플릿 무결성 + harness-update.md·frontmatter 3종 문면 정합성 (T22-1~T22-177, dashboard-native-data-source PRP 로 재작성)"
   log_test_name "$test_name" "$test_desc"
 
   local sandbox
@@ -3151,9 +3182,10 @@ test_dashboard_template_integrity() {
   local dashboard_union_file="$sandbox/dashboard_union.txt"
   cat "$dashboard_command_file" "$dashboard_helper_file" "$dashboard_render_file" "$dashboard_template_file" > "$dashboard_union_file"
 
-  # T22-2: 필수 셀렉터 6종이 템플릿에 모두 존재
+  # T22-2(개정, docs/prps/hub-dashboard-multi-task.md MT7): 필수 셀렉터 5종이 합본에 모두 존재 — 제목·진행 막대·진행률·
+  # 단계 id 4종은 작업 카드 묶음(dz-tasks)·카드 클래스(task-card·task-folded)로 바뀌었다(카드가 여러 장이면 id 가 겹친다).
   local required_selector
-  for required_selector in dz-title dz-progress-bar dz-progress-pct dz-step- \
+  for required_selector in dz-tasks task-card task-folded \
     dz-log dz-updated; do
     if ! grep -q "$required_selector" "$dashboard_union_file"; then
       record_failure "$test_name" "T22-2: 셀렉터 미발견: $required_selector"
@@ -3235,12 +3267,14 @@ test_dashboard_template_integrity() {
     note_failure "T22-23: table.matrix{ CSS 규칙 미발견"
   fi
 
-  # T22-24: 선형 단계 목록 비퇴화 + 새 렌더러가 만드는 단계 줄 패턴이 문서화돼 있다.
-  if ! grep -qF '<ol class="steps" id="dz-steps">' "$dashboard_union_file"; then
-    note_failure "T22-24: 선형 단계 목록 <ol id=\"dz-steps\"> 미발견"
+  # T22-24(개정, docs/prps/hub-dashboard-multi-task.md MT7): 선형 단계 목록 비퇴화 + 렌더러가 만드는 작업 카드 패턴이 있다 —
+  # id 가 붙은 <ol id="dz-steps">·dz-step-{n} 은 카드가 여러 장이면 겹쳐 없앴다.
+  if ! grep -qF '<ol class="steps">' "$dashboard_union_file"; then
+    note_failure "T22-24: 선형 단계 목록 <ol class=\"steps\"> 미발견"
   fi
-  if ! grep -q 'dz-step-{n}' "$dashboard_union_file"; then
-    note_failure "T22-24: dz-step-{n} 패턴 미발견"
+  if ! grep -qF 'class="card task-card"' "$dashboard_render_file" \
+    || ! grep -qF '<details class="card task-card task-folded">' "$dashboard_render_file"; then
+    note_failure "T22-24: 렌더러에 열린·접힌 작업 카드 패턴(class=\"card task-card\") 미발견"
   fi
 
   # T22-27: 색 토큰 팔레트 이식(허브 토큰 전면 이식) — ① 정방향(신규 시맨틱 토큰명 존재)
@@ -3436,9 +3470,12 @@ test_dashboard_template_integrity() {
     note_failure "T22-52: 스크립트가 dz-impl-card 를 DOM/인라인 스타일로 조작함"
   fi
 
-  # T22-53: 기존 시각화 동기화 비퇴화.
-  if ! grep -qF "querySelector('#dz-steps,#dz-matrix')" "$dashboard_union_file"; then
-    note_failure "T22-53: querySelector('#dz-steps,#dz-matrix') 미발견"
+  # T22-53(개정, docs/prps/hub-dashboard-multi-task.md MT7): 작업 카드 묶음 동기화 비퇴화 — 폴링이 #dz-tasks 를 outerHTML 로
+  # 통째 교체한다(카드 수·순서·접힘이 바뀌는 순간을 따로 처리하지 않는다). 옛 #dz-steps,#dz-matrix 부분 치환은 걷었다.
+  local sync_tasks_body_53
+  sync_tasks_body_53=$(sed -n '/function syncTasks(fresh){/,/^  }$/p' "$dashboard_template_file")
+  if ! grep -qF "getElementById('dz-tasks')" <<< "$sync_tasks_body_53" || ! grep -qF 'outerHTML' <<< "$sync_tasks_body_53"; then
+    note_failure "T22-53: syncTasks() 가 #dz-tasks 를 outerHTML 로 교체하지 않음(getElementById('dz-tasks')·outerHTML 미발견)"
   fi
 
   # T22-61(역방향): 「지금」 카드 제거 후속으로 없앤 dz-current 계열 셀렉터·인자가 부활하지 않는다.
@@ -3742,11 +3779,11 @@ test_dashboard_template_integrity() {
     note_failure "T22-136: dashboard.md 에 템플릿 파일명($actual_template_basename) 미언급"
   fi
 
-  # T22-137(정+역, dashboard-into-hub.md M2 HD15 재조준): init 이 지금도 낼 수 있는 폐쇄
-  # 어휘(OK·MKDIR-FAILED)는 문서에 있고(정), 폐기된 어휘(NOTEMPLATE·ANCHOR-FAIL)는 문서
+  # T22-137(정+역, dashboard-into-hub.md M2 HD15 재조준, docs/prps/hub-dashboard-multi-task.md MT2 개정): init 이 지금도 낼 수 있는 폐쇄
+  # 어휘(OK·MKDIR-FAILED·BADTASK)는 문서에 있고(정), 폐기된 어휘(NOTEMPLATE·ANCHOR-FAIL)는 문서
   # 어디에도 없다(역 — HTML 재발행 경로가 사라지며 그 실패 어휘도 함께 사라졌다).
   local init_closed_vocab
-  for init_closed_vocab in 'OK' 'MKDIR-FAILED'; do
+  for init_closed_vocab in 'OK' 'MKDIR-FAILED' 'BADTASK'; do
     if ! grep -qF -- "$init_closed_vocab" "$dashboard_command_file"; then
       note_failure "T22-137: 개정 init 폐쇄 어휘 미발견: $init_closed_vocab"
     fi
@@ -3758,15 +3795,14 @@ test_dashboard_template_integrity() {
     fi
   done
 
-  # T22-139: init 이 치환하는 앵커 9종이 템플릿에 각각 정확히 1회 등장한다
+  # T22-139(개정, docs/prps/hub-dashboard-multi-task.md MT7): 렌더러가 치환하는 앵커(앵커 6종 중 이 목록의 4종)가 템플릿에 각각
+  # 정확히 1회 등장한다 — 제목·진행률·단계 목록 앵커 3종은 작업 카드 묶음 앵커 하나로 합쳐졌다.
   # (앵커 유일성 붕괴 → 서버 렌더 404 상시화 방지, dashboard-into-hub.md M2 재조준 —
   # AnchorMismatch 는 이제 허브 서버의 404 + server.log 한 줄로 드러난다, HD15).
   local init_substitution_anchor
   for init_substitution_anchor in \
     '<span class="project-name" id="dz-project-name">프로젝트</span>' \
-    '<h1 id="dz-title">세션 제목</h1>' \
-    '<div class="pct" id="dz-progress-pct">0/0 · 0%</div>' \
-    '<ol class="steps" id="dz-steps">' \
+    '<div id="dz-tasks"></div>' \
     '<ul class="log" id="dz-log" data-owner-token="" data-server-port=""></ul>' \
     '<div class="foot" id="dz-updated">갱신: -</div>'; do
     local anchor_occurrence_count
@@ -4004,6 +4040,23 @@ test_dashboard_template_integrity() {
     note_failure "T22-176: hub_dashboard_log.py 가 hub_atomic_write 를 임포트하지 않음(HD14 재사용 위반)"
   fi
 
+  # T22-177(신설, 정+역, docs/prps/hub-dashboard-multi-task.md MT8): 작업 카드 CSS 가 템플릿에 있고 새 색을 들이지 않는다 —
+  # ① 이름표 배지 규칙(.badge.task{) ② 접힌 카드 summary 규칙(details.task-folded>summary{) ③ 플로팅 압축 보기에서 접힌 카드를 숨기는 규칙이
+  # 있다 ④ .badge.task{ 본문에 색 리터럴(#)이 없다(기존 토큰 var(--…)만 쓴다 — 결과 배지와 섞이지 않는 중립 짝). 메시지는 반복문
+  # 밖의 고정 문구다(원장 판별자 자격, T37-13). 원장 행은 ④ 를 문다.
+  if ! grep -qF '.badge.task{' "$dashboard_template_file"; then
+    note_failure "T22-177: 템플릿에 이름표 배지 규칙(.badge.task{)이 없음(결정 MT8 위반)"
+  fi
+  if ! grep -qF 'details.task-folded>summary{' "$dashboard_template_file"; then
+    note_failure "T22-177: 템플릿에 접힌 작업 카드 summary 규칙(details.task-folded>summary{)이 없음(결정 MT8 위반)"
+  fi
+  if ! grep -qF 'body.dz-pip details.task-folded{display:none}' "$dashboard_template_file"; then
+    note_failure "T22-177: 템플릿에 플로팅 압축 보기의 접힌 카드 숨김 규칙이 없음(결정 MT8 위반 — 압축 보기는 진행 중 작업만 보인다)"
+  fi
+  if grep -E '^  \.badge\.task\{' "$dashboard_template_file" | grep -qF '#'; then
+    note_failure "T22-177: .badge.task 규칙에 색 리터럴(#)이 있음(결정 MT8 위반 — 새 색 토큰 0, var(--…)만 쓴다)"
+  fi
+
   # T22-175(신설, DN16): switch 절차가 dashboard_enabled 필드만 설정하고 settings.local.json
   # 을 통째로 덮어쓰지 않는다는 보증이 헬퍼 소스 자체에 있다(문서 T23-8·T23-9 의 코드 대응).
   if ! grep -qF 'settings["dashboard_enabled"] = desired_enabled' "$dashboard_helper_file"; then
@@ -4202,7 +4255,7 @@ read_python_product_constant() {
 test_hub_docs_and_constants() {
   group_failures=()   # 앞 그룹이 조기 return 했을 때의 잔여물 제거
   local test_name="T25"
-  local test_desc="허브 문서·상수 정합성 (T25-1~T25-294)"
+  local test_desc="허브 문서·상수 정합성 (T25-1~T25-295)"
   log_test_name "$test_name" "$test_desc"
 
   local hub_settings_file="$REPO_ROOT/hub/bin/hub_settings.py"
@@ -4324,11 +4377,12 @@ test_hub_docs_and_constants() {
   fi
 
   # T25-6(재앵커, dashboard-native-data-source PRP §6.6 — dashboard-into-hub PRP M1·M2 로
-  # 경로만 재조준): 단계 줄 템플릿의 생산자가 문서 프로즈에서 hub_dashboard_render.py 의 코드
-  # 자체로 옮겨갔다(DN3) — 그 <li id="dz-step-%d"> 형태는 템플릿 자체 폴링의 id 계약이다.
-  # impl 세부 작업 패널은 폐기(DN8)돼 dz-impl 쪽 단계 줄 생산자는 더 이상 없다.
-  if ! grep -qF 'id="dz-step-%d"' "$REPO_ROOT/hub/bin/hub_dashboard_render.py"; then
-    note_failure "T25-6: hub_dashboard_render.py 에 단계 줄 템플릿(id=\"dz-step-%d\") 미발견"
+  # 경로만 재조준, docs/prps/hub-dashboard-multi-task.md MT7 로 개정): 단계 줄의 생산자가 문서 프로즈에서
+  # hub_dashboard_render.py 의 코드 자체로 옮겨갔다(DN3) — 이제 단계 줄은 id 없는 작업 카드(class="card task-card")
+  # 안에 그려지고 폴링은 카드 묶음(#dz-tasks)을 통째 교체한다(옛 <li id="dz-step-%d"> id 계약은 걷었다).
+  # impl 세부 작업 패널은 폐기(DN8)돼 dz-impl 쪽 단계 줄 생산자는 더 이상 없다. 원장 행은 이 검사를 문다(개정 시 변조행 승급).
+  if ! grep -qF 'class="card task-card"' "$REPO_ROOT/hub/bin/hub_dashboard_render.py"; then
+    note_failure "T25-6: hub_dashboard_render.py 에 열린 작업 카드 템플릿(class=\"card task-card\") 미발견"
   fi
 
   # T25-7: hub_hook.py 에 Notification 문자열이 없다 (미설치 결정의 회귀 방지)
@@ -10035,11 +10089,11 @@ PYEOF
     note_failure "T25-251: LIVE_SESSION_STATES 에 background 가 없음(BW8 위반)"
   fi
 
-  # T25-294 PW-G1(신설, 역 — 결정 PW1, docs/prps/hub-bg-wait-passive-watch.md §8): 깨우는 종류 집합에 monitor 가 없다 —
+  # T25-295 PW-G1(신설, 역 — 결정 PW1, docs/prps/hub-bg-wait-passive-watch.md §8): 깨우는 종류 집합에 monitor 가 없다 —
   # 훅의 monitor 는 아티팩트 실시간 감시처럼 재개 때마다 다시 걸리는 끝나지 않는 구독이라 세면 모든 턴 뒤가 90분씩
   # 「백그라운드 대기」로 가려진다. 선언 줄이 비면 위 T25-251 이 이미 보고하므로 여기서는 중복 보고하지 않는다.
   if [[ -n "$waking_background_task_types_line_251" ]] && grep -qF '"monitor"' <<< "$waking_background_task_types_line_251"; then
-    note_failure "T25-294: WAKING_BACKGROUND_TASK_TYPES 에 monitor 가 있음(끝나지 않는 수동 구독 — 결정 PW1 위반)"
+    note_failure "T25-295: WAKING_BACKGROUND_TASK_TYPES 에 monitor 가 있음(끝나지 않는 수동 구독 — 결정 PW1 위반)"
   fi
 
   # T25-252 BW-G5(신설, 정(문서) — 결정 BW2·BW5, docs/prps/hub-subagent-background-pause.md
@@ -10480,20 +10534,22 @@ PYEOF
     note_failure "T25-262: DOM 순서에 기대던 옛 형제 결합자(.workflow-runs ~ .session-tier1)가 되살아남(결정 LM3·LM2 위반 — 시각 순서와 반대 방향의 결합자다)"
   fi
 
-  # T25-263(개정, 정+역 — 결정 LM4·LM12, docs/prps/hub-session-row-layout-and-modal-size.md): 진행중 단계는 별도 줄도, 진행률 줄 맨 앞
-  # 칩도 아니다 — 칩은 아래 서브에이전트 실행 칩(.agent-chip)과 헷갈려 걷었다(LM12, 옛 LM5·LM6). 정 — ① renderTier1() 이 .tier1-pct
-  # 문자열을 제목(escapeHtml(tier1.title))으로 시작한다. 역 — ② 칩 렌더·판정 함수 이름 ③ 칩 클래스(tier1-step) ④ 칩 전용 상수
+  # T25-263(개정, 정+역 — 결정 LM4·LM12, docs/prps/hub-session-row-layout-and-modal-size.md; 개정 — 결정 MT9, docs/prps/hub-dashboard-multi-task.md:
+  # 줄 그리기가 renderTier1TaskLine() 으로 옮겨 갔다): 진행중 단계는 별도 줄도, 진행률 줄 맨 앞
+  # 칩도 아니다 — 칩은 아래 서브에이전트 실행 칩(.agent-chip)과 헷갈려 걷었다(LM12, 옛 LM5·LM6). 정 — ① renderTier1TaskLine() 이 .tier1-pct
+  # 문자열을 제목(escapeHtml(task.title))으로 시작한다. 역 — ② 칩 렌더·판정 함수 이름 ③ 칩 클래스(tier1-step) ④ 칩 전용 상수
   # (보조기술용 라벨·「커밋 전」)가 템플릿 어디에도 없다(되살아남 방지 — 이름을 문자열로 묻던 옛 가드가 개명에 눈이 멀지 않도록 옛 이름을
   # 부재로 문다) ⑤ 별도 줄 마크업이 없고 ⑥ 그 CSS 기본 규칙이 없다(TC 부활 방지 — 줄 시작 앵커로 주석 안의 언급은 세지 않는다). 메시지는
   # 반복문 밖의 고정 문구로 나눠 쓴다(T25-240 관례와 같은 이유 — 원장 판별자 자격, T37-13). 원장 행은 ③ 을 문다.
-  local render_tier1_body_263
+  local render_tier1_body_263 render_tier1_task_line_body_263
   render_tier1_body_263=$(sed -n '/^  function renderTier1(tier1){$/,/^  }$/p' "$hub_template_file")
-  if [[ -z "$render_tier1_body_263" ]]; then
-    record_failure "$test_name" "T25-263: renderTier1() 범위 추출 실패 — 앵커가 깨졌다"
+  render_tier1_task_line_body_263=$(sed -n '/^  function renderTier1TaskLine(task){$/,/^  }$/p' "$hub_template_file")
+  if [[ -z "$render_tier1_body_263" || -z "$render_tier1_task_line_body_263" ]]; then
+    record_failure "$test_name" "T25-263: renderTier1()·renderTier1TaskLine() 범위 추출 실패 — 앵커가 깨졌다"
     return 1
   fi
-  if ! grep -qF -- "tier1-pct\">' + escapeHtml(tier1.title)" <<< "$render_tier1_body_263"; then
-    note_failure "T25-263: renderTier1() 이 .tier1-pct 를 제목(escapeHtml(tier1.title))으로 시작하지 않음(결정 LM12 위반 — 진행률 줄 맨 앞에 다른 것이 끼었다)"
+  if ! grep -qF -- "tier1-pct\">' + escapeHtml(task.title)" <<< "$render_tier1_task_line_body_263"; then
+    note_failure "T25-263: renderTier1TaskLine() 이 .tier1-pct 를 제목(escapeHtml(task.title))으로 시작하지 않음(결정 LM12 위반 — 진행률 줄 맨 앞에 다른 것이 끼었다)"
   fi
   if grep -qE 'renderTier1ActiveStep|tier1StageChipContent' "$hub_template_file"; then
     note_failure "T25-263: 단계 칩 렌더·판정 함수 이름이 되살아남(결정 LM12 위반 — 진행률 줄 맨 앞 칩이 돌아왔다)"
@@ -10827,18 +10883,30 @@ PYEOF
   fi
 
   # T25-281(신설, 역 — 결정 AW5, docs/prps/hub-approval-wait-badge.md): 승인 대기 표지는 결정 LM12 가 걷은 단계 칩의 부활이 아니다.
-  # ① renderApprovalWaitBadge() 본문에 agent-chip 이 없다(서브에이전트 실행 칩과 같은 모양·클래스를 쓰지 않는다) ② renderTier1() 본문에
-  # approval-wait·renderApprovalWaitBadge 가 없다(표지는 첫 줄에 살지 진행률 줄에 되돌아가지 않는다) ③ 템플릿에 따옴표로 닫힌 정확한
+  # ① renderApprovalWaitBadge() 본문에 agent-chip 이 없다(서브에이전트 실행 칩과 같은 모양·클래스를 쓰지 않는다) ② renderTier1()·
+  # renderTier1TaskLine() 본문에(결정 MT9 개정 — 진행률 줄 그리기가 두 함수로 나뉘었다) approval-wait·renderApprovalWaitBadge 가 없다(표지는 첫 줄에 살지 진행률 줄에 되돌아가지 않는다) ③ 템플릿에 따옴표로 닫힌 정확한
   # 리터럴 \'승인\' 이 없다 — 화면이 단계 이름으로 승인을 다시 판정하지 않는다(판정은 서버 사실 하나, AW2. 라벨 \'승인 대기\' 는 걸리지
   # 않는다). 메시지는 반복문 밖의 고정 문구다. 원장 행은 ① 을 문다.
   if grep -qF 'agent-chip' <<< "$approval_badge_body_280"; then
     note_failure "T25-281: 승인 대기 표지가 실행 칩 클래스(agent-chip)를 씀(결정 AW5 위반 — 걷힌 단계 칩과 같은 혼동이 돌아온다)"
   fi
-  if grep -qE 'approval-wait|renderApprovalWaitBadge' <<< "$render_tier1_body_263"; then
+  if grep -qE 'approval-wait|renderApprovalWaitBadge' <<< "$render_tier1_body_263"$'\n'"$render_tier1_task_line_body_263"; then
     note_failure "T25-281: renderTier1() 이 승인 대기 표지를 그림(결정 AW3·AW5 위반 — 표지가 진행률 줄로 옮겨졌다)"
   fi
   if grep -qF "'승인'" "$hub_template_file"; then
     note_failure "T25-281: 템플릿에 단계 이름 리터럴 '승인' 이 있음(결정 AW2 위반 — 화면이 단계 이름으로 승인 대기를 다시 판정한다)"
+  fi
+
+  # T25-294(신설, 정, 결정 MT9, docs/prps/hub-dashboard-multi-task.md): 세션 줄은 접히지 않은 작업마다 진행률 줄 하나를 그린다 — ① visibleProgressTasks()
+  # 본문이 서버 필드 is_folded 를 읽는다(필드가 개명돼도 눈이 멀지 않게 읽는 이름을 직접 문다 — 접힌 작업이 세션 줄에 섞여 보이는 회귀를
+  # 막는다) ② 둘째 줄부터의 간격 규칙(.tier1-pct+.tier1-pct{)이 있다. 메시지는 반복문 밖의 고정 문구다(원장 판별자 자격, T37-13). 원장 행은 ① 을 문다.
+  local visible_progress_tasks_body_294
+  visible_progress_tasks_body_294=$(sed -n '/^  function visibleProgressTasks(tier1){$/,/^  }$/p' "$hub_template_file")
+  if ! grep -qF 'is_folded' <<< "$visible_progress_tasks_body_294"; then
+    note_failure "T25-294: visibleProgressTasks() 가 서버 필드 is_folded 를 읽지 않음(결정 MT9 위반 — 접힌 작업이 세션 줄에 섞여 보인다)"
+  fi
+  if ! grep -qF '.tier1-pct+.tier1-pct{' "$hub_template_file"; then
+    note_failure "T25-294: 템플릿에 작업 줄 간격 규칙(.tier1-pct+.tier1-pct{)이 없음(결정 MT9 위반)"
   fi
 
   # T25-285(신설, 보안 — 결정 MN8, docs/prps/hub-macos-notification.md): 사용자 문자열이 AppleScript 소스·셸에 닿지 않는다. ① NOTIFY_APPLESCRIPT_LINES
@@ -12352,7 +12420,7 @@ test_dashboard_bash_gate_regression() {
 # 재조준): hub/README.md 의 「헬퍼 스크립트」 표와 hub/bin/hub_dashboard_log.py 의 실제
 # 디스패치가 일치한다(옛 commands/dashboard.md·commands/dashboard_helper.py 시절 만들어진
 # 그룹이다). 서브커맨드 10종 → 5종 → 4종(init·log·step·switch, DN3·DN8·DN9·M2 HD15 —
-# render·ANCHOR-FAIL 폐기)으로 줄고, URL 템플릿(자동 발행 폐기, DN8)은 더 이상 검사
+# render·ANCHOR-FAIL 폐기)으로 줄고 폐쇄 어휘는 10종 → 12종(BADTASK·NOTASK, hub-dashboard-multi-task.md MT2)이 됐고, URL 템플릿(자동 발행 폐기, DN8)은 더 이상 검사
 # 대상이 아니다.
 #
 # 한계(비망라) — 검수 1회차 H1 이 지적한 행 단위 대응 검사(T34-1·T34-2, render 서브커맨드가
@@ -12361,6 +12429,7 @@ test_dashboard_bash_gate_regression() {
 # "존재하는가"만 보고 "어느 행에 있어야 하는가"는 보지 않는다. 헬퍼가 어휘를 올바른
 # 조건에서 출력하는지는 tests/hub/test_hub_dashboard_log.py 의 단위 테스트만이 확인한다.
 test_dashboard_helper_table_dispatch_parity() {
+  group_failures=()   # 앞 그룹이 조기 return 했을 때의 잔여물 제거(T34-7 이 note_failure 를 쓰므로 finish_group 으로 끝낸다)
   local test_name="T34"
   local test_desc="헬퍼 스크립트 표 ↔ 실제 디스패치 정합 (G2)"
   log_test_name "$test_name" "$test_desc"
@@ -12392,18 +12461,32 @@ test_dashboard_helper_table_dispatch_parity() {
     return 1
   fi
 
-  # 폐쇄 어휘 10종 — 표에 등장하는 어휘가 기록기(순수 층 포함) 안에 문자열로 존재한다.
+  # 폐쇄 어휘 12종 — 표에 등장하는 어휘가 기록기(순수 층 포함) 안에 문자열로 존재한다. BADTASK·NOTASK 는
+  # 작업 이름표(--task, docs/prps/hub-dashboard-multi-task.md MT2)가 더했다.
   local vocab
   for vocab in OK NOSESSION DISABLED MKDIR-FAILED NOINIT BADKIND BADINDEX \
-    ON OFF INVALID-SETTINGS; do
+    ON OFF INVALID-SETTINGS BADTASK NOTASK; do
     if ! grep -qF -- "$vocab" "$dashboard_helper_file" "$dashboard_render_file"; then
       record_failure "$test_name" "T34-6: 폐쇄 어휘가 기록기에 없음: $vocab"
       return 1
     fi
   done
 
-  log_ok "$test_name 통과"
-  ((passed_tests++))
+  # T34-7(신설, 정합, docs/prps/hub-dashboard-multi-task.md MT2): 규칙 파일이 가르치는 `--task` 옵션을 기록기가 받고 표가 알린다 —
+  # 세 곳(「헬퍼 스크립트」 표가 있는 hub/README.md · 기록기의 `"--task"` 리터럴 · 규칙 파일)에 모두 있다. 한 곳이라도 빠지면 규칙이 가르친 호출을
+  # 기록기가 BADKIND 로 거절하거나(규칙만 앞선 경우) 아무도 모르는 옵션이 된다. 메시지는 한 곳마다 고정 문구다(원장 판별자 자격, T37-13).
+  # 원장 행은 기록기 쪽을 문다.
+  if ! grep -qF -- "[--task '<이름표>']" "$dashboard_command_file"; then
+    note_failure "T34-7: 「헬퍼 스크립트」 표에 --task 옵션 미발견"
+  fi
+  if ! grep -qF -- '"--task"' "$dashboard_helper_file"; then
+    note_failure "T34-7: hub_dashboard_log.py 에 \"--task\" 옵션 리터럴 미발견"
+  fi
+  if ! grep -qF -- "--task '<이름표>'" "$REPO_ROOT/hub/rules/dashboard-recording.md"; then
+    note_failure "T34-7: hub/rules/dashboard-recording.md 에 --task 사용법 미발견"
+  fi
+
+  finish_group "$test_name"
 }
 
 # T35 (결함 재발 방지 — commands/ 에 .py 소스가 생긴 뒤로 도달 가능해진 배포 결함, 사용자 실측

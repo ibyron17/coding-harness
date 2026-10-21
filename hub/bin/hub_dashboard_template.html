@@ -6,11 +6,10 @@
 <title>세션 진행 상황 대시보드</title>
 <!--
 DZ:DASHBOARD 갱신 맵 (동적 영역 — 셀렉터 기반 정밀 치환, hub/bin/hub_dashboard_render.py 앵커 상수·hub/README.md 「진행 기록」 참조)
-  #dz-title            : 세션 제목 텍스트
-  #dz-progress-bar      : inline style width:N%
-  #dz-progress-pct      : 진행률 텍스트 (예: 3/6 · 50%)
-  #dz-step-{n}          : [그룹 1개] 각 단계 li — class(done|active|wait) + .chip 텍스트
-                          + .step-detail 텍스트(그 단계의 한 줄 상세. 비어 있으면 CSS 가 숨긴다)
+  #dz-tasks            : 작업 카드 묶음 — 작업마다 .card.task-card 한 장(커밋까지 끝난 작업은 접힌
+                          details.task-folded). 카드 안은 h1(+ .badge.task 이름표)·막대·진행률·단계 li
+                          (class done|active|wait + .chip + .step-detail). 카드 수·순서·접힘이 바뀌므로
+                          폴링이 이 요소를 통째로 교체한다(docs/prps/hub-dashboard-multi-task.md MT7)
   #dz-cell-{g}-{p}      : [그룹 2+] 매트릭스 칸 td — data-state(done|active|wait|na) + 칸 텍스트
                           {g}=행(그룹) 번호, {p}=열(단계) 번호. 한 파일에 step/cell 이 공존하지 않는다
   #dz-group-{g}         : [그룹 2+] 행 머리 th — init 이 그룹명을 넣고 이후 치환하지 않는다
@@ -142,7 +141,7 @@ DZ:DASHBOARD 갱신 맵 (동적 영역 — 셀렉터 기반 정밀 치환, hub/b
   .step-detail{flex-basis:100%;margin-left:38px;font-size:12.5px;font-weight:400;color:var(--muted);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
   .step-detail:empty{display:none}
   #dz-impl-card:not(:has(#dz-impl-tasks li)){display:none}
-  /* 진행중 단계 행 신호(#dz-steps · #dz-impl-tasks 공통) — 예전에는 이 자리에 정적
+  /* 진행중 단계 행 신호(#dz-tasks 카드 · #dz-impl-tasks 공통) — 예전에는 이 자리에 정적
      --accent-soft 가로 밴드 + 좌측 3px 세로 바를 얹어 모션을 꺼도 "지금 이 단계"가
      스캔되게 했다. 사용자 피드백 두 가지로 뒤집는다(docs/prps/dashboard-hub-signal-tuning.md
      결정 D1~D7) — 밴드는 li 가 .card{padding:26px 30px} 안쪽 블록이라 좌우 끝이 카드
@@ -197,6 +196,21 @@ DZ:DASHBOARD 갱신 맵 (동적 영역 — 셀렉터 기반 정밀 치환, hub/b
   .badge.pass{background:var(--accent-fill);color:var(--on-accent-fill)}
   .badge.fail{background:var(--attention-soft);color:var(--attention);border:1px dashed var(--attention)}
   .badge.commit{background:var(--soft);color:var(--head);border:1px solid var(--line)}
+  /* 작업 카드(결정 MT8, docs/prps/hub-dashboard-multi-task.md) — 새 색 토큰 0. 이름표는 .badge.commit 과 같은 짝
+     (결과 배지와 섞이지 않는 중립), 접힌 카드는 .card 를 그대로 받고 .entry summary 와 같은 마커 숨김 관용구를 쓴다. */
+  .badge.task{background:var(--soft);color:var(--head);border:1px solid var(--line)}
+  .task-card h1 .badge.task{vertical-align:3px}
+  details.task-folded{padding:12px 30px}
+  details.task-folded>summary{display:flex;align-items:center;gap:8px;cursor:pointer;list-style:none;font-size:14px;font-weight:700;color:var(--muted)}
+  details.task-folded>summary::-webkit-details-marker{display:none}
+  details.task-folded>summary::marker{content:""}
+  details.task-folded>summary::before{content:"▸";flex:none;width:12px;color:var(--muted)}
+  details.task-folded[open]>summary::before{content:"▾"}
+  details.task-folded>summary:hover .task-folded-title{color:var(--head)}
+  details.task-folded>summary .badge{margin-right:0}
+  details.task-folded>summary:focus-visible{outline:2px solid var(--accent);outline-offset:3px;border-radius:6px}
+  .task-folded-title{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .task-folded-pct{flex:none;font-size:12px}
   .dzf{position:absolute;opacity:0;pointer-events:none}
   label[for^="dzf-"]{display:inline-block;font-size:12px;font-weight:700;padding:4px 12px;margin:8px 6px 8px 0;border-radius:999px;background:var(--soft);color:var(--muted);cursor:pointer;border:1px solid var(--line)}
   .dzf:checked + label{background:var(--accent-fill);color:var(--on-accent-fill);border-color:var(--accent-ink)}
@@ -266,6 +280,7 @@ DZ:DASHBOARD 갱신 맵 (동적 영역 — 셀렉터 기반 정밀 치환, hub/b
   body.dz-pip .card{padding:14px 16px;border-radius:10px;margin-bottom:10px}
   body.dz-pip h1{font-size:16px}
   body.dz-pip #dz-log-card{display:none}
+  body.dz-pip details.task-folded{display:none}  /* 플로팅 압축 보기는 진행 중 작업만 */
   body.dz-pip ol.steps li{padding:9px 4px}
   body.dz-pip ol.steps li:not(.active) .step-detail{display:none}
   /* 작업 추적 제목의 말줄임 툴팁(요구 1, 결정 LT1~LT9) — 허브 상세 패널(폭 549px)에서
@@ -316,13 +331,7 @@ try{
      아래 툴팁 IIFE 가 hover 시점에만 채운다. -->
 <div id="dz-tooltip" class="tooltip" aria-hidden="true"></div>
 <div class="wrap">
-  <div class="card">
-    <h1 id="dz-title">세션 제목</h1>
-    <div class="bar-outer"><div class="bar-inner" id="dz-progress-bar" style="width:0%"></div></div>
-    <div class="pct" id="dz-progress-pct">0/0 · 0%</div>
-    <ol class="steps" id="dz-steps">
-    </ol>
-  </div>
+  <div id="dz-tasks"></div>
   <div class="card" id="dz-impl-card">
     <div class="impl-title">구현 세부 작업 · 디스패치와 결과 보고 시점에만 갱신</div>
     <div class="pct" id="dz-impl-count">0/0 · 0%</div>
@@ -395,13 +404,9 @@ try{
     var live = wrap.querySelector('#'+id), next = fresh.getElementById(id);
     if(live && next) live.textContent = next.textContent;
   }
-  function syncProgressBar(fresh){
-    var live = wrap.querySelector('#dz-progress-bar'), next = fresh.getElementById('dz-progress-bar');
-    if(live && next) live.setAttribute('style', next.getAttribute('style') || '');
-  }
-  function syncVisualization(fresh){
-    // 선형(#dz-steps)과 매트릭스(#dz-matrix)는 한 파일에 하나만 존재한다(불변식 1).
-    var live = wrap.querySelector('#dz-steps,#dz-matrix'), next = fresh.querySelector('#dz-steps,#dz-matrix');
+  function syncTasks(fresh){
+    // 카드 수·순서·접힘이 바뀌는 순간을 따로 처리하지 않고 묶음 통째로 교체한다(#dz-impl-card 와 같은 근거).
+    var live = wrap.querySelector('#dz-tasks'), next = fresh.getElementById('dz-tasks');
     if(live && next) live.outerHTML = next.outerHTML;
   }
   function syncLog(fresh){
@@ -409,7 +414,7 @@ try{
     if(live && next) live.innerHTML = next.innerHTML;
   }
   function syncImplCard(fresh){
-    // 이 카드는 .wrap 안이지만 #dz-steps 동기화 대상이 아니다 — 별도 대입이 없으면 영구히 stale 된다.
+    // 이 카드는 .wrap 안이지만 #dz-tasks 동기화 대상이 아니다 — 별도 대입이 없으면 영구히 stale 된다.
     var live = wrap.querySelector('#dz-impl-card'), next = fresh.getElementById('dz-impl-card');
     if(live && next) live.outerHTML = next.outerHTML;
   }
@@ -446,9 +451,8 @@ try{
     lastHtml = html;
     var fresh = new DOMParser().parseFromString(html, 'text/html');
     // 라디오와 <style> 은 치환 대상이 아니다(사용자가 고른 필터가 날아간다).
-    syncText(fresh,'dz-title');
-    syncText(fresh,'dz-progress-pct'); syncText(fresh,'dz-updated');
-    syncProgressBar(fresh); syncVisualization(fresh); syncImplCard(fresh); syncLog(fresh);
+    syncText(fresh,'dz-updated');
+    syncTasks(fresh); syncImplCard(fresh); syncLog(fresh);
     resizePipToFit();
   }
   function poll(){
