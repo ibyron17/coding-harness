@@ -68,7 +68,7 @@ class StandardFlowRoundTripTest(_ContractTestCase):
     """init → design → approve → impl → pass 로 기록한 뒤 수집하면 4/4 완료로 읽힌다."""
 
     def test_full_flow_is_collected_as_complete(self) -> None:
-        self._run(hub_dashboard_log.cmd_init, "전체 경로 완료", "설계|승인|구현|검수")
+        self._run(hub_dashboard_log.cmd_init, ["전체 경로 완료", "설계|승인|구현|검수"])
         for kind, summary in (
             ("design", "설계 완료"), ("approve", "승인 완료"), ("impl", "구현 완료"), ("pass", "검수 통과"),
         ):
@@ -86,7 +86,7 @@ class FailRegressionRoundTripTest(_ContractTestCase):
     """impl → fail 로 기록하면 구현이 active 로, 검수가 wait 로 읽히고 최근 요약이 상세로 남는다."""
 
     def test_fail_leaves_active_step_with_latest_summary_as_detail(self) -> None:
-        self._run(hub_dashboard_log.cmd_init, "축약 경로", "구현|검수")
+        self._run(hub_dashboard_log.cmd_init, ["축약 경로", "구현|검수"])
         self._run(hub_dashboard_log.cmd_log, ["impl", "1차 구현"])
         self._run(hub_dashboard_log.cmd_log, ["fail", "1차 검수 실패", "상세 이유"])
 
@@ -102,7 +102,7 @@ class NonStandardPhaseStepRoundTripTest(_ContractTestCase):
     """비표준 단계 목록은 `step` 호출로만 갱신되고, 수집이 그 상태를 그대로 읽는다."""
 
     def test_step_events_update_the_collected_snapshot(self) -> None:
-        self._run(hub_dashboard_log.cmd_init, "원인 분석 진행", "원인 분석|설계|구현|검수")
+        self._run(hub_dashboard_log.cmd_init, ["원인 분석 진행", "원인 분석|설계|구현|검수"])
         self.assertEqual(self._run(hub_dashboard_log.cmd_step, ["1", "done"]), "OK")
         self.assertEqual(self._run(hub_dashboard_log.cmd_step, ["2", "active"]), "OK")
 
@@ -116,7 +116,7 @@ class ApprovalWaitRoundTripTest(_ContractTestCase):
     기록 규칙의 단계 이름과 파서가 보는 이름이 어긋나면 여기서 깨진다(결정 AW2)."""
 
     def test_approval_step_is_active_between_design_and_approve(self) -> None:
-        self._run(hub_dashboard_log.cmd_init, "승인 대기 왕복", "설계|승인|구현|검수")
+        self._run(hub_dashboard_log.cmd_init, ["승인 대기 왕복", "설계|승인|구현|검수"])
         self.assertFalse(self._collect_one().is_approval_step_active)
 
         self.assertEqual(self._run(hub_dashboard_log.cmd_log, ["design", "설계 완료"]), "OK")
@@ -126,13 +126,32 @@ class ApprovalWaitRoundTripTest(_ContractTestCase):
         self.assertFalse(self._collect_one().is_approval_step_active)
 
 
+class MultiTaskRoundTripTest(_ContractTestCase):
+    """이름표 작업을 기록기로 쓰고 수집하면 작업이 둘로 갈라 읽히고, 끝나 커밋된 첫 작업은 접힌다(결정 MT2·MT5).
+    기록 규칙이 가르치는 `--task` 위치와 파서가 읽는 `task` 키가 어긋나면 여기서 깨진다."""
+
+    def test_two_tasks_are_collected_separately_and_the_committed_one_is_folded(self) -> None:
+        self._run(hub_dashboard_log.cmd_init, ["첫", "설계|승인|구현|검수"])
+        self.assertEqual(self._run(hub_dashboard_log.cmd_init, ["--task", "B", "B", "구현|검수"]), "OK")
+        self.assertEqual(self._run(hub_dashboard_log.cmd_log, ["--task", "B", "impl", "B 구현"]), "OK")
+        self.assertEqual(self._run(hub_dashboard_log.cmd_log, ["pass", "첫 검수 통과"]), "OK")
+        self.assertEqual(self._run(hub_dashboard_log.cmd_log, ["commit", "첫 커밋"]), "OK")
+
+        snapshot = self._collect_one()
+
+        self.assertEqual([task.label for task in snapshot.tasks], ["B", ""])
+        self.assertEqual([task.is_folded for task in snapshot.tasks], [False, True])
+        self.assertEqual((snapshot.title, snapshot.percent), ("B", 50))
+        self.assertEqual(snapshot.tasks[1].percent, 100)
+
+
 class DisabledSwitchRoundTripTest(_ContractTestCase):
     """진행 기록을 끈 프로젝트는 init 이 아무것도 쓰지 않아 수집 대상이 없다(RL10)."""
 
     def test_disabled_project_has_no_collectible_snapshot(self) -> None:
         self.assertEqual(self._run(hub_dashboard_log.cmd_switch, "off"), "OFF")
 
-        init_output = self._run(hub_dashboard_log.cmd_init, "꺼진 프로젝트", "구현|검수")
+        init_output = self._run(hub_dashboard_log.cmd_init, ["꺼진 프로젝트", "구현|검수"])
 
         self.assertEqual(init_output, "DISABLED")
         snapshots, warnings = hub_collect.read_session_dashboard_snapshots(str(self._project_dir))

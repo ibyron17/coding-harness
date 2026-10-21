@@ -180,7 +180,8 @@ class RenderLogEntryLinesTest(unittest.TestCase):
             entry = _entry_block(lines, seq)
             self.assertEqual(entry[1] == "        <details open>", expect_open, msg="seq=%d" % seq)
 
-    def test_round_number_tracks_cumulative_pass_and_fail_only(self) -> None:
+    def test_round_number_tracks_cumulative_pass_and_fail_of_a_single_task(self) -> None:
+        """작업 하나(이름표 없는 기록)에서는 회차가 그 작업의 누적 pass·fail 수다(DN5, 작업별 개정은 MT4)."""
         events = (
             hub_dashboard_render.DashboardEvent(time_ms=_time_at(0), kind="design", summary="설계"),
             hub_dashboard_render.DashboardEvent(time_ms=_time_at(1), kind="impl", summary="구현"),
@@ -283,18 +284,19 @@ class BuildPublishedValuesTest(unittest.TestCase):
         self.assertIsNone(values.impl_block_lines)
 
     def test_step_line_attribute_order_and_one_per_line(self) -> None:
-        """불변식 — id="dz-step-{n}" class="{state}" 순서 고정, 줄마다 하나."""
+        """불변식 — 단계 li 는 class="{state}" 로 시작하고 줄마다 하나(결정 MT7: id 는 없앴다)."""
         events = hub_parse.parse_event_lines(
             _jsonl(_init_dict(0, "제목", ["설계", "승인", "구현", "검수"]), _log_dict(1, "impl", "구현 요약"))
         )
 
         values = hub_dashboard_render.build_published_values(events, "d4973ae5-cf0c-4cf2-b560-cb3606bc1cd2")
 
-        step_lines = [line for line in values.progress_block_lines if "dz-step-" in line]
+        step_lines = [line for line in values.task_block_lines if "<li " in line]
         self.assertEqual(len(step_lines), 4)
         for line in step_lines:
-            self.assertRegex(line, r'^\s*<li id="dz-step-\d+" class="(done|active|wait)">')
+            self.assertRegex(line, r'^\s*<li class="(done|active|wait)"><span class="num">\d+</span>')
             self.assertEqual(line.count("<li "), 1)
+            self.assertNotIn("dz-step-", line)
 
     def test_title_with_newline_is_folded_to_single_line(self) -> None:
         """H1 회귀 — title 의 개행이 공백으로 접혀 <h1> 이 한 줄로 남는다."""
@@ -302,7 +304,9 @@ class BuildPublishedValuesTest(unittest.TestCase):
 
         values = hub_dashboard_render.build_published_values(events, "d4973ae5-cf0c-4cf2-b560-cb3606bc1cd2")
 
-        self.assertEqual(values.title_html, "제목 줄1 제목 줄2")
+        self.assertEqual(
+            [line.strip() for line in values.task_block_lines if "<h1>" in line], ["<h1>제목 줄1 제목 줄2</h1>"]
+        )
 
     def test_project_with_newline_is_folded_to_single_line(self) -> None:
         """H1 회귀 — project 의 개행도 같은 이유로 접힌다."""
@@ -320,7 +324,7 @@ class BuildPublishedValuesTest(unittest.TestCase):
 
         values = hub_dashboard_render.build_published_values(events, "d4973ae5-cf0c-4cf2-b560-cb3606bc1cd2")
 
-        step_lines = [line for line in values.progress_block_lines if "dz-step-1" in line]
+        step_lines = [line for line in values.task_block_lines if '<span class="num">1</span>' in line]
         self.assertEqual(len(step_lines), 1)
         self.assertNotIn("\n", step_lines[0])
         self.assertIn("설계 승인", step_lines[0])
@@ -337,8 +341,8 @@ class BuildPublishedValuesTest(unittest.TestCase):
 
         values = hub_dashboard_render.build_published_values(events, "d4973ae5-cf0c-4cf2-b560-cb3606bc1cd2")
 
-        self.assertEqual(values.progress_text_html, "2/3 · 67%")
-        self.assertEqual(values.progress_width, "67%")
+        self.assertIn('      <div class="pct">2/3 · 67%</div>', values.task_block_lines)
+        self.assertIn('width:67%', "".join(values.task_block_lines))
 
     def test_percent_rounds_one_of_six_to_17_not_16(self) -> None:
         """H3 회귀 — 비표준 6단계에서 버림(16%)이 아니라 반올림(17%)이어야 한다."""
@@ -352,7 +356,7 @@ class BuildPublishedValuesTest(unittest.TestCase):
 
         values = hub_dashboard_render.build_published_values(events, "d4973ae5-cf0c-4cf2-b560-cb3606bc1cd2")
 
-        self.assertEqual(values.progress_text_html, "1/6 · 17%")
+        self.assertIn('      <div class="pct">1/6 · 17%</div>', values.task_block_lines)
 
 
 class RenderFromEventsSnapshotConsistencyTest(unittest.TestCase):
@@ -387,14 +391,13 @@ class RenderFromEventsSnapshotConsistencyTest(unittest.TestCase):
 
         rendered = self._render(events)
 
-        self.assertIn('<h1 id="dz-title">%s</h1>' % snapshot.title, rendered)
+        self.assertIn('<h1>%s</h1>' % snapshot.title, rendered)
         self.assertIn(
-            '<div class="pct" id="dz-progress-pct">%d/%d · %d%%</div>'
-            % (snapshot.completed, snapshot.total, snapshot.percent),
+            '<div class="pct">%d/%d · %d%%</div>' % (snapshot.completed, snapshot.total, snapshot.percent),
             rendered,
         )
         for step in snapshot.steps:
-            self.assertIn('<li id="dz-step-%d" class="%s">' % (step.index, step.state), rendered)
+            self.assertIn('<li class="%s"><span class="num">%d</span>%s' % (step.state, step.index, step.name), rendered)
 
     def test_fail_recovery_step_states_and_active_detail_match_snapshot(self) -> None:
         events = hub_parse.parse_event_lines(
@@ -412,7 +415,9 @@ class RenderFromEventsSnapshotConsistencyTest(unittest.TestCase):
 
         active_step = next(step for step in snapshot.steps if step.state == "active")
         self.assertEqual(active_step.name, "구현")
-        self.assertIn('<li id="dz-step-%d" class="active">' % active_step.index, rendered)
+        self.assertIn(
+            '<li class="active"><span class="num">%d</span>%s' % (active_step.index, active_step.name), rendered
+        )
         self.assertIn('<span class="step-detail">%s</span>' % active_step.detail, rendered)
 
     def test_shortened_path_step_states_match_snapshot(self) -> None:
@@ -424,7 +429,7 @@ class RenderFromEventsSnapshotConsistencyTest(unittest.TestCase):
         rendered = self._render(events)
 
         for step in snapshot.steps:
-            self.assertIn('<li id="dz-step-%d" class="%s">' % (step.index, step.state), rendered)
+            self.assertIn('<li class="%s"><span class="num">%d</span>%s' % (step.state, step.index, step.name), rendered)
 
     def test_updated_label_matches_hub_parse_format(self) -> None:
         events = hub_parse.parse_event_lines(
@@ -460,6 +465,264 @@ class RenderFromEventsSnapshotConsistencyTest(unittest.TestCase):
         active_step = next(step for step in snapshot.steps if step.state == "active")
         self.assertEqual(active_step.detail, "재현 조건 확인.\n두 번째 줄도 있음.")
         self.assertIn('<span class="step-detail">재현 조건 확인. 두 번째 줄도 있음.</span>', rendered)
+
+
+def _task_progress(label: str = "", title: str = "제목", states: tuple = ("done", "active"), **overrides) -> object:
+    """카드 렌더 시험용 TaskProgress — 단계 이름은 구현·검수 순으로 states 길이만큼 붙인다."""
+    names = ("구현", "검수", "배포", "정리")
+    steps = tuple(
+        hub_parse.StepView(
+            index=position + 1, name=names[position], state=state,
+            detail="진행 상세" if state == "active" else "", started_at=None,
+        )
+        for position, state in enumerate(states)
+    )
+    completed = sum(1 for state in states if state == "done")
+    fields = dict(
+        label=label, title=title, completed=completed, total=len(states),
+        percent=round(completed * 100 / len(states)), steps=steps, started_at_ms=_time_at(0),
+        is_committed=False, is_approval_step_active=False, is_folded=False,
+    )
+    return hub_parse.TaskProgress(**{**fields, **overrides})
+
+
+class RenderTaskBlockLinesTest(unittest.TestCase):
+    """render_task_block_lines — 작업 카드 묶음(결정 MT7). 열린 카드는 .card.task-card, 접힌 카드는 details."""
+
+    def test_unlabeled_single_task_renders_the_old_card_shape_without_badge_or_details(self) -> None:
+        lines = hub_dashboard_render.render_task_block_lines((_task_progress(title="옛 제목"),))
+
+        self.assertEqual(
+            lines,
+            [
+                '  <div id="dz-tasks">',
+                '    <div class="card task-card">',
+                "      <h1>옛 제목</h1>",
+                '      <div class="bar-outer"><div class="bar-inner" style="width:50%"></div></div>',
+                '      <div class="pct">1/2 · 50%</div>',
+                '      <ol class="steps">',
+                '        <li class="done"><span class="num">1</span>구현<span class="chip">완료</span>'
+                '<span class="step-detail"></span></li>',
+                '        <li class="active"><span class="num">2</span>검수<span class="chip">진행중</span>'
+                '<span class="step-detail">진행 상세</span></li>',
+                "      </ol>",
+                "    </div>",
+                "  </div>",
+            ],
+        )
+
+    def test_labeled_task_gets_a_badge_inside_the_heading(self) -> None:
+        lines = hub_dashboard_render.render_task_block_lines((_task_progress(label="결함①", title="결함 수정"),))
+
+        self.assertIn('      <h1><span class="badge task">결함①</span>결함 수정</h1>', lines)
+
+    def test_folded_task_renders_a_details_card_with_summary_and_steps(self) -> None:
+        folded = _task_progress(
+            label="결함①", title="결함 수정", states=("done", "done"), is_folded=True, is_committed=True
+        )
+
+        lines = hub_dashboard_render.render_task_block_lines((folded,))
+
+        self.assertEqual(
+            lines,
+            [
+                '  <div id="dz-tasks">',
+                '    <details class="card task-card task-folded">',
+                '      <summary><span class="badge task">결함①</span><span class="task-folded-title">결함 수정</span>'
+                '<span class="badge commit">커밋</span><span class="task-folded-pct">2/2 · 100%</span></summary>',
+                '      <ol class="steps">',
+                '        <li class="done"><span class="num">1</span>구현<span class="chip">완료</span>'
+                '<span class="step-detail"></span></li>',
+                '        <li class="done"><span class="num">2</span>검수<span class="chip">완료</span>'
+                '<span class="step-detail"></span></li>',
+                "      </ol>",
+                "    </details>",
+                "  </div>",
+            ],
+        )
+
+    def test_folded_unlabeled_task_has_no_badge_in_the_summary(self) -> None:
+        folded = _task_progress(states=("done", "done"), is_folded=True, is_committed=True)
+
+        text = "\n".join(hub_dashboard_render.render_task_block_lines((folded,)))
+
+        self.assertNotIn("badge task", text)
+        self.assertIn('<summary><span class="task-folded-title">제목</span>', text)
+
+    def test_cards_follow_the_given_order(self) -> None:
+        tasks = (_task_progress(label="가", title="첫째"), _task_progress(label="나", title="둘째"))
+
+        text = "\n".join(hub_dashboard_render.render_task_block_lines(tasks))
+
+        self.assertLess(text.index("첫째"), text.index("둘째"))
+        self.assertEqual(text.count('class="card task-card"'), 2)
+
+    def test_label_and_title_are_escaped_as_text_nodes(self) -> None:
+        task = _task_progress(label="<b>&", title="<i>제목&</i>")
+
+        text = "\n".join(hub_dashboard_render.render_task_block_lines((task,)))
+
+        self.assertIn('<span class="badge task">&lt;b&gt;&amp;</span>&lt;i&gt;제목&amp;&lt;/i&gt;', text)
+        self.assertNotIn("<i>", text)
+
+    def test_step_detail_newline_is_folded_to_one_line(self) -> None:
+        task = _task_progress()
+        task = hub_parse.TaskProgress(
+            **{**task.__dict__, "steps": (task.steps[0], hub_parse.StepView(2, "검수", "active", "줄1\n줄2", None))}
+        )
+
+        lines = hub_dashboard_render.render_task_block_lines((task,))
+
+        self.assertTrue(any('<span class="step-detail">줄1 줄2</span>' in line for line in lines))
+
+    def test_no_ids_remain_in_the_card_markup(self) -> None:
+        text = "\n".join(hub_dashboard_render.render_task_block_lines((_task_progress(label="가"),)))
+
+        for removed_id in ("dz-title", "dz-progress-bar", "dz-progress-pct", "dz-steps", "dz-step-"):
+            self.assertNotIn(removed_id, text)
+
+
+class RenderLogEntryTaskBadgeTest(unittest.TestCase):
+    """로그 항목의 이름표 배지·작업별 회차(결정 MT4·MT7)."""
+
+    def _lines_for(self, *rows: dict) -> list:
+        events = hub_parse.parse_event_lines(_jsonl(*rows))
+        return hub_dashboard_render.render_log_entry_lines(events)
+
+    @staticmethod
+    def _labeled(row: dict, label: str) -> dict:
+        return {**row, "task": label}
+
+    def test_badge_sits_between_time_and_round(self) -> None:
+        lines = self._lines_for(
+            _init_dict(0, "첫", ["구현", "검수"]),
+            self._labeled(_init_dict(1, "B", ["구현", "검수"]), "B"),
+            self._labeled(_log_dict(2, "fail", "B 실패"), "B"),
+        )
+
+        entry = _entry_block(lines, seq=1)
+
+        summary_lines = [line.strip() for line in entry[3:7]]
+        self.assertEqual(
+            summary_lines[0].startswith('<span class="time">'), True
+        )
+        self.assertEqual(summary_lines[1], '<span class="badge task">B</span>')
+        self.assertEqual(summary_lines[2], '<span class="badge round">R1</span>')
+        self.assertTrue(summary_lines[3].startswith('<span class="badge fail">'))
+
+    def test_unlabeled_entry_has_no_task_badge(self) -> None:
+        lines = self._lines_for(_init_dict(0, "첫", ["구현", "검수"]), _log_dict(1, "impl", "구현"))
+
+        self.assertFalse(any("badge task" in line for line in lines))
+
+    def test_rounds_are_counted_per_task(self) -> None:
+        lines = self._lines_for(
+            _init_dict(0, "첫", ["구현", "검수"]),
+            self._labeled(_init_dict(1, "B", ["구현", "검수"]), "B"),
+            self._labeled(_log_dict(2, "fail", "B 1회차 FAIL"), "B"),
+            _log_dict(3, "pass", "첫 1회차 PASS"),
+            self._labeled(_log_dict(4, "pass", "B 2회차 PASS"), "B"),
+        )
+
+        rounds = [
+            next(line for line in _entry_block(lines, seq) if "badge round" in line).strip()
+            for seq in (1, 2, 3)
+        ]
+
+        self.assertEqual(
+            rounds,
+            ['<span class="badge round">R1</span>', '<span class="badge round">R1</span>',
+             '<span class="badge round">R2</span>'],
+        )
+
+    def test_label_is_escaped_in_the_badge(self) -> None:
+        lines = self._lines_for(
+            _init_dict(0, "첫", ["구현", "검수"]),
+            self._labeled(_init_dict(1, "B", ["구현", "검수"]), "<&>"),
+            self._labeled(_log_dict(2, "impl", "구현"), "<&>"),
+        )
+
+        self.assertTrue(any('<span class="badge task">&lt;&amp;&gt;</span>' in line for line in lines))
+
+    def test_seq_counts_every_live_log_entry_across_tasks(self) -> None:
+        lines = self._lines_for(
+            _init_dict(0, "첫", ["구현", "검수"]),
+            self._labeled(_init_dict(1, "B", ["구현", "검수"]), "B"),
+            self._labeled(_log_dict(2, "impl", "B"), "B"),
+            _log_dict(3, "impl", "첫"),
+        )
+
+        seqs = [int(line.split('data-seq="')[1].split('"')[0]) for line in lines if "data-seq=" in line]
+
+        self.assertEqual(seqs, [2, 1])
+
+
+class RenderReissueAnchorTest(unittest.TestCase):
+    """render_reissue — 앵커 6종이 각각 정확히 1회가 아니면 AnchorMismatch(결정 MT7)."""
+
+    _ANCHORS = (
+        hub_dashboard_render.ANCHOR_PROJECT_NAME,
+        hub_dashboard_render.ANCHOR_TASKS,
+        hub_dashboard_render.ANCHOR_IMPL_COUNT,
+        hub_dashboard_render.ANCHOR_IMPL_TASKS_BLOCK,
+        hub_dashboard_render.ANCHOR_LOG,
+        hub_dashboard_render.ANCHOR_UPDATED,
+    )
+
+    def _values(self) -> object:
+        events = hub_parse.parse_event_lines(_jsonl(_init_dict(0, "제목", ["구현", "검수"])))
+        return hub_dashboard_render.build_published_values(events, "d4973ae5-cf0c-4cf2-b560-cb3606bc1cd2")
+
+    def test_real_template_contains_each_of_the_six_anchors_exactly_once(self) -> None:
+        template_text = _read_real_template()
+
+        for anchor in self._ANCHORS:
+            with self.subTest(anchor=anchor.strip()[:30]):
+                self.assertEqual(template_text.count(anchor), 1)
+
+    def test_missing_or_duplicated_anchor_raises_anchor_mismatch(self) -> None:
+        template_text = _read_real_template()
+        values = self._values()
+
+        for anchor in self._ANCHORS:
+            with self.subTest(anchor=anchor.strip()[:30], problem="missing"):
+                with self.assertRaises(hub_dashboard_render.AnchorMismatch) as raised:
+                    hub_dashboard_render.render_reissue(template_text.replace(anchor, "", 1), values)
+                self.assertEqual(raised.exception.count, 0)
+            with self.subTest(anchor=anchor.strip()[:30], problem="duplicated"):
+                with self.assertRaises(hub_dashboard_render.AnchorMismatch) as raised:
+                    hub_dashboard_render.render_reissue(template_text + "\n" + anchor, values)
+                self.assertEqual(raised.exception.count, 2)
+
+    def test_old_anchors_are_gone_from_the_template(self) -> None:
+        template_text = _read_real_template()
+
+        for removed_id in ('id="dz-title"', 'id="dz-progress-bar"', 'id="dz-progress-pct"', 'id="dz-steps"'):
+            self.assertNotIn(removed_id, template_text)
+
+
+class RenderIncidentFixtureTest(unittest.TestCase):
+    """이번 사고(두 작업 동시 진행) 기록의 화면 — 한 작업의 검수 통과가 다른 작업을 100% 로 만들지 않는다."""
+
+    def test_two_tasks_render_two_cards_and_the_committed_one_is_folded(self) -> None:
+        events = hub_parse.parse_event_lines(
+            _jsonl(
+                _init_dict(0, "9회차", ["설계", "승인", "구현", "검수"]),
+                {**_init_dict(1, "결함 ①", ["구현", "검수"]), "task": "결함①"},
+                {**_log_dict(2, "impl", "결함 구현"), "task": "결함①"},
+                {**_log_dict(3, "pass", "결함 PASS"), "task": "결함①"},
+                {**_log_dict(4, "commit", "결함 커밋"), "task": "결함①"},
+                _log_dict(5, "design", "9회차 설계"),
+            )
+        )
+
+        rendered = hub_dashboard_render.render_from_events(_read_real_template(), events, "d4973ae5-cf0c-4cf2-b560-cb3606bc1cd2")
+
+        self.assertEqual(rendered.count('class="card task-card"'), 1)
+        self.assertEqual(rendered.count('<details class="card task-card task-folded">'), 1)
+        self.assertIn('<h1>9회차</h1>', rendered)
+        self.assertIn('<div class="pct">1/4 · 25%</div>', rendered)
+        self.assertLess(rendered.index("<h1>9회차</h1>"), rendered.index('<details class="card task-card task-folded">'))
 
 
 if __name__ == "__main__":
