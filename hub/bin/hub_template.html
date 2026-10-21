@@ -21,6 +21,9 @@ DZH:HUB 데이터 계약
               docs/prps/hub-session-modal-cleanup.md) — 진행률은 세션 자신의 tier1 을 세션 줄·세션
               카드 아래에서만 그리고, 그래서 projects[].tier1_is_previous_task 도 읽는 곳이 없다.
               서버 계약은 그대로 두고 가지치기는 후속이다(결정 MX12).
+              sessions[].tier1.tasks 는 그 세션 진행 기록의 작업별 진행(표시 순서, is_folded 포함)이다 —
+              세션 줄·세션 카드가 접히지 않은 작업마다 진행률 한 줄을 그린다(결정 MT9, docs/prps/
+              hub-dashboard-multi-task.md). 비어 있으면(옛 페이로드) tier1 자신의 상단 값 한 줄로 폴백한다.
               template_stamp 필드는 이 문서를 렌더한 hub_template.html 의 세대다(SHA-256
               앞 16자, docs/prps/hub-ungated-poll-and-stale-tab-self-heal.md 결정 SH3) —
               폴링이 받아온 스탬프가 문서 자신의 것과 다르면 1회 자가 리로드한다(결정 SH6~SH9).
@@ -454,6 +457,7 @@ DZH:HUB 데이터 계약
   .last-activity{margin-left:auto;font-size:11.5px;color:var(--muted);flex:0 0 auto;white-space:nowrap}
   .path{font-size:11.5px;color:var(--muted);margin-top:2px;word-break:break-all}
   .tier1-pct{font-size:12px;font-weight:700;color:var(--accent-ink);margin-top:8px}
+  .tier1-pct+.tier1-pct{margin-top:2px}  /* 작업이 여럿이면 둘째 줄부터 .tier1-impl 과 같은 간격(결정 MT9). 갈고리는 첫 줄에 그대로 맞는다 */
   /* 진행중 단계 줄(.tier1-active)과 그 2줄 클램프(TC2, docs/prps/hub-tier1-clamp-fix-and-session-model.md)는 걷혔다 —
      단계명을 옮겨 받았던 진행률 줄 맨 앞 단계 칩도 서브에이전트 실행 칩과 헷갈려 걷었다(결정 LM4·LM12,
      docs/prps/hub-session-row-layout-and-modal-size.md). 지금 진행률 줄은 제목 — 완료/전체 · % 글자뿐이다. */
@@ -2345,15 +2349,25 @@ try{
     return '<div class="tier1-impl">구현 세부 ' + tier1.impl_done + '/' + tier1.impl_total + '</div>';
   }
 
-  // 진행률 2줄(제목 — 완료/전체 · %, 구현 세부). 호출자는 tier1 이 있을 때만 부른다 — 세션 줄·모달
+  // 세션 줄에 보일 작업(결정 MT9 안 A) — 접히지 않은 작업, 서버가 준 표시 순서 그대로. 접힌 작업은 패널에서 본다.
+  // tasks 가 없거나 비면(옛 서버 페이로드·손으로 만든 픽스처) tier1 자신 하나로 폴백한다 — 오늘의 한 줄이다.
+  function visibleProgressTasks(tier1){
+    if(!tier1.tasks || !tier1.tasks.length) return [tier1];
+    return tier1.tasks.filter(function(task){ return !task.is_folded; });
+  }
+  // 작업 하나의 진행률 줄 — 제목으로 시작한다(칩·배지를 앞에 두지 않는다: LM12·AW5).
+  function renderTier1TaskLine(task){
+    return '<div class="tier1-pct">' + escapeHtml(task.title) + ' — '
+      + task.completed + '/' + task.total + ' · ' + task.percent + '%</div>';
+  }
+
+  // 진행률 줄(작업마다 제목 — 완료/전체 · %, 구현 세부). 호출자는 tier1 이 있을 때만 부른다 — 세션 줄·모달
   // 세션 카드(renderSessionProgress) 전용이다. 카드와 카드 상세보기 머리는 프로젝트 단위 진행률을
   // 그리지 않는다(결정 MX4, docs/prps/hub-session-modal-cleanup.md) — 그래서 이전 작업·주인 세션
   // 없음 라벨 인자와 null 가드도 없다. 진행률 줄 맨 앞 단계 칩은 없다 — 아래 서브에이전트 실행 칩과
   // 헷갈려 걷었다(결정 LM12, docs/prps/hub-session-row-layout-and-modal-size.md). 승인 대기 표지는 첫 줄에 산다 — AW3.
   function renderTier1(tier1){
-    return '<div class="tier1-pct">' + escapeHtml(tier1.title) + ' — '
-      + tier1.completed + '/' + tier1.total + ' · ' + tier1.percent + '%</div>'
-      + renderTier1ImplProgress(tier1);
+    return visibleProgressTasks(tier1).map(renderTier1TaskLine).join('') + renderTier1ImplProgress(tier1);
   }
 
   // 드래그 전용 핸들(결정 DG1~DG3). 키보드로 아무 것도 할 수 없게 됐으므로 <button> 이 아니다 —

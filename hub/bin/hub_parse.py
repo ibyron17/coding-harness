@@ -3,7 +3,9 @@
 이 모듈은 파일시스템·시각·환경에 닿지 않는다(★순수, tests/hub/test_hub_parse.py 대상).
 상태의 단일 출처는 JSONL 이벤트 열이다(docs/prps/dashboard-native-data-source.md DN2·DN3) —
 이벤트를 파싱하고(parse_event_lines) 단계 상태를 축약해(derive_phase_states) 허브 카드가
-읽는 Tier1Snapshot 을 합성한다(snapshot_from_events). HTML 은 읽지 않는다
+읽는 Tier1Snapshot 을 합성한다(snapshot_from_events). 한 세션이 작업을 동시에 둘 이상 하면
+기록 한 줄마다 작업 이름표(task)가 붙고, 작업마다 같은 축약기를 따로 돌려 TaskProgress 를
+만든다(docs/prps/hub-dashboard-multi-task.md MT1~MT6). HTML 은 읽지 않는다
 (docs/prps/dashboard-into-hub.md HD5~HD7) — 허브 서버가 요청 때마다 이 모듈이 읽은 같은
 이벤트를 hub_dashboard_render.render_from_events 로 그려 화면을 서빙하므로, 카드 요약과
 화면은 항상 같은 출처에서 나온다.
@@ -11,7 +13,7 @@
 
 import datetime
 import json
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from typing import Literal
 
 StepState = Literal["done", "active", "wait"]
@@ -27,7 +29,7 @@ UNSET_SOURCE_PATH = ""
 
 @dataclass(frozen=True)
 class StepView:
-    """선형 진행 표시의 단계 하나(#dz-step-{n})."""
+    """선형 진행 표시의 단계 하나(작업 카드 안 단계 li 한 줄)."""
 
     index: int
     name: str
@@ -37,8 +39,24 @@ class StepView:
 
 
 @dataclass(frozen=True)
+class TaskProgress:
+    """진행 기록 안 작업 하나의 진행 상태(결정 MT4·MT5, docs/prps/hub-dashboard-multi-task.md)."""
+
+    label: str                       # 작업 이름표. "" = 이름표 없는 첫 작업
+    title: str
+    completed: int
+    total: int
+    percent: int
+    steps: tuple[StepView, ...]      # 진행중 단계의 detail = 그 작업의 마지막 로그 요약
+    started_at_ms: int               # 그 작업의 (마지막) init 시각
+    is_committed: bool               # 마지막 pass 뒤 commit 이 있다
+    is_approval_step_active: bool
+    is_folded: bool                  # 닫힘(100% 이고 커밋됨)이고 대표 작업이 아니다
+
+
+@dataclass(frozen=True)
 class Tier1Snapshot:
-    """세션별 진행 기록에서 읽은 진행 상태 전체."""
+    """세션별 진행 기록에서 읽은 진행 상태 전체. 상단 필드의 다중 작업 의미는 결정 MT6 표."""
 
     title: str
     subtitle: str
@@ -57,9 +75,10 @@ class Tier1Snapshot:
     # docs/prps/hub-session-tree-and-per-session-dashboards.md).
     session_id: str | None = None
     # 이 대시보드가 기록하는 **작업이 시작된 시각**(결정 RL8, docs/prps/
-    # hub-card-gate-and-run-list-reset.md §3.7) = JSONL 첫 줄(init 이벤트)의 time_ms
-    # (docs/prps/dashboard-into-hub.md HD8 — M1 까지는 `/dashboard init` 사이드카 mtime
-    # 이었다). snapshot_from_events 가 채운다 — hub_collect 는 이 값을 덮어쓰지 않는다.
+    # hub-card-gate-and-run-list-reset.md §3.7) = 작업이 하나면 그 작업의 init 이벤트 time_ms, 여럿이면(결정 MT6,
+    # docs/prps/hub-dashboard-multi-task.md) 끝나지 않은 작업들의 init 시각 중 가장 이른 것이고 전부 끝났으면 대표 작업의
+    # init 시각이다(docs/prps/dashboard-into-hub.md HD8 — M1 까지는 `/dashboard init` 사이드카 mtime 이었다).
+    # snapshot_from_events 가 채운다 — hub_collect 는 이 값을 덮어쓰지 않는다.
     task_started_at_ms: int | None = None
     # 마지막 pass 기록 뒤에 commit 기록이 있는가(결정 LM6, docs/prps/hub-session-row-layout-and-modal-size.md).
     # pass 가 없으면 False. 사실만 싣는다 — 「커밋 전」 칩이 걷힌 뒤(결정 LM12) 현재 화면은 읽지 않는다. 정적 값이라
@@ -69,6 +88,9 @@ class Tier1Snapshot:
     # 상태와 합쳐 표지를 보일지는 서버(hub_session.is_awaiting_approval, 결정 MN5)가 정하고 화면은 그 결과만 읽는다. 이벤트 열의 함수라
     # snapshot_content_key 에 안전하다.
     is_approval_step_active: bool = False
+    # 작업별 진행(결정 MT6) — 표시 순서(펼친 작업 init 순 → 접힌 작업 init 순). 파서는 항상 1개 이상 채운다.
+    # 비어 있으면 옛 서버 페이로드·손으로 만든 값이다(화면은 상단 필드 한 줄로 폴백한다).
+    tasks: tuple[TaskProgress, ...] = ()
 
 
 # ---------------------------------------------------------------------------
@@ -97,6 +119,17 @@ _MAX_VALID_TIME_MS = 4_102_444_800_000  # 2100-01-01T00:00:00Z
 # 두고, 넘으면 init 자체를 무효로 처리해 기존 "init 없음" 경고로 떨어뜨린다.
 _MAX_PHASE_COUNT = 32
 
+# 작업 이름표 글자 수 상한(결정 MT1) — 실사례 이름표(「결함①」·「9회차」 3자)의 6배 여유이자 550px 패널 로그
+# 항목에서 요약 글자를 절반 넘게 먹지 않는 폭이다. 기록기(hub_dashboard_log)가 같은 값을 쓴다(HD14).
+TASK_LABEL_MAX_LENGTH = 20
+UNLABELED_TASK = ""  # 이름표 없음 — 이름표 없는 기록은 첫 작업의 것이다(결정 MT1)
+
+
+def is_valid_task_label(label: str) -> bool:
+    """이름표 형식 — 1~TASK_LABEL_MAX_LENGTH 자, 앞뒤 공백 없음, 인쇄 가능한 문자만(결정 MT1).
+    개행·탭·제어 문자·U+2028 을 거부하는 이유는 한 줄 렌더 계약(H1)과 같다."""
+    return 1 <= len(label) <= TASK_LABEL_MAX_LENGTH and label == label.strip() and label.isprintable()
+
 
 @dataclass(frozen=True)
 class DashboardEvent:
@@ -117,6 +150,9 @@ class DashboardEvent:
     detail: str = ""
     index: int = 0
     state: str = ""
+    # 작업 이름표(결정 MT1). parse_event_lines 가 이름표 없는 이벤트를 첫 작업의 이름표로 채운다(MT3) —
+    # 첫 작업이 이름표 없이 시작됐으면 "" 그대로다.
+    task: str = UNLABELED_TASK
 
 
 def _parse_init_event(time_ms: int, raw: dict) -> DashboardEvent | None:
@@ -189,24 +225,57 @@ def _parse_single_event_line(line: str) -> DashboardEvent | None:
         return None
     if not (_MIN_VALID_TIME_MS <= time_ms <= _MAX_VALID_TIME_MS):
         return None
+    task = raw.get("task", UNLABELED_TASK)
+    if not isinstance(task, str) or (task != UNLABELED_TASK and not is_valid_task_label(task)):
+        return None
     if kind == "init":
-        return _parse_init_event(time_ms, raw)
-    if kind == "step":
-        return _parse_step_event(time_ms, raw)
-    return _parse_log_event(time_ms, kind, raw)
+        event = _parse_init_event(time_ms, raw)
+    elif kind == "step":
+        event = _parse_step_event(time_ms, raw)
+    else:
+        event = _parse_log_event(time_ms, kind, raw)
+    return event if event is None or task == UNLABELED_TASK else replace(event, task=task)
 
 
-def _find_last_init_index(events: list[DashboardEvent]) -> int | None:
-    """events 중 kind == "init" 인 마지막 인덱스. 하나도 없으면 None."""
-    last_index = None
+def _find_start_index(events: list[DashboardEvent]) -> int | None:
+    """살아 있는 열의 시작점(결정 MT3) — 마지막 이름표 없는 init. 그런 init 이 없으면 첫 init.
+    init 이 하나도 없으면 None."""
+    first_init_index = None
+    last_unlabeled_init_index = None
     for index, event in enumerate(events):
-        if event.kind == "init":
-            last_index = index
-    return last_index
+        if event.kind != "init":
+            continue
+        if first_init_index is None:
+            first_init_index = index
+        if event.task == UNLABELED_TASK:
+            last_unlabeled_init_index = index
+    return first_init_index if last_unlabeled_init_index is None else last_unlabeled_init_index
+
+
+def _fill_first_task_label(events: list[DashboardEvent]) -> list[DashboardEvent]:
+    """이름표 없는 이벤트에 시작점 init 의 이름표를 채운다(첫 작업 몫, 결정 MT1·MT3). 시작점이 이름표 없는
+    init 이면 아무것도 바뀌지 않는다."""
+    first_task = events[0].task
+    if first_task == UNLABELED_TASK:
+        return events
+    return [replace(event, task=first_task) if event.task == UNLABELED_TASK else event for event in events]
+
+
+def _keep_live_events(events: list[DashboardEvent]) -> list[DashboardEvent]:
+    """각 이벤트를 자기 작업의 마지막 init 이후(그 init 포함)일 때만 남긴다(결정 MT3 생존 규칙) — 재시작된
+    작업의 옛 이벤트와 자기 init 보다 먼저 온 이름표 이벤트가 빠진다."""
+    last_init_index_by_task = {event.task: index for index, event in enumerate(events) if event.kind == "init"}
+    return [
+        event
+        for index, event in enumerate(events)
+        if event.task in last_init_index_by_task and last_init_index_by_task[event.task] <= index
+    ]
 
 
 def parse_event_lines(text: str) -> tuple[DashboardEvent, ...]:
-    """JSONL 본문 → 이벤트 열. 줄 단위 fail-open 방식('\\n' 분할, U+2028 보존). 마지막 init 이후만."""
+    """JSONL 본문 → 살아 있는 이벤트 열(결정 MT3). 줄 단위 fail-open 방식('\\n' 분할, U+2028 보존).
+    마지막 이름표 없는 init 부터(없으면 첫 init 부터) 읽고, 이름표 없는 이벤트는 첫 작업 몫으로 채우고,
+    재시작된 작업의 옛 이벤트·고아를 뺀다. init 이 없으면 (). 결과의 첫 이벤트는 항상 init 이다."""
     events: list[DashboardEvent] = []
     # JSONL 의 줄 구분자는 "\n" 하나뿐이다(재검수 MEDIUM — 실측: str.splitlines() 는 그보다
     # 넓어 U+2028(LINE SEPARATOR)·U+2029(PARAGRAPH SEPARATOR) 도 줄 경계로 본다. summary·
@@ -218,10 +287,15 @@ def parse_event_lines(text: str) -> tuple[DashboardEvent, ...]:
         event = _parse_single_event_line(line)
         if event is not None:
             events.append(event)
-    last_init_index = _find_last_init_index(events)
-    if last_init_index is None:
+    start_index = _find_start_index(events)
+    if start_index is None:
         return ()
-    return tuple(events[last_init_index:])
+    return tuple(_keep_live_events(_fill_first_task_label(events[start_index:])))
+
+
+def live_task_labels(events: tuple[DashboardEvent, ...]) -> frozenset[str]:
+    """살아 있는 작업들의 이름표 집합(첫 작업이 이름표 없이 시작됐으면 "" 포함) — 기록기의 NOTASK 판정(결정 MT2)."""
+    return frozenset(event.task for event in events if event.kind == "init")
 
 
 # ---------------------------------------------------------------------------
@@ -310,13 +384,33 @@ def format_event_updated_label(time_ms: int) -> str:
 # ---------------------------------------------------------------------------
 
 _PERCENT_ROUND_BASE = 100  # P = round(완료 수 / 단계 수 × 100) 산식의 배수(매직 넘버 회피)
+# 작업이 끝났다고 보는 진행률(README 데이터 모델의 종료 신호 — pass = 전부 완료). hub_session.
+# TIER1_FINISHED_PERCENT 와 같은 정의다(이 모듈은 잎이라 그쪽을 임포트하지 않는다).
+_TASK_FINISHED_PERCENT = 100
 
 
-def snapshot_from_events(events: tuple[DashboardEvent, ...]) -> Tier1Snapshot:
-    """이벤트 열 → Tier1Snapshot(hub/README.md 「진행 기록」>「데이터 모델」 대응).
-    events[0] 은 init 이어야 한다(parse_event_lines 계약)."""
-    init_event = events[0]
-    later_events = events[1:]
+def _split_with_last_positions(
+    events: tuple[DashboardEvent, ...],
+) -> list[tuple[tuple[DashboardEvent, ...], int]]:
+    """살아 있는 열 → (작업 묶음, 그 작업의 마지막 이벤트 위치) 목록. init 순서다 — 생존 규칙(MT3) 덕에 한
+    작업의 첫 이벤트가 곧 그 작업의 init 이다."""
+    groups: dict[str, list[DashboardEvent]] = {}
+    last_positions: dict[str, int] = {}
+    for position, event in enumerate(events):
+        groups.setdefault(event.task, []).append(event)
+        last_positions[event.task] = position
+    return [(tuple(group), last_positions[label]) for label, group in groups.items()]
+
+
+def split_events_by_task(events: tuple[DashboardEvent, ...]) -> tuple[tuple[DashboardEvent, ...], ...]:
+    """살아 있는 열 → 작업별 묶음(init 순, 묶음[0] 은 그 작업의 init)(결정 MT4)."""
+    return tuple(group for group, _ in _split_with_last_positions(events))
+
+
+def _progress_of_task(task_events: tuple[DashboardEvent, ...]) -> TaskProgress:
+    """작업 하나의 이벤트(init 으로 시작)에 기존 축약기를 그대로 돌린다(결정 MT4 — 새 전이 규칙 없음)."""
+    init_event = task_events[0]
+    later_events = task_events[1:]
     phase_states = derive_phase_states(init_event.phases, later_events)
     total = len(phase_states)
     completed = sum(1 for state in phase_states if state == "done")
@@ -332,21 +426,74 @@ def snapshot_from_events(events: tuple[DashboardEvent, ...]) -> Tier1Snapshot:
         )
         for index, (name, state) in enumerate(zip(init_event.phases, phase_states))
     )
-    return Tier1Snapshot(
+    return TaskProgress(
+        label=init_event.task,
         title=init_event.title,
-        subtitle="",
         completed=completed,
         total=total,
         percent=percent,
         steps=steps,
+        started_at_ms=init_event.time_ms,
+        is_committed=is_commit_logged_after_last_pass(later_events),
+        is_approval_step_active=is_approval_step_active(steps),
+        is_folded=False,
+    )
+
+
+def _pick_representative_index(progresses: list[TaskProgress], last_positions: list[int]) -> int:
+    """대표 작업(결정 MT5) — 후보(승인 단계 진행중인 미완 작업 → 미완 작업 → 모든 작업) 중 마지막 이벤트가
+    파일에서 가장 뒤인 것. 시각이 아니라 순서라 같은 밀리초 동률이 없다."""
+    unfinished = [index for index, task in enumerate(progresses) if task.percent < _TASK_FINISHED_PERCENT]
+    awaiting_approval = [index for index in unfinished if progresses[index].is_approval_step_active]
+    candidates = awaiting_approval or unfinished or list(range(len(progresses)))
+    return max(candidates, key=lambda index: last_positions[index])
+
+
+def _compose_tasks(events: tuple[DashboardEvent, ...]) -> tuple[tuple[TaskProgress, ...], TaskProgress]:
+    """(표시 순서의 작업 목록, 대표 작업). 접힘 = 닫힘(100% 이고 커밋됨) 이고 대표가 아님(결정 MT5)이며, 표시
+    순서는 펼친 작업(init 순) → 접힌 작업(init 순)이다."""
+    grouped = _split_with_last_positions(events)
+    progresses = [_progress_of_task(group) for group, _ in grouped]
+    representative_index = _pick_representative_index(progresses, [position for _, position in grouped])
+    judged = [
+        replace(
+            task,
+            is_folded=index != representative_index
+            and task.percent >= _TASK_FINISHED_PERCENT
+            and task.is_committed,
+        )
+        for index, task in enumerate(progresses)
+    ]
+    ordered = [task for task in judged if not task.is_folded] + [task for task in judged if task.is_folded]
+    return tuple(ordered), progresses[representative_index]
+
+
+def task_progresses(events: tuple[DashboardEvent, ...]) -> tuple[TaskProgress, ...]:
+    """작업별 진행(표시 순서, is_folded 채움 — 결정 MT5)."""
+    return _compose_tasks(events)[0]
+
+
+def snapshot_from_events(events: tuple[DashboardEvent, ...]) -> Tier1Snapshot:
+    """이벤트 열 → Tier1Snapshot(hub/README.md 「진행 기록」>「데이터 모델」 대응). events[0] 은 init 이어야
+    한다(parse_event_lines 계약). 상단 필드의 다중 작업 집계는 결정 MT6 표 — 작업이 하나면 오늘 값과 같다."""
+    tasks, representative = _compose_tasks(events)
+    unfinished_start_times = [task.started_at_ms for task in tasks if task.percent < _TASK_FINISHED_PERCENT]
+    return Tier1Snapshot(
+        title=representative.title,
+        subtitle="",
+        completed=representative.completed,
+        total=representative.total,
+        percent=representative.percent,
+        steps=representative.steps,
         matrix_done=None,
         impl_done=0,
         impl_total=0,
         updated_text=format_event_updated_label(events[-1].time_ms),
         file_mtime_ms=UNSET_FILE_MTIME_MS,
-        task_started_at_ms=init_event.time_ms,
-        is_committed=is_commit_logged_after_last_pass(later_events),
-        is_approval_step_active=is_approval_step_active(steps),
+        task_started_at_ms=min(unfinished_start_times) if unfinished_start_times else representative.started_at_ms,
+        is_committed=representative.is_committed,
+        is_approval_step_active=any(task.is_approval_step_active for task in tasks),
+        tasks=tasks,
     )
 
 

@@ -185,6 +185,8 @@ function scopeReport(scope){
     noDashboardCount: scope.querySelectorAll('.session-no-dashboard').length,
     injectedElements: scope.querySelectorAll('.tier1-pct b, .tier1-pct i').length,
     pctText: pct ? pct.textContent : null,
+    pctTexts: Array.prototype.map.call(scope.querySelectorAll('.tier1-pct'), function(el){ return el.textContent; }),
+    tier1Text: scope.querySelector('.session-tier1') ? scope.querySelector('.session-tier1').textContent : null,
   };
 }
 var ids = %(ids)s;
@@ -197,6 +199,34 @@ var modal = {};
 ids.forEach(function(id){ modal[id] = scopeReport(document.querySelector('#dzh-session-modal-body .session-card[data-session-id="' + id + '"]')); });
 __probeResult({list: list, modal: modal});
 """
+
+
+# D53·D54 — 작업별 진행률 줄(결정 MT9 안 A). 작업이 여럿이면 접히지 않은 작업마다 한 줄(서버가 준 표시 순서 그대로), 접힌 작업은 줄에 없다.
+# tasks 가 비어 있는 옛 페이로드·손으로 만든 픽스처는 tier1 자신 한 줄로 폴백한다(D27 과 같은 글자).
+def _task_progress(label: str, title: str, steps: tuple[hub_parse.StepView, ...], is_folded: bool = False) -> hub_parse.TaskProgress:
+    completed = sum(1 for step in steps if step.state == "done")
+    return hub_parse.TaskProgress(
+        label=label, title=title, completed=completed, total=len(steps), percent=round(completed * 100 / len(steps)), steps=steps,
+        started_at_ms=BASE_TIME_MS, is_committed=is_folded, is_approval_step_active=False, is_folded=is_folded,
+    )
+
+
+_FOLDED_TASK_TITLE = "접힌 작업 제목"
+_MULTI_TASK_TIER1 = dataclasses.replace(
+    _tier1("9회차 구현", _FOUR_PHASES_REVIEWING),
+    tasks=(
+        _task_progress("9회차", "9회차 구현", _FOUR_PHASES_REVIEWING),
+        _task_progress("결함①", _ESCAPE_TITLE, _steps(("구현", "done", ""), ("검수", "active", "재검수"))),
+        _task_progress("", _FOLDED_TASK_TITLE, _FOUR_PHASES_ALL_DONE, is_folded=True),
+    ),
+)
+_MULTI_TASK_SESSIONS = (
+    _dated("multi-task", "working", "working", 1, task_excerpt="작업 셋", tier1=_MULTI_TASK_TIER1),
+    _dated("legacy-no-tasks", "idle", "idle", 2, task_excerpt="tasks 없는 옛 페이로드", tier1=_tier1("옛 제목", _FOUR_PHASES_REVIEWING)),
+    _dated("single-task", "idle", "idle", 3, task_excerpt="작업 하나",
+           tier1=dataclasses.replace(_tier1("하나뿐", _FOUR_PHASES_ALL_DONE, is_committed=True), tasks=(_task_progress("", "하나뿐", _FOUR_PHASES_ALL_DONE),))),
+)
+_MULTI_TASK_SNAPSHOT = _snapshot((_project(_PROJECT_PATH, "rows", "working", _MULTI_TASK_SESSIONS),))
 
 
 def _probe_body(sessions: tuple[hub_session.SessionView, ...]) -> str:
@@ -389,6 +419,28 @@ class HubSessionRowLayoutDomTest(unittest.TestCase):
         tier1 = session.tier1
         self.assertEqual(report["pctText"], f"{tier1.title} — {tier1.completed}/{tier1.total} · {tier1.percent}%", "진행률 줄 글자가 「제목 — 완료/전체 · 퍼센트」 가 아님(D27, LM12)")
         self.assertEqual(report["pctElementCount"], 0, "진행률 줄 안에 자식 요소가 있음(D27, LM12 — 칩이 다시 붙었다)")
+
+    def test_d53_session_row_shows_one_progress_line_per_unfolded_task_in_display_order(self) -> None:
+        # 결정 MT9 안 A — tier1.tasks 중 접히지 않은 작업마다 「제목 — 완료/전체 · 퍼센트」 한 줄, 서버가 준 표시 순서 그대로. 접힌 작업은 카드에 없다(패널에서 본다).
+        # 제목은 글자 그대로 그려진다(이스케이프). 두 화면(카드 목록 줄·카드 상세보기 카드) 모두.
+        result = run_scenario(_make_page(_MULTI_TASK_SNAPSHOT, _probe_body(_MULTI_TASK_SESSIONS)), window_width=1440, window_height=900)
+        expected = ["9회차 구현 — 3/4 · 75%", f"{_ESCAPE_TITLE} — 1/2 · 50%"]
+        for surface, surface_label in _SURFACES:
+            with self.subTest(surface=surface_label):
+                report = result[surface]["multi-task"]
+                self.assertEqual(report["pctTexts"], expected, "세션 줄 진행률 줄이 접히지 않은 작업마다·표시 순서대로가 아님(D53, MT9)")
+                self.assertNotIn(_FOLDED_TASK_TITLE, report["tier1Text"], "접힌 작업 제목이 세션 줄에 보임(D53, MT9)")
+                self.assertEqual(report["injectedElements"], 0, "작업 제목의 태그가 요소로 해석됨(D53, escape)")
+                self.assertEqual((report["chipCount"], report["pctChipCount"]), (0, 0), "작업 줄 앞에 칩이 붙음(D53, LM12)")
+
+    def test_d54_empty_or_single_task_list_falls_back_to_exactly_one_line_like_today(self) -> None:
+        # 결정 MT9 — tasks 가 비면(옛 서버 페이로드) tier1 자신 하나로 폴백하고, 작업이 하나뿐이면 오늘과 같은 한 줄이다(접히지 않는다).
+        result = run_scenario(_make_page(_MULTI_TASK_SNAPSHOT, _probe_body(_MULTI_TASK_SESSIONS)), window_width=1440, window_height=900)
+        expected_by_session = {"legacy-no-tasks": ["옛 제목 — 3/4 · 75%"], "single-task": ["하나뿐 — 4/4 · 100%"]}
+        for surface, surface_label in _SURFACES:
+            for session_id, expected in expected_by_session.items():
+                with self.subTest(surface=surface_label, session=session_id):
+                    self.assertEqual(result[surface][session_id]["pctTexts"], expected, "tasks 가 비었거나 하나일 때 진행률 줄이 오늘과 같은 한 줄이 아님(D54, MT9)")
 
     def test_d32_session_time_is_the_elapsed_time_since_the_task_started(self) -> None:
         # 요구 2(결정 LM11) — 세션 줄 첫 줄의 시간은 「N분 전」(마지막 이벤트 경과 — 프로젝트 머리 .last-activity 와 같은 종류)도, 세션이 처음 시작된 때부터도 아니라

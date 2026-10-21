@@ -270,7 +270,7 @@ class ProjectDashboardRoutingTest(_RunningHubServerTestCase):
 
     def test_registered_key_serves_dashboard_with_nosniff_header(self) -> None:
         """HD5(docs/prps/dashboard-into-hub.md) — 서버가 .jsonl 을 요청 시점에 렌더한다.
-        본문에 init 이벤트의 제목 원문이 그대로 실린다(dz-title)."""
+        본문에 init 이벤트의 제목 원문이 그대로 실린다(작업 카드의 h1, 결정 MT7)."""
         dashboard_path = self.temp_dir / "dashboard.jsonl"
         dashboard_path.write_text(_valid_dashboard_jsonl("제목"), encoding="utf-8")
         self.httpd.dashboard_paths_by_key = {"2222222222222222": str(dashboard_path)}
@@ -279,7 +279,7 @@ class ProjectDashboardRoutingTest(_RunningHubServerTestCase):
 
         self.assertEqual(response.status, 200)
         self.assertEqual(response.getheader("X-Content-Type-Options"), "nosniff")
-        self.assertIn('<h1 id="dz-title">제목</h1>', response.body.decode("utf-8"))
+        self.assertIn('<h1>제목</h1>', response.body.decode("utf-8"))
 
     def test_lone_surrogate_in_title_is_replaced_and_serves_200(self) -> None:
         """RA2(재검수 2회차) — JSONL 의 title 이 UTF-16 서로게이트 쌍이 쪼개진 값(hub_atomic_
@@ -298,7 +298,7 @@ class ProjectDashboardRoutingTest(_RunningHubServerTestCase):
         response = self._get("/project/5555555555555555/dashboard.html")
 
         self.assertEqual(response.status, 200)
-        self.assertIn('<h1 id="dz-title">a�b</h1>', response.body.decode("utf-8"))
+        self.assertIn('<h1>a�b</h1>', response.body.decode("utf-8"))
 
     def test_registered_key_with_no_init_event_is_404(self) -> None:
         """init 없음 — 이벤트가 있어도 첫 줄이 init 이 아니면 렌더할 스냅샷이 없다."""

@@ -19,21 +19,17 @@ import html
 import re
 from dataclasses import dataclass
 
-from hub_parse import DashboardEvent, derive_phase_states, format_event_updated_label, latest_log_summary
+from hub_parse import DashboardEvent, TaskProgress, format_event_updated_label, task_progresses
 
 # ---------------------------------------------------------------------------
-# 앵커 상수 9종 — render_reissue 가 9개 전부 쓴다(build_published_values 는 간접 경유).
+# 앵커 상수 6종 — render_reissue 가 6개 전부 쓴다(build_published_values 는 간접 경유).
 # 템플릿 슬롯의 마크업이 바뀌면 고칠 자리가 여기 한 곳이다. 값은
-# hub_dashboard_template.html 의 빈 상태(발행 전 원본) 그대로다.
+# hub_dashboard_template.html 의 빈 상태(발행 전 원본) 그대로다. 제목·진행 막대·진행률·단계
+# 목록 앵커 4종은 작업 카드 묶음 하나(ANCHOR_TASKS)로 합쳐졌다(결정 MT7 — 카드가 여러 장이면 id 가 겹친다).
 # ---------------------------------------------------------------------------
 
 ANCHOR_PROJECT_NAME = '  <span class="project-name" id="dz-project-name">프로젝트</span>'
-ANCHOR_TITLE = '    <h1 id="dz-title">세션 제목</h1>'
-ANCHOR_PROGRESS_BAR = (
-    '    <div class="bar-outer"><div class="bar-inner" id="dz-progress-bar" style="width:0%"></div></div>'
-)
-ANCHOR_PROGRESS_PCT = '    <div class="pct" id="dz-progress-pct">0/0 · 0%</div>'
-ANCHOR_STEPS_BLOCK = '    <ol class="steps" id="dz-steps">\n    </ol>'
+ANCHOR_TASKS = '  <div id="dz-tasks"></div>'
 ANCHOR_IMPL_COUNT = '    <div class="pct" id="dz-impl-count">0/0 · 0%</div>'
 ANCHOR_IMPL_TASKS_BLOCK = '    <ol class="steps" id="dz-impl-tasks">\n    </ol>'
 ANCHOR_LOG = '    <ul class="log" id="dz-log" data-owner-token="" data-server-port=""></ul>'
@@ -56,10 +52,7 @@ class PublishedValues:
     """
 
     project_name_html: str | None
-    title_html: str
-    progress_width: str
-    progress_text_html: str
-    progress_block_lines: list[str]
+    task_block_lines: list[str]  # <div id="dz-tasks"> … </div> 전체(작업 카드 묶음, 결정 MT7)
     impl_count_html: str | None
     impl_block_lines: list[str] | None
     log_owner_token: str
@@ -117,7 +110,7 @@ def _render_log_block(values: PublishedValues) -> str:
 
 
 def render_reissue(template_text: str, values: PublishedValues) -> str:
-    """현재 템플릿의 앵커 9종을 values 로 치환한 새 문자열을 돌려준다.
+    """현재 템플릿의 앵커 6종을 values 로 치환한 새 문자열을 돌려준다.
 
     앵커 등장 횟수가 1이 아니면 AnchorMismatch.
     project_name_html 이 None 이면 ValueError — 호출 전에 I/O 층이 채워야 한다.
@@ -133,15 +126,8 @@ def render_reissue(template_text: str, values: PublishedValues) -> str:
     replacements = [
         (ANCHOR_PROJECT_NAME,
          '  <span class="project-name" id="dz-project-name">%s</span>' % values.project_name_html),
-        (ANCHOR_TITLE,
-         '    <h1 id="dz-title">%s</h1>' % values.title_html),
-        (ANCHOR_PROGRESS_BAR,
-         '    <div class="bar-outer"><div class="bar-inner" id="dz-progress-bar" style="width:%s"></div></div>'
-         % values.progress_width),
-        (ANCHOR_PROGRESS_PCT,
-         '    <div class="pct" id="dz-progress-pct">%s</div>' % values.progress_text_html),
-        (ANCHOR_STEPS_BLOCK,
-         "\n".join(values.progress_block_lines)),
+        (ANCHOR_TASKS,
+         "\n".join(values.task_block_lines)),
         (ANCHOR_IMPL_COUNT,
          '    <div class="pct" id="dz-impl-count">%s</div>' % impl_count_html),
         (ANCHOR_IMPL_TASKS_BLOCK,
@@ -173,7 +159,7 @@ _LOG_KIND_DISPLAY: dict[str, tuple[str, str, str]] = {
     "commit": ("commit", "commit", "커밋"),
     "note": ("note", "impl", "메모"),
 }
-_ROUND_TRACKED_KINDS = ("pass", "fail")  # DN5 — 회차는 이 두 종류의 누적 수다.
+_ROUND_TRACKED_KINDS = ("pass", "fail")  # DN5 — 회차는 이 두 종류의 작업별 누적 수다(결정 MT4).
 _RECENT_LOG_OPEN_COUNT = 3  # 최신 3건만 <details open> — 「로그 항목 스키마」 절의 기존 UX 그대로.
 _NO_DETAIL_TEXT = "(상세 없음)"
 _STEP_STATE_LABEL = {"done": "완료", "active": "진행중", "wait": "대기"}
@@ -253,7 +239,7 @@ def render_detail_html(detail: str) -> str:
 # 단일 행 필드 정규화 — _escape_single_line. title·project·phases 항목·summary 처럼 DOM 에서
 # 한 줄 안에 있어야 하는 필드 전용이다(불변식 2·3). 개행이 들어오면 템플릿 자체 폴링(부분
 # 치환)이 그 id 를 한 줄로 기대하는 계약이 깨져 단계·항목이 조용히 어긋난다(검수 H1 —
-# 실측: summary 에 개행 1개만 있어도 <li id="dz-step-N"> 가 물리적으로 여러 줄로 쪼개져
+# 실측: summary 에 개행 1개만 있어도 단계 <li> 가 물리적으로 여러 줄로 쪼개져
 # 렌더 결과가 그 계약을 어겼다). escape_for_dom 자체에 넣지 않는 이유: 그 함수는 detail
 # 경로도 쓰는데 detail 은 개행이 블록 구분자라 보존해야 한다(render_detail_html) — 정규화
 # 여부는 필드의 성격에 달렸으므로 호출부에서 선택한다.
@@ -291,15 +277,16 @@ class _LogEntryFields:
     badge_class: str
     badge_label: str
     round_number: int | None
+    task_label_html: str  # 이스케이프된 작업 이름표. 이름표 없는 항목은 ""(배지 없음)
     summary_html: str
     detail_html: str
 
 
 def _collect_log_entries(events: tuple[DashboardEvent, ...]) -> list[_LogEntryFields]:
-    """로그로 남는 이벤트만 골라 순번(오래된 것부터 1)·누적 회차를 매긴다."""
+    """로그로 남는 이벤트만 골라 순번(오래된 것부터 1)·작업별 누적 회차를 매긴다."""
     entries: list[_LogEntryFields] = []
     seq = 0
-    round_number = 0
+    round_numbers_by_task: dict[str, int] = {}
     for event in events:
         display = _LOG_KIND_DISPLAY.get(event.kind)
         if display is None:
@@ -308,7 +295,7 @@ def _collect_log_entries(events: tuple[DashboardEvent, ...]) -> list[_LogEntryFi
         data_kind, badge_class, badge_label = display
         is_round_tracked = event.kind in _ROUND_TRACKED_KINDS
         if is_round_tracked:
-            round_number += 1
+            round_numbers_by_task[event.task] = round_numbers_by_task.get(event.task, 0) + 1
         entries.append(
             _LogEntryFields(
                 seq=seq,
@@ -316,7 +303,8 @@ def _collect_log_entries(events: tuple[DashboardEvent, ...]) -> list[_LogEntryFi
                 data_kind=data_kind,
                 badge_class=badge_class,
                 badge_label=badge_label,
-                round_number=round_number if is_round_tracked else None,
+                round_number=round_numbers_by_task[event.task] if is_round_tracked else None,
+                task_label_html=_escape_single_line(event.task),
                 summary_html=_escape_single_line(event.summary),
                 detail_html=render_detail_html(event.detail),
             )
@@ -332,6 +320,8 @@ def _render_single_log_entry(entry: _LogEntryFields, is_open: bool) -> list[str]
         "          <summary>",
         '            <span class="time">%s</span>' % entry.time_label,
     ]
+    if entry.task_label_html:
+        lines.append('            ' + _task_badge_html(entry.task_label_html))
     if entry.round_number is not None:
         lines.append('            <span class="badge round">R%d</span>' % entry.round_number)
     lines.append('            <span class="badge %s">%s</span>' % (entry.badge_class, entry.badge_label))
@@ -344,7 +334,7 @@ def _render_single_log_entry(entry: _LogEntryFields, is_open: bool) -> list[str]
 
 
 def render_log_entry_lines(events: tuple[DashboardEvent, ...]) -> list[str]:
-    """최신이 위. data-seq 1부터, 최신 3건만 <details open>. pass/fail 에 누적 회차 R{n}."""
+    """최신이 위. data-seq 1부터, 최신 3건만 <details open>. 이름표 배지, pass/fail 에 작업별 회차 R{n}."""
     newest_first = list(reversed(_collect_log_entries(events)))
     lines: list[str] = []
     for position, entry in enumerate(newest_first):
@@ -357,59 +347,77 @@ def render_log_entry_lines(events: tuple[DashboardEvent, ...]) -> list[str]:
 # ---------------------------------------------------------------------------
 
 
-def _latest_log_summary_html(events: tuple[DashboardEvent, ...]) -> str:
-    """가장 최근 로그 요약(DN6, 활성 단계의 .step-detail 로 쓰인다) — 이스케이프 적용.
-    원문 선택은 hub_parse.latest_log_summary 가 한다(허브 카드 요약과 같은 값을 공유)."""
-    return _escape_single_line(latest_log_summary(events))
+def _task_badge_html(escaped_label: str) -> str:
+    """작업 이름표 배지 — 이름표는 이미 이스케이프된 텍스트다."""
+    return '<span class="badge task">%s</span>' % escaped_label
 
 
-def _render_steps_block(
-    phases: tuple[str, ...], phase_states: tuple[str, ...], active_detail_html: str
-) -> list[str]:
-    """진행 단계 <ol> 블록 — 템플릿 자체 폴링(부분 치환)이 이 id 형태(`dz-step-{n}`)로 DOM
-    을 찾는 계약이다. 허브는 이 마크업을 정규식으로 파싱하지 않는다(HD5,
-    docs/prps/dashboard-into-hub.md — 출력 바이트를 유지하려고 정규화·줄 형태는 그대로 둔다)."""
+def _render_steps_block(task: TaskProgress) -> list[str]:
+    """작업 카드 안 진행 단계 <ol> — 단계 줄은 줄마다 li 하나다(id 는 없다, 결정 MT7)."""
     item_lines = [
-        '      <li id="dz-step-%d" class="%s"><span class="num">%d</span>%s'
-        '<span class="chip">%s</span><span class="step-detail">%s</span></li>'
+        '        <li class="%s"><span class="num">%d</span>%s<span class="chip">%s</span>'
+        '<span class="step-detail">%s</span></li>'
         % (
-            index + 1,
-            state,
-            index + 1,
-            _escape_single_line(name),
-            _STEP_STATE_LABEL[state],
-            active_detail_html if state == "active" else "",
+            step.state,
+            step.index,
+            _escape_single_line(step.name),
+            _STEP_STATE_LABEL[step.state],
+            _escape_single_line(step.detail),
         )
-        for index, (name, state) in enumerate(zip(phases, phase_states))
+        for step in task.steps
     ]
-    return ['    <ol class="steps" id="dz-steps">', *item_lines, "    </ol>"]
+    return ['      <ol class="steps">', *item_lines, "      </ol>"]
+
+
+def _render_open_task_card(task: TaskProgress) -> list[str]:
+    """펼친 작업 카드 — 이름표 배지(있을 때만)·제목·진행 막대·진행률·단계 목록."""
+    badge = _task_badge_html(_escape_single_line(task.label)) if task.label else ""
+    return [
+        '    <div class="card task-card">',
+        "      <h1>%s%s</h1>" % (badge, _escape_single_line(task.title)),
+        '      <div class="bar-outer"><div class="bar-inner" style="width:%d%%"></div></div>' % task.percent,
+        '      <div class="pct">%d/%d · %d%%</div>' % (task.completed, task.total, task.percent),
+        *_render_steps_block(task),
+        "    </div>",
+    ]
+
+
+def _render_folded_task_card(task: TaskProgress) -> list[str]:
+    """접힌 작업 카드 — 네이티브 details(키보드·낭독기 지원). 한 줄 요약에 이름표·제목·커밋 배지·진행률."""
+    badge = _task_badge_html(_escape_single_line(task.label)) if task.label else ""
+    return [
+        '    <details class="card task-card task-folded">',
+        '      <summary>%s<span class="task-folded-title">%s</span><span class="badge commit">커밋</span>'
+        '<span class="task-folded-pct">%d/%d · %d%%</span></summary>'
+        % (badge, _escape_single_line(task.title), task.completed, task.total, task.percent),
+        *_render_steps_block(task),
+        "    </details>",
+    ]
+
+
+def render_task_block_lines(tasks: tuple[TaskProgress, ...]) -> list[str]:
+    """작업 카드 묶음 — 펼친 카드는 .card.task-card, 접힌 카드는 details.card.task-card.task-folded(결정 MT7).
+    카드는 받은 순서(표시 순서) 그대로 그린다."""
+    card_lines = [
+        line
+        for task in tasks
+        for line in (_render_folded_task_card(task) if task.is_folded else _render_open_task_card(task))
+    ]
+    return ['  <div id="dz-tasks">', *card_lines, "  </div>"]
 
 
 def build_published_values(events: tuple[DashboardEvent, ...], session_id: str) -> PublishedValues:
-    """이벤트 → 앵커 9종 값. impl 슬롯은 None(카드 비움). owner_token = 세션 ID 앞 8자리, server_port = ''."""
+    """이벤트 → 앵커 6종 값. impl 슬롯은 None(카드 비움). owner_token = 세션 ID 앞 8자리, server_port = ''."""
     if not events or events[0].kind != "init":
         raise ValueError("events[0] 은 kind == 'init' 이어야 한다 — hub_parse.parse_event_lines 의 계약")
-    init_event = events[0]
-    later_events = events[1:]
-    phase_states = derive_phase_states(init_event.phases, later_events)
-    total = len(phase_states)
-    completed = sum(1 for state in phase_states if state == "done")
-    # hub/README.md 「진행 기록」의 step·impl 절차가 명시하는 P = round(M/N × 100)(검수 H3 —
-    # 버림(//)은 이 규격과 다르다. 예: 2/3 은 버림 66% 이지만 규격은 반올림 67%).
-    percent = round(completed * 100 / total) if total else 0
     return PublishedValues(
-        project_name_html=_escape_single_line(init_event.project),
-        title_html=_escape_single_line(init_event.title),
-        progress_width="%d%%" % percent,
-        progress_text_html="%d/%d · %d%%" % (completed, total, percent),
-        progress_block_lines=_render_steps_block(
-            init_event.phases, phase_states, _latest_log_summary_html(later_events)
-        ),
+        project_name_html=_escape_single_line(events[0].project),
+        task_block_lines=render_task_block_lines(task_progresses(events)),
         impl_count_html=None,
         impl_block_lines=None,
         log_owner_token=(session_id or "")[:_OWNER_TOKEN_LENGTH],
         log_server_port="",
-        log_entry_lines=render_log_entry_lines(later_events),
+        log_entry_lines=render_log_entry_lines(events),
         updated_html=format_event_updated_label(events[-1].time_ms),
     )
 

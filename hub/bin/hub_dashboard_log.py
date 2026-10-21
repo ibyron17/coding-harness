@@ -24,7 +24,8 @@ STEP_STATES)는 hub_parse.py(★순수, 잎)에서 재사용한다(HD14) — 생
 함께 사라져 허브가 끝난 작업을 미완료로 그렸다.
 
 상태의 단일 출처는 세션별 JSONL 이다(DN2) — `init` 이 새로 쓰고 `log`·`step` 은 한 줄씩
-append 한다. HTML 은 더 이상 이 파일이 만들지 않는다(HD5·HD15,
+append 한다. 동시 작업은 서브커맨드 바로 뒤 `--task '<이름표>'` 로 구분한다(docs/prps/
+hub-dashboard-multi-task.md MT2) — 이름표 `init` 은 기존 기록을 지우지 않고 덧붙인다. HTML 은 더 이상 이 파일이 만들지 않는다(HD5·HD15,
 docs/prps/dashboard-into-hub.md M2) — 화면은 허브 서버가 요청 때마다 이 JSONL 을 읽어
 그 자리에서 렌더한다(hub_server.py). `render` 서브커맨드는 그 재발행이 필요 없어져
 M2 에서 폐기됐다.
@@ -152,6 +153,15 @@ def _read_text_or_none(path: str) -> str | None:
         return None
 
 
+def _read_existing_text(path: str) -> str:
+    """기존 기록 본문. 파일이 없을 때만 빈 문자열이고, 있는데 못 읽으면(권한 등) OSError 를 그대로 올린다 — 빈 기록으로 보고
+    덮어쓰면 이름표 init 이 기존 작업 기록을 지운다."""
+    try:
+        return pathlib.Path(path).read_text(encoding="utf-8")
+    except FileNotFoundError:
+        return ""
+
+
 def _write_text_atomically(final_path: str, text: str) -> None:
     """hub_atomic_write.atomic_write_text 를 이 파일의 호출 관례(경로 하나 + 본문)에
     맞춘 얇은 래퍼(HD14) — commands/·hub/bin/ 은 이제 같은 배포 채널이라 더는 이 관용구를
@@ -165,7 +175,43 @@ def _write_text_atomically(final_path: str, text: str) -> None:
 # ---------------------------------------------------------------------------
 
 
-def cmd_init(title: str, phases_arg: str) -> None:
+_TASK_OPTION = "--task"
+INIT_POSITIONAL_ARGUMENT_COUNT = 2  # init 의 위치 인자: 제목·단계 목록
+
+
+def _is_misplaced_task_option(arg: str) -> bool:
+    """서브커맨드 바로 뒤가 아닌 자리에 놓인 `--task`·`--task=…` 인가. 요약·상세가 `--task 라는 글자…` 처럼 그저
+    그 글자로 시작하는 본문은 아니다(정확히 `--task` 이거나 `--task=` 로 시작할 때만)."""
+    return arg == _TASK_OPTION or arg.startswith(_TASK_OPTION + "=")
+
+
+def _split_task_option(args: list[str]) -> tuple[str | None, list[str]] | None:
+    """서브커맨드 바로 뒤 첫 인자의 `--task <이름표>` 를 떼어 (앞뒤 공백을 걷은 이름표, 나머지 인자) 를 돌려준다
+    (결정 MT2). 옵션이 없으면 (None, args). 값이 없거나 형식 위반이거나 `--task=…` 처럼 `--task` 로 시작하는
+    다른 첫 인자면 None(BADTASK) — 받지 않으면 `init --task=결함① …` 이 제목 「--task=결함①」인 무표 init 으로
+    읽혀 기존 기록을 통째로 지운다. 떼고 남은 위치 인자 중에도 `--task`·`--task=…` 가 있으면 None 이다 — 맨 뒤에
+    붙인 `init '제목' '단계' --task C` 가 무표 init 으로 읽혀 기록을 지우고, `log … --task B` 의 이름표가 버려져 첫 작업
+    몫으로 기록되거나 상세로 들어가는 것을 막는다. 본문이 그저 `--task` 글자로 시작하는 요약·상세는 옵션이 아니다."""
+    task_label: str | None = None
+    positional_args = args
+    if args and args[0].startswith(_TASK_OPTION):
+        if args[0] != _TASK_OPTION or len(args) < 2:
+            return None
+        task_label = args[1].strip()
+        if not hub_parse.is_valid_task_label(task_label):
+            return None
+        positional_args = args[2:]
+    if any(_is_misplaced_task_option(arg) for arg in positional_args):
+        return None
+    return task_label, positional_args
+
+
+def _with_task_label(event: dict, task_label: str | None) -> dict:
+    """이름표가 있을 때만 `task` 키를 단 새 이벤트 — 이름표 없는 호출이 쓰는 바이트는 오늘과 같다(MT2)."""
+    return event if task_label is None else {**event, "task": task_label}
+
+
+def cmd_init(args: list[str]) -> None:
     session_id = _current_session_id()
     paths = _resolve_paths(session_id)
     if paths is None:
@@ -175,51 +221,102 @@ def cmd_init(title: str, phases_arg: str) -> None:
     if not hub_collect.read_dashboard_enabled(str(base_directory)):
         print("DISABLED")
         return
+    task_split = _split_task_option(args)
+    if task_split is None:
+        print("BADTASK")
+        return
+    task_label, positional_args = task_split
+    if len(positional_args) != INIT_POSITIONAL_ARGUMENT_COUNT:
+        # 이름표 값을 빠뜨리면 제목이 이름표로 읽혀 인자가 모자라고, 철자 틀린 옵션(`--Task C`·`—task C`·`'--task C'`)이
+        # 위치 인자로 남으면 이름표 없는 init 이 기록 전체를 지운다 — 어느 쪽이든 조용히 틀리게 쓰지 않는다.
+        print("BADTASK")
+        return
+    title, phases_arg = positional_args[0], positional_args[1]
+    jsonl_path = str(base_directory / paths.jsonl_path)
     try:
         os.makedirs(base_directory / hub_project.SESSION_DASHBOARDS_RELATIVE_DIRECTORY, exist_ok=True)
         _cleanup_stale_session_dashboards(base_directory)
-        init_event = {
-            "time_ms": _now_ms(),
-            "kind": "init",
-            "title": title,
-            "phases": phases_arg.split("|"),
-            "project": _project_display_name(base_directory),
-        }
-        _write_text_atomically(str(base_directory / paths.jsonl_path), _dump_event_line(init_event))
+        init_event = _with_task_label(
+            {
+                "time_ms": _now_ms(),
+                "kind": "init",
+                "title": title,
+                "phases": phases_arg.split("|"),
+                "project": _project_display_name(base_directory),
+            },
+            task_label,
+        )
+        # 이름표 없는 init 은 세션 기록을 새로 시작하고(오늘 동작), 이름표 붙은 init 은 기존 기록 뒤에 덧붙인다.
+        kept_text = _read_existing_text(jsonl_path) if task_label is not None else ""
+        _write_text_atomically(jsonl_path, kept_text + _dump_event_line(init_event))
     except OSError:
         print("MKDIR-FAILED")
         return
     print("OK")
 
 
-def cmd_log(args: list[str]) -> None:
+@dataclass(frozen=True)
+class _AppendTarget:
+    """log·step 이 한 줄 덧붙일 대상 — 읽어 둔 현재 본문, 이름표, 이름표를 뗀 나머지 인자."""
+
+    jsonl_path: str
+    current_text: str
+    task_label: str | None
+    positional_args: list[str]
+
+
+def _prepare_append(args: list[str]) -> _AppendTarget | None:
+    """log·step 공통 앞 검사 NOSESSION → DISABLED → BADTASK → NOINIT. 걸리면 그 어휘를 출력하고 None."""
     session_id = _current_session_id()
     paths = _resolve_paths(session_id)
     if paths is None:
         print("NOSESSION")
-        return
+        return None
     base_directory = _dashboard_base_directory()
     if not hub_collect.read_dashboard_enabled(str(base_directory)):
         print("DISABLED")
-        return
+        return None
+    task_split = _split_task_option(args)
+    if task_split is None:
+        print("BADTASK")
+        return None
     jsonl_path = str(base_directory / paths.jsonl_path)
     current_jsonl_text = _read_text_or_none(jsonl_path)
     if current_jsonl_text is None:
         print("NOINIT")
+        return None
+    return _AppendTarget(jsonl_path, current_jsonl_text, task_split[0], task_split[1])
+
+
+def _is_task_live(target: _AppendTarget) -> bool:
+    """이름표가 없으면 첫 작업 몫이라 항상 참. 있으면 그 이름표 작업의 init 이 살아 있는 기록에 있어야 한다."""
+    if target.task_label is None:
+        return True
+    live_labels = hub_parse.live_task_labels(hub_parse.parse_event_lines(target.current_text))
+    return target.task_label in live_labels
+
+
+def _append_event(target: _AppendTarget, event: dict) -> None:
+    """이벤트(이름표 있으면 `task` 키 포함) 한 줄을 기록 뒤에 덧붙이고 OK 를 출력한다."""
+    labeled_event = _with_task_label(event, target.task_label)
+    _write_text_atomically(target.jsonl_path, target.current_text + _dump_event_line(labeled_event))
+    print("OK")
+
+
+def cmd_log(args: list[str]) -> None:
+    target = _prepare_append(args)
+    if target is None:
         return
-    kind = args[0]
+    kind = target.positional_args[0]
     if kind not in hub_parse.LOG_EVENT_KINDS:
         print("BADKIND")
         return
-    event = {
-        "time_ms": _now_ms(),
-        "kind": kind,
-        "summary": args[1],
-        "detail": args[2] if len(args) > 2 else "",
-    }
-    new_jsonl_text = current_jsonl_text + _dump_event_line(event)
-    _write_text_atomically(jsonl_path, new_jsonl_text)
-    print("OK")
+    if not _is_task_live(target):
+        print("NOTASK")
+        return
+    summary = target.positional_args[1]
+    detail = target.positional_args[2] if len(target.positional_args) > 2 else ""
+    _append_event(target, {"time_ms": _now_ms(), "kind": kind, "summary": summary, "detail": detail})
 
 
 def _parse_step_args(args: list[str]) -> tuple[int | None, str]:
@@ -235,28 +332,17 @@ def _parse_step_args(args: list[str]) -> tuple[int | None, str]:
 
 
 def cmd_step(args: list[str]) -> None:
-    session_id = _current_session_id()
-    paths = _resolve_paths(session_id)
-    if paths is None:
-        print("NOSESSION")
+    target = _prepare_append(args)
+    if target is None:
         return
-    base_directory = _dashboard_base_directory()
-    if not hub_collect.read_dashboard_enabled(str(base_directory)):
-        print("DISABLED")
-        return
-    jsonl_path = str(base_directory / paths.jsonl_path)
-    current_jsonl_text = _read_text_or_none(jsonl_path)
-    if current_jsonl_text is None:
-        print("NOINIT")
-        return
-    index, state = _parse_step_args(args)
+    index, state = _parse_step_args(target.positional_args)
     if index is None:
         print("BADINDEX")
         return
-    event = {"time_ms": _now_ms(), "kind": "step", "index": index, "state": state}
-    new_jsonl_text = current_jsonl_text + _dump_event_line(event)
-    _write_text_atomically(jsonl_path, new_jsonl_text)
-    print("OK")
+    if not _is_task_live(target):
+        print("NOTASK")
+        return
+    _append_event(target, {"time_ms": _now_ms(), "kind": "step", "index": index, "state": state})
 
 
 def cmd_switch(state_arg: str) -> None:
@@ -297,7 +383,7 @@ def main(argv: list[str]) -> int:
         return 2
     subcommand, args = argv[0], argv[1:]
     if subcommand == "init":
-        cmd_init(args[0], args[1])
+        cmd_init(args)
     elif subcommand == "log":
         cmd_log(args)
     elif subcommand == "step":
