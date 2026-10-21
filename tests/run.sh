@@ -607,7 +607,10 @@ readonly MUTATION_HARNESS_GROUP="T37"
 #
 # 143 → 145(hub-release-check-on-refresh.md 2회차 검수 반영, 결정 RR4·RR7·RR11): 신규 가드 T25-292(run_server 의 판정기 배선)·T25-293(허브 페이지 틀 삽입 차단 정책)의 변조행 2건을
 # 붙였다. T99-6 은 이 상수 인용을 바꾼 수정에 맞춰 sed 리터럴을 옮겼다. 순증가 2.
-readonly LEDGER_MUTATION_ROW_FLOOR=145
+#
+# 145 → 146(hub-bg-wait-passive-watch.md, 결정 PW1): 신규 가드 T25-294(깨우는 종류에 monitor 가 없다 — 역)의 변조행 1건을 붙였다. T25-251 은 원래 변조행이라 같은 ID 로
+# 변조 sed 리터럴만 새 상수 값에 맞춰 옮겼다. T99-6 은 이 상수 인용을 바꾼 수정에 맞춰 sed 리터럴을 옮겼다. 순증가 1.
+readonly LEDGER_MUTATION_ROW_FLOOR=146
 
 # 원장 면제행 수의 상한 래칫(T37-14 가 실행마다 검사, PRP §12 「면제행이 영구 도피처가
 # 된다」의 두 번째 완화). 착지 시점 실측 390. 신규 가드를 기존 공통 사유로 면제 등록하면
@@ -967,7 +970,10 @@ readonly LEDGER_EXEMPT_ROW_RATCHET=372
 # 571 → 572(background-task-orphans.md §6.5): 신설 1건 T31-12(서브에이전트 보고 게이트 배선 — 에이전트 3종 frontmatter hooks·TaskStop·정리 문구·스크립트 실재).
 # 순증가 1. collect_guard_ids 를 그대로 재현해 편집 전(571)·후(572) 재측정한다. 원장에는 변조행이 아니라 면제행 1건으로 등록했다(T31-10·T31-11 과 같은
 # 사용자 결정 2026-10-08, 전체 검사 시간 보호) — 변조 검증은 구현 시 수동 1회(같은 문서 §8.1-4).
-readonly SOURCE_GUARD_ID_FLOOR=572
+#
+# 572 → 573(hub-bg-wait-passive-watch.md, 결정 PW1): 신설 1건 T25-294(깨우는 종류에 monitor 가 없다). 순증가 1.
+# collect_guard_ids 를 그대로 재현해 편집 전(572)·후(573) 재측정한다 — 차집합은 T25-294 하나다.
+readonly SOURCE_GUARD_ID_FLOOR=573
 
 # 배포 트리(rules/·agents/·commands/)에 남는 "파일명:줄번호" 형태 인용 수의 상한
 # 래칫(T39-4). 배포되는 문서가 다른 파일의 줄 번호를 인용하면, 그 파일을 고치는 수정이
@@ -4196,7 +4202,7 @@ read_python_product_constant() {
 test_hub_docs_and_constants() {
   group_failures=()   # 앞 그룹이 조기 return 했을 때의 잔여물 제거
   local test_name="T25"
-  local test_desc="허브 문서·상수 정합성 (T25-1~T25-293)"
+  local test_desc="허브 문서·상수 정합성 (T25-1~T25-294)"
   log_test_name "$test_name" "$test_desc"
 
   local hub_settings_file="$REPO_ROOT/hub/bin/hub_settings.py"
@@ -10027,6 +10033,13 @@ PYEOF
     note_failure "T25-251: hub_project.py 에 LIVE_SESSION_STATES 선언을 찾지 못함"
   elif ! grep -qF '"background"' <<< "$live_session_states_line_251"; then
     note_failure "T25-251: LIVE_SESSION_STATES 에 background 가 없음(BW8 위반)"
+  fi
+
+  # T25-294 PW-G1(신설, 역 — 결정 PW1, docs/prps/hub-bg-wait-passive-watch.md §8): 깨우는 종류 집합에 monitor 가 없다 —
+  # 훅의 monitor 는 아티팩트 실시간 감시처럼 재개 때마다 다시 걸리는 끝나지 않는 구독이라 세면 모든 턴 뒤가 90분씩
+  # 「백그라운드 대기」로 가려진다. 선언 줄이 비면 위 T25-251 이 이미 보고하므로 여기서는 중복 보고하지 않는다.
+  if [[ -n "$waking_background_task_types_line_251" ]] && grep -qF '"monitor"' <<< "$waking_background_task_types_line_251"; then
+    note_failure "T25-294: WAKING_BACKGROUND_TASK_TYPES 에 monitor 가 있음(끝나지 않는 수동 구독 — 결정 PW1 위반)"
   fi
 
   # T25-252 BW-G5(신설, 정(문서) — 결정 BW2·BW5, docs/prps/hub-subagent-background-pause.md

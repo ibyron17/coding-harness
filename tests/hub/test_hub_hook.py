@@ -425,6 +425,29 @@ class BackgroundProjectionTest(HubHookScenarioTest):
         })
         self.assertEqual(recorded["bt"], {"unknown": 2})
 
+    def test_h_pw1_artifact_watch_payload_is_still_counted_as_monitor_without_its_text(self) -> None:
+        """결정 PW2(docs/prps/hub-bg-wait-passive-watch.md) — 아티팩트 실시간 감시는 기록에 그대로 monitor 로 남는다.
+        「백그라운드 대기」에서 빼는 일은 판정층이 하고, 훅이 monitor 를 걸러 내면 이 테스트가 깨진다."""
+        artifact_url = "https://claude.ai/artifact/FAKE-ARTIFACT-KEY"
+        watch_description = f"live updates for artifact {artifact_url} (re-armed on session resume)"
+        payload = {
+            "hook_event_name": "SubagentStop", "session_id": "s", "cwd": "/repo",
+            "agent_id": "agt-1", "agent_type": "bt-probe",
+            "background_tasks": [
+                {"id": "s3fakewatch", "type": "monitor", "status": "running", "description": watch_description},
+                {"id": "a9fakeagent", "type": "subagent", "status": "running",
+                 "agent_type": "bt-probe", "description": "probe agent"},
+            ],
+            "session_crons": [],
+        }
+        hub_collect.HUB_HTML_PATH.write_text("fresh-marker")
+        self._run_hook_with_stdin(payload)
+        today = time.strftime("%Y-%m-%d", time.localtime())
+        raw_line = (hub_collect.EVENTS_DIR / f"{today}.jsonl").read_text(encoding="utf-8").splitlines()[-1]
+        self.assertEqual(json.loads(raw_line)["bt"], {"monitor": 1, "subagent": 1})
+        for leaked in (watch_description, "claude.ai/artifact", "s3fakewatch", "a9fakeagent"):
+            self.assertNotIn(leaked, raw_line)
+
 
 if __name__ == "__main__":
     unittest.main()

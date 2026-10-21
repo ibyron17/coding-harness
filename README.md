@@ -393,7 +393,7 @@ coding-harness/
 │   └── hub.md
 ├── hub/                            # 통합 허브 — 별도 설치(hub/README.md). 진행 기록(대시보드)
 │                                   #   자산도 이 안에서 배포된다(hub/bin·hub/rules)
-├── docs/prps/                      # 설계·조사 문서 93개 — coding-harness.md·hub-dashboard.md·
+├── docs/prps/                      # 설계·조사 문서 94개 — coding-harness.md·hub-dashboard.md·
 │   │                               #   dashboard-rationale.md 등
 │   └── ab-artifacts/               # 모델×스캐폴딩 A/B 실험 원본 6건 — 승인된 설계가 아니다
 ├── docs/images/                    # hub/README.md 의 스크린샷 3장 — 허브 화면 2장은 가상 데이터, 진행 기록 화면 1장은 이 저장소 자신의 작업 기록
