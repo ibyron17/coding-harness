@@ -230,7 +230,7 @@
 | BW1 | 신호원 = `Stop`·`SubagentStop` 입력의 `background_tasks`·`session_crons`(공개 계약). transcript `<note>`·handback 보조 신호는 기각 |
 | BW2 | 기록 = 이벤트 이름으로 가둔 종류별 개수 `bt` + 1회성 예약 수 `sw`. 자유 텍스트·id·status 는 읽지도 않는다 |
 | BW3 | 사실 = 가장 최근 **추적** 이벤트가 Stop/SubagentStop 이면 그 보고, 그 밖의 추적 이벤트는 지운다 |
-| BW4 | 깨우는 종류 = `shell`·`monitor`·`workflow` + 1회성 예약. `subagent`·`teammate` 는 훅이 이미 추적, 반복 예약은 제외 |
+| BW4 | 깨우는 종류 = `shell`·`monitor`·`workflow` + 1회성 예약(→ 2026-10-21 PW1 개정: `shell`·`workflow` — `docs/prps/hub-bg-wait-passive-watch.md`). `subagent`·`teammate` 는 훅이 이미 추적, 반복 예약은 제외 |
 | BW5 | 표시 = 여섯 번째 상태 `"background"`, 사다리 done > interrupted > background(base idle 일 때) > stale > base |
 | BW6 | 상한 = 보고 뒤 90분(`BACKGROUND_WAIT_MAX_MS`), 명부 `not_listed` 면 취소 |
 | BW7 | 실행 줄은 귀속하지 않는다. 재개는 같은 줄·재개 시각부터(현 동작 유지) |
@@ -318,6 +318,11 @@ session.background_report = (
 고정 주기·CronCreate 반복)은 세션이 사용자를 기다리는 동안에도 늘 걸려 있는 상시 일정이라, 세면 답을 줄 때마다
 (Stop 마다) 「백그라운드 대기」가 된다 — 제외한다(오늘과 같음). 발화하면 그 프롬프트가 `UserPromptSubmit` 으로
 와서 어차피 작업중이 된다. `recurring` 은 닫힌 불리언이라 프라이버시 비용이 없다.
+
+> **개정됨(2026-10-21, [`hub-bg-wait-passive-watch.md`](./hub-bg-wait-passive-watch.md) 결정 PW1) — BW4.** `monitor` 를 깨우는
+> 종류에서 뺀다. 훅 라벨 `monitor` 는 keepalive 사유 `monitor:`(Monitor 도구 감시 — 훅에서는 `shell`, §1.3-3)가 아니라
+> `monitor_ws`·`monitor_mcp` 이고, 그중 아티팩트 실시간 감시는 재개 때마다 다시 걸리는 끝나지 않는 구독이라 모든 턴 뒤를
+> 90분씩 「백그라운드 대기」로 가렸다. 집합은 `{"shell","workflow"}` 다. BW2(종류만 읽는다)는 그대로다.
 
 ### BW5. 표시 상태 — 안 B: 여섯 번째 상태 `"background"`
 
@@ -466,7 +471,7 @@ None, 한쪽만 있으면 다른 쪽은 빈 값.
 
 ```python
 SessionState = Literal["working", "idle", "stale", "done", "interrupted", "background"]
-WAKING_BACKGROUND_TASK_TYPES: frozenset[str] = frozenset({"shell", "monitor", "workflow"})   # BW4
+WAKING_BACKGROUND_TASK_TYPES: frozenset[str] = frozenset({"shell", "monitor", "workflow"})   # BW4 (PW1 개정 뒤: {"shell", "workflow"})
 BACKGROUND_WAIT_MAX_MS = 90 * 60 * 1000       # BW6 — 조용한 공백 25건 최장 40.1분의 2.2배
 
 @dataclass(frozen=True)

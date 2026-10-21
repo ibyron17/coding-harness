@@ -625,7 +625,11 @@ readonly MUTATION_HARNESS_GROUP="T37"
 #
 # 150 → 152(hub-dashboard-multi-task.md 1회차 검수 반영): 개정한 T22-24(렌더러의 <ol class="steps">)·T22-53(템플릿 syncTasks 의 getElementById)이 단일 파일 변조로
 # 재현됨이 확인돼 면제행에서 변조행으로 승급시켰다. T99-6 은 이 상수 인용을 바꾼 수정에 맞춰 sed 리터럴을 옮겼다. 순증가 2.
-readonly LEDGER_MUTATION_ROW_FLOOR=152
+#
+# 152 → 153(hub-bg-wait-passive-watch.md, 결정 PW1): 신규 가드 T25-295(깨우는 종류에 monitor 가 없다 — 역)의 변조행 1건을 붙였다. T25-251 은 원래 변조행이라 같은 ID 로
+# 변조 sed 리터럴만 새 상수 값에 맞춰 옮겼다. T99-6 은 이 상수 인용을 바꾼 수정에 맞춰 sed 리터럴을 옮겼다. 순증가 1. 동시 작업(hub-dashboard-multi-task)이 먼저 T25-294 를
+# 써서 이 기능의 가드는 develop 병합 뒤 T25-295 로 확정했다.
+readonly LEDGER_MUTATION_ROW_FLOOR=153
 
 # 원장 면제행 수의 상한 래칫(T37-14 가 실행마다 검사, PRP §12 「면제행이 영구 도피처가
 # 된다」의 두 번째 완화). 착지 시점 실측 390. 신규 가드를 기존 공통 사유로 면제 등록하면
@@ -997,7 +1001,10 @@ readonly LEDGER_EXEMPT_ROW_RATCHET=368
 # 572 → 575(hub-dashboard-multi-task.md, 결정 MT2·MT8·MT9): 신설 3건 T22-177(작업 카드 CSS — 새 색 토큰 0)·T25-294(세션 줄이 접힌 작업을 거르는 필드)·
 # T34-7(--task 가 표·기록기·규칙 파일 세 곳에 있다). 순증가 3. 개정한 T22-2·T22-24·T22-53·T22-137·T22-139·T25-6·T25-263·T25-281·T34-6 은 같은 ID 라 개수에
 # 닿지 않는다. collect_guard_ids 를 그대로 재현해 편집 전(572)·후(575) 재측정했다.
-readonly SOURCE_GUARD_ID_FLOOR=575
+#
+# 575 → 576(hub-bg-wait-passive-watch.md, 결정 PW1): 신설 1건 T25-295(깨우는 종류에 monitor 가 없다). 순증가 1.
+# collect_guard_ids 를 그대로 재현해 편집 전(575)·후(576) 재측정한다 — 차집합은 T25-295 하나다.
+readonly SOURCE_GUARD_ID_FLOOR=576
 
 # 배포 트리(rules/·agents/·commands/)에 남는 "파일명:줄번호" 형태 인용 수의 상한
 # 래칫(T39-4). 배포되는 문서가 다른 파일의 줄 번호를 인용하면, 그 파일을 고치는 수정이
@@ -4248,7 +4255,7 @@ read_python_product_constant() {
 test_hub_docs_and_constants() {
   group_failures=()   # 앞 그룹이 조기 return 했을 때의 잔여물 제거
   local test_name="T25"
-  local test_desc="허브 문서·상수 정합성 (T25-1~T25-294)"
+  local test_desc="허브 문서·상수 정합성 (T25-1~T25-295)"
   log_test_name "$test_name" "$test_desc"
 
   local hub_settings_file="$REPO_ROOT/hub/bin/hub_settings.py"
@@ -10080,6 +10087,13 @@ PYEOF
     note_failure "T25-251: hub_project.py 에 LIVE_SESSION_STATES 선언을 찾지 못함"
   elif ! grep -qF '"background"' <<< "$live_session_states_line_251"; then
     note_failure "T25-251: LIVE_SESSION_STATES 에 background 가 없음(BW8 위반)"
+  fi
+
+  # T25-295 PW-G1(신설, 역 — 결정 PW1, docs/prps/hub-bg-wait-passive-watch.md §8): 깨우는 종류 집합에 monitor 가 없다 —
+  # 훅의 monitor 는 아티팩트 실시간 감시처럼 재개 때마다 다시 걸리는 끝나지 않는 구독이라 세면 모든 턴 뒤가 90분씩
+  # 「백그라운드 대기」로 가려진다. 선언 줄이 비면 위 T25-251 이 이미 보고하므로 여기서는 중복 보고하지 않는다.
+  if [[ -n "$waking_background_task_types_line_251" ]] && grep -qF '"monitor"' <<< "$waking_background_task_types_line_251"; then
+    note_failure "T25-295: WAKING_BACKGROUND_TASK_TYPES 에 monitor 가 있음(끝나지 않는 수동 구독 — 결정 PW1 위반)"
   fi
 
   # T25-252 BW-G5(신설, 정(문서) — 결정 BW2·BW5, docs/prps/hub-subagent-background-pause.md
