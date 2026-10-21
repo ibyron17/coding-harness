@@ -28,6 +28,7 @@ import hub_workflow  # noqa: E402
 
 STALE_AFTER_MS = 30 * 60 * 1000
 BASE_TIME_MS = 1_786_000_000_000
+MINUTE_MS = 60 * 1000
 
 
 def _event(hook_event_name: str, offset_ms: int = 0, **overrides) -> hub_session_facts.HookEvent:
@@ -2260,6 +2261,73 @@ class BackgroundWaitLadderTest(unittest.TestCase):
         self.assertEqual(view_at_1240.state, "idle")
 
 
+class PassiveSubscriptionTest(unittest.TestCase):
+    """PW-L1~L5·PW-G1 — docs/prps/hub-bg-wait-passive-watch.md 결정 PW1. 훅 종류 monitor(아티팩트 실시간
+    감시처럼 호스트가 재개 때마다 다시 거는 끝나지 않는 구독)는 「백그라운드 대기」로 세지 않는다."""
+
+    def _idle_roster(self, session_id: str) -> hub_live_session.LiveSessionIndex:
+        record = hub_live_session.LiveSessionRecord(session_id=session_id, pid=1, is_busy=False)
+        return hub_live_session.build_live_session_index([record], is_complete=True)
+
+    def _stop_with(self, offset_ms: int, task_counts, wakeup_count: int = 0) -> hub_session_facts.HookEvent:
+        report = hub_session_facts.BackgroundReport(BASE_TIME_MS + offset_ms, task_counts, wakeup_count)
+        return _event("Stop", offset_ms, background_report=report)
+
+    def _view_at(self, events, minutes_after_base: int) -> hub_session.SessionView:
+        facts = _facts_from(events)
+        return hub_session.compute_session_view(
+            facts, BASE_TIME_MS + minutes_after_base * MINUTE_MS, stale_after_ms=STALE_AFTER_MS,
+            live_roster=self._idle_roster(facts.session_id),
+        )
+
+    def test_pw_l1_monitor_only_report_is_idle(self) -> None:
+        view = self._view_at([self._stop_with(0, (("monitor", 1),))], 10)
+
+        self.assertEqual(view.state, "idle")
+        self.assertIsNone(view.background_wait)
+
+    def test_pw_l2_monitor_only_report_goes_stale_after_thirty_minutes(self) -> None:
+        view = self._view_at([self._stop_with(0, (("monitor", 1),))], 31)
+
+        self.assertEqual(view.state, "stale")
+
+    def test_pw_l3_monitor_is_not_counted_next_to_shells(self) -> None:
+        view = self._view_at([self._stop_with(0, (("monitor", 1), ("shell", 2)))], 10)
+
+        self.assertEqual(view.state, "background")
+        self.assertEqual(view.background_wait.task_count, 2)
+
+    def test_pw_l4_monitor_with_one_shot_wakeup_counts_only_the_wakeup(self) -> None:
+        view = self._view_at([self._stop_with(0, (("monitor", 1),), wakeup_count=1)], 10)
+
+        self.assertEqual(view.state, "background")
+        self.assertEqual(view.background_wait.task_count, 0)
+        self.assertEqual(view.background_wait.wakeup_count, 1)
+
+    def test_pw_l5_artifact_watch_session_replay(self) -> None:
+        """사례 재생 — 매 턴 끝마다 monitor 1 이 보고돼도 진짜 셸이 남은 구간만 대기이고 나머지는 사용자 차례다."""
+        monitor_only = (("monitor", 1),)
+        events = [
+            self._stop_with(0, monitor_only),
+            _event("UserPromptSubmit", 4 * MINUTE_MS),
+            self._stop_with(14 * MINUTE_MS, (("monitor", 1), ("shell", 1))),
+            _event("UserPromptSubmit", 34 * MINUTE_MS),
+            self._stop_with(35 * MINUTE_MS, monitor_only),
+        ]
+        events_until_shell_report = events[:3]
+
+        view_at_1230 = self._view_at(events_until_shell_report, 24)
+        view_at_1245 = self._view_at(events, 39)
+
+        self.assertEqual(view_at_1230.state, "background")
+        self.assertEqual(view_at_1245.state, "idle")
+
+    def test_pw_g1_monitor_only_report_is_not_a_scan_target(self) -> None:
+        facts = _facts_from([self._stop_with(0, (("monitor", 1),))])
+
+        self.assertFalse(hub_session.is_background_output_scan_target(facts, BASE_TIME_MS + 10 * MINUTE_MS))
+
+
 class EffectiveBackgroundWaitTest(unittest.TestCase):
     """E1~E4 — `effective_background_wait` 단독 단위 테스트(사다리 나머지는 위
     BackgroundWaitLadderTest)."""
@@ -2294,7 +2362,7 @@ class EffectiveBackgroundWaitTest(unittest.TestCase):
         )
         facts = self._facts_with_report(report)
         result = hub_session.effective_background_wait(facts, BASE_TIME_MS + 10, "idle")
-        self.assertEqual(result.task_count, 5)   # monitor 3 + shell 2 — dream·subagent 는 제외
+        self.assertEqual(result.task_count, 2)   # shell 2 — monitor·dream·subagent 는 제외(BW4·PW1)
 
 
 class BackgroundOutputScanGateTest(unittest.TestCase):
@@ -2313,7 +2381,7 @@ class BackgroundOutputScanGateTest(unittest.TestCase):
             BASE_TIME_MS, (("dream", 5), ("monitor", 3), ("shell", 2), ("subagent", 7), ("workflow", 1)), 0,
         )
 
-        self.assertEqual(hub_session.waking_background_task_count(report), 6)
+        self.assertEqual(hub_session.waking_background_task_count(report), 3)   # shell 2 + workflow 1
 
     def test_waking_count_of_no_report_is_zero(self) -> None:
         self.assertEqual(hub_session.waking_background_task_count(None), 0)

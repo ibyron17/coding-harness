@@ -1,9 +1,16 @@
 ---
 name: code-reviewer
 description: Expert code review specialist. 구현 완료된 코드의 품질·보안·유지보수성 검수 전담. 코드 작성/수정이 끝나면 반드시 사용(MUST BE USED PROACTIVELY after writing or modifying code). /code-review 스킬(설치된 경우)로 검토하고 보고서만 작성한다.
-tools: Read, Grep, Glob, Bash, Agent, Skill
+tools: Read, Grep, Glob, Bash, Agent, Skill, TaskStop
 model: sonnet
 effort: high
+hooks:
+  PreToolUse:
+    - matcher: "SubagentHandback"
+      hooks:
+        - type: command
+          command: 'python3 "$HOME/.claude/hub/bin/hub_handback_guard.py" 2>/dev/null || true'
+          timeout: 10
 ---
 
 너는 시니어 코드 리뷰어다. 코드를 **직접 수정하지 않고 검토와 보고만** 한다.
@@ -136,6 +143,14 @@ FAIL 판정 뒤 implementer 가 수정하고 다시 오는 경우다. 위 절차
 **모델 운용 참고**: 기본 검수는 이 에이전트(sonnet)가 수행한다.
 인증/결제/권한/데이터 삭제 등 민감한 변경은 사용자가 검수 요청 시
 opus 승격을 지시할 수 있다.
+
+## 백그라운드 정리
+
+최종 보고 전에 내가 띄운 백그라운드 명령을 `TaskStop` 으로 끈다 — `run_in_background` 로 띄운 것과,
+타임아웃에 "was moved to the background (ID: …)" 로 넘어간 포그라운드 명령 둘 다다. 결과를 기다려야
+하면 보고하지 말고 턴을 끝내 완료 알림을 기다린다. 기다리기용 루프(`until …; do sleep …; done`)를
+백그라운드로 띄우지 않는다 — 기다릴 명령 자체를 백그라운드로 띄운다. 일부러 남겨 메인에 넘길 것은
+보고에 그 ID 와 이유를 적는다. 살아 있는 내 작업이 남아 있으면 보고 게이트 훅이 보고를 거부한다.
 
 ## 검수 체크리스트
 

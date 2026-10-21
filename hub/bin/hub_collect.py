@@ -305,8 +305,8 @@ def read_session_dashboard_snapshots(
     (스냅샷들, 경고들). 디렉토리 부재는 정상(빈 튜플). 미통과 파일명은 열지도 않는다 — 발견된 경로만
     레지스트리에 오른다(결정 N3). iterdir·읽기 실패·파싱 실패·init 없음은 그 항목만 건너뛰고 경고
     1건을 남긴다.
-    task_started_at_ms 는 파서(hub_parse.parse_dashboard_jsonl)가 JSONL 첫 줄(init)에서 채운
-    값을 그대로 두고 이 함수가 덮어쓰지 않는다(HD8, docs/prps/dashboard-into-hub.md — M1 까지는
+    task_started_at_ms 는 파서(hub_parse.parse_dashboard_jsonl)가 init 이벤트에서 채운(작업이 여럿이면
+    끝나지 않은 작업 중 가장 이른 init 시각 — 결정 MT6) 값을 그대로 두고 이 함수가 덮어쓰지 않는다(HD8, docs/prps/dashboard-into-hub.md — M1 까지는
     사이드카 mtime 을 이 함수가 별도로 읽어 덮어썼다).
     """
     dashboards_dir = Path(project_path) / hub_project.SESSION_DASHBOARDS_RELATIVE_DIRECTORY

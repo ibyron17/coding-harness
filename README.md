@@ -213,6 +213,8 @@ scope 는 대상 프로젝트의 `./CLAUDE.md` 를 건드리지 않고, user sco
 - 작업 에이전트 3종은 하위 에이전트로 Explore 만 띄운다 — 에이전트 본문의 **지침**이다. `tools` 에는
   `Agent` 를 쓴다. 서브에이전트 정의에서는 `Agent(...)` 괄호 목록이
   무시되므로 기계 강제는 없다.
+- 배포 에이전트 3종은 허브가 설치돼 있으면 보고 직전에 제 백그라운드 작업이 남았는지 검사한다(보고 게이트 — 남아 있으면 보고를 돌려보내고
+  끄는 법을 안내한다. 허브가 없으면 조용히 건너뛴다).
 - explore 는 CLAUDE.md 계층을 받지 않는다(`omitClaudeMd`) — 부르는 쪽이 필요한 규칙을 요청에 담는다.
 - 모델 배분은 `rules/workflow/model-routing.md` 「모델 운용 원칙」을 따른다: 판단 오류의
   파급이 가장 큰 설계에 opus, 토큰 소비가 가장 큰 구현에 sonnet, 수집 전용에 haiku.
@@ -391,7 +393,7 @@ coding-harness/
 │   └── hub.md
 ├── hub/                            # 통합 허브 — 별도 설치(hub/README.md). 진행 기록(대시보드)
 │                                   #   자산도 이 안에서 배포된다(hub/bin·hub/rules)
-├── docs/prps/                      # 설계·조사 문서 92개 — coding-harness.md·hub-dashboard.md·
+├── docs/prps/                      # 설계·조사 문서 95개 — coding-harness.md·hub-dashboard.md·
 │   │                               #   dashboard-rationale.md 등
 │   └── ab-artifacts/               # 모델×스캐폴딩 A/B 실험 원본 6건 — 승인된 설계가 아니다
 ├── docs/images/                    # hub/README.md 의 스크린샷 3장 — 허브 화면 2장은 가상 데이터, 진행 기록 화면 1장은 이 저장소 자신의 작업 기록

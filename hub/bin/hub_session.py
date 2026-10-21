@@ -196,13 +196,14 @@ SUBAGENT_ZOMBIE_AFTER_MS = 90 * 60 * 1000
 # 있다(재검수 1회차 L1) — 상수는 파서 모듈에 둔다는 그 모듈의 관례를 따른다. 이 모듈은
 # summarize_agent_runs 의 표시 절단에 그 값을 그대로 쓴다(위 import).
 
-# 깨우는 종류(결정 BW4, docs/prps/hub-subagent-background-pause.md) — 호스트가 "제
-# 백그라운드 작업이 남은 채 멈췄다"고 판정하는 keepalive 사유(bash:·monitor:·workflow:,
-# §1.3-5)와 같은 집합이다. subagent·teammate 는 훅이 이미 실행(S)으로 추적하므로 빼면
-# 이중 계산이고, 서브에이전트 자신의 SubagentStop 배열에 자기 자신이 섞이는 문제(U3)도
-# 피한다. dream·auto_mode_scan(호스트 내부 ambient 작업)·cloud_session·mcp_task·unknown 은
+# 깨우는 종류(결정 BW4, 개정 PW1 — docs/prps/hub-bg-wait-passive-watch.md). shell·workflow 만 센다.
+# shell 에는 Monitor 도구의 스크립트 감시도 든다(호스트가 local_bash 로 등록 — 마감 최대 30분, 끝나면 세션을 깨운다).
+# monitor 는 뺀다 — 훅의 monitor 라벨은 아티팩트 실시간 감시(재개 때마다 다시 걸리는 끝나지 않는 구독)와 Monitor
+# WebSocket 감시·MCP 감시를 한데 묶어 종류만으로는 가를 수 없고, 설명 문구는 읽지 않는다(BW2).
+# subagent·teammate 는 훅이 이미 실행(S)으로 추적하므로 빼면 이중 계산이고, 서브에이전트 자신의 SubagentStop 배열에
+# 자기 자신이 섞이는 문제(U3)도 피한다. dream·auto_mode_scan(호스트 내부 ambient 작업)·cloud_session·mcp_task·unknown 은
 # 깨움 경로가 확인되지 않아 제외한다(페일오픈 — 오늘과 같은 방향).
-WAKING_BACKGROUND_TASK_TYPES: frozenset[str] = frozenset({"shell", "monitor", "workflow"})
+WAKING_BACKGROUND_TASK_TYPES: frozenset[str] = frozenset({"shell", "workflow"})
 
 # 「백그라운드 대기」 표시를 믿는 상한(결정 BW6). 근거: 조용한 공백 25건(§1.2)의 최장
 # 40.1분의 2.2배 — SUBAGENT_ZOMBIE_AFTER_MS(위, ZG2: 최장 정상 실행 47.3분의 1.9배)와 같은

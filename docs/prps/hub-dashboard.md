@@ -368,6 +368,9 @@ overlay:
 > `done > interrupted > background > stale > base_state` 순이다. 정본은
 > `docs/prps/hub-subagent-background-pause.md` §5 BW1~BW12.
 
+> **개정 →(결정 PW1, `hub-bg-wait-passive-watch.md`)**: 깨우는 종류에서
+> `monitor` 를 뺀다 — `shell`·`workflow` 와 1회성 예약 깨우기만 센다. 훅 기록(`bt`)은 그대로다.
+
 ### 3. 단계 추정 — 서브에이전트 타입 → 단계
 
 > **개정됨.** `infer_phase()` 는 삭제되고 `summarize_agent_runs()` 가 각 서브에이전트 타입에
