@@ -42,12 +42,13 @@ running git again.
 Read each changed file in full. Check for:
 
 **Security Issues (CRITICAL):**
-- Hardcoded credentials, API keys, tokens
+- Hardcoded credentials, API keys, tokens — incl. config files, compose/Dockerfile, test fixtures, tracked `.env*` (`git ls-files ':(glob)**/.env*'`, excluding `.env.example`), secrets in public-prefixed env vars; a committed real secret needs rotation, not just deletion
 - SQL injection vulnerabilities
-- XSS vulnerabilities
+- XSS vulnerabilities (incl. unvalidated link/redirect URLs, cross-window messages without origin checks)
 - Missing input validation
 - Insecure dependencies
 - Path traversal risks
+- Everything in `rules/common/security.md` → Mandatory Security Checks and Secret Management (canonical list: command injection, SSRF, unsafe deserialization, per-resource authorization, dependency vetting, least privilege, …)
 
 **Code Quality (HIGH):**
 - Functions > 50 lines
@@ -57,6 +58,7 @@ Read each changed file in full. Check for:
 - console.log statements
 - TODO/FIXME comments
 - Missing JSDoc for public APIs
+- Trust-boundary code (incl. frontend rendering and link URLs) without a malicious-input negative test
 
 **Best Practices (MEDIUM):**
 - Mutation patterns (use immutable instead)
@@ -96,6 +98,7 @@ Generate report with:
   「규칙 수치 위반」 (a measuring/grep command that shows the number or pattern, 1–3 output lines), or 「설계 대조」
   (PRP section ↔ location). Static findings (function > 50 lines, hardcoded credentials) use 「규칙 수치 위반」 and cause
   category `정합`. Without a reproduction, downgrade the finding one level (MEDIUM/LOW need none).
+  For credential findings, mask the value in the output (file:line and key name only, e.g. `grep -noE '"?<key>"?[[:space:]]*[=:]'`).
 - Validation results table (Phase 3의 실행 결과: 명령별 Pass / Fail / Skipped)
 - Verdict line with FAIL cause categories [실행|검증|정합|설계]
   (definitions: agents/code-reviewer.md 「사유 범주」 — `설계` means the PRP itself is the cause, not the `[분류]` 설계).
@@ -120,7 +123,7 @@ Parse input to determine PR:
 | Branch name | Find PR via `gh pr list --head <branch>` |
 
 ```bash
-gh pr view <NUMBER> --json number,title,body,author,baseRefName,headRefName,changedFiles,additions,deletions
+gh pr view <NUMBER> --json number,title,body,author,baseRefName,headRefName,changedFiles,additions,deletions,isCrossRepository
 gh pr diff <NUMBER>
 ```
 
@@ -153,7 +156,7 @@ Apply the review checklist across 7 categories:
 | **Correctness** | Logic errors, off-by-ones, null handling, edge cases, race conditions |
 | **Type Safety** | Type mismatches, unsafe casts, `any` usage, missing generics |
 | **Pattern Compliance** | Matches project conventions (naming, file structure, error handling, imports) |
-| **Security** | Injection, auth gaps, secret exposure, SSRF, path traversal, XSS |
+| **Security** | Injection, auth gaps, secret exposure, SSRF, path traversal, XSS — full list: `rules/common/security.md` |
 | **Performance** | N+1 queries, missing indexes, unbounded loops, memory leaks, large payloads |
 | **Completeness** | Missing tests, missing error handling, incomplete migrations, missing docs |
 | **Maintainability** | Dead code, magic numbers, deep nesting, unclear naming, missing types |
@@ -168,6 +171,10 @@ Assign severity to each finding:
 | **LOW** | Style nit or minor suggestion | Optional |
 
 ### Phase 4 — VALIDATE
+
+**Untrusted PRs**: if `isCrossRepository` is true (a fork), do not install, build, or test the PR's code without
+the user's approval — install scripts and test code run with your privileges. Record `Skipped (untrusted PR)`
+in the Validation table.
 
 Run available validation commands:
 

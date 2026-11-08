@@ -55,6 +55,7 @@ Extract these sections from the plan:
 - **Patterns to Mirror** — Code conventions to follow
 - **Files to Change** — What to create or modify
 - **Step-by-Step Tasks** — Implementation sequence
+- **Security Considerations** — mitigations to build and negative tests to write (skip if N/A)
 - **Validation Commands** — How to verify correctness
 - **Acceptance Criteria** — Definition of done
 
@@ -200,7 +201,7 @@ exit "$TEST_EXIT"
 
 ### Level 5: Edge Case Testing
 
-Run through edge cases from the plan's Testing Strategy checklist.
+Run through edge cases from the plan's Testing Strategy checklist. Include every negative test listed under Security Considerations.
 
 **CHECKPOINT**: All 5 validation levels pass. Zero errors.
 
