@@ -158,7 +158,7 @@ common·typescript·react·react-native·web)는 상류 유래(파생)이고, `r
 - **워크플로우 재구성**: 설계(`design-architect`)→구현(`implementer`)→검수
   (`code-reviewer`) 역할 분리, `/dashboard`·`/hub` 등 이 저장소 고유 도구를 추가했다.
 - **로컬 패치**: 상류 파생 파일(`rules/README.md` 포함)과 상류 유래·본문 재작성으로
-  표기한 `rules/python/`을 합쳐 25개 파일에 이 저장소 고유의 수정이 있다 — 목록·근거는
+  표기한 `rules/python/`을 합쳐 26개 파일에 이 저장소 고유의 수정이 있다 — 목록·근거는
   §5.
 - **CLAUDE.md 배포 채널 이관**(2026-09-02): 루트 `CLAUDE.md`가 배포물과 이 저장소 자신의
   프로젝트 지침을 동시에 겸하던 것을, 배포되는 범용 워크플로우 지침은
@@ -204,7 +204,7 @@ common·typescript·react·react-native·web)는 상류 유래(파생)이고, `r
 | `rules/common/coding-style.md` | 중첩 한도를 `>4 levels`→`>3 levels`로 강화, 에러 처리 절을 "실제 발생 가능한 실패만 처리"하는 `karpathy-guidelines.md` #2 참조로 교체(추측성 에러 처리 배제) | 검수 R3 3회차 지적 ①(§5 누락 보완 — 상류 원문 diff 로 신규 확인) |
 | `rules/common/development-workflow.md` | 0단계를 "필수"에서 "도구(gh/MCP) 미설치 시 스킵"으로 완화, Context7·Exa 고유명사 의존 완화, `planner`/`tdd-guide` → `design-architect`/`implementer` 치환 | F-3(AR11)·F-4(AR12)·harness-landscape-survey |
 | `rules/common/performance.md` | 모델 선택·thinking 절을 공식 문서 출처 기반으로 재작성(adaptive reasoning 반영), `/effort` 지속성 서술 정정, 미배포 `build-error-resolver` 제거 | A-3(AR3)·F-3(AR11)·기존 로컬 패치(품질 트랙) |
-| `rules/common/security.md` | 미배포 `security-reviewer` → `code-reviewer` 보안 렌즈 위임으로 교체 | F-3(AR11) |
+| `rules/common/security.md` | 미배포 `security-reviewer` → `code-reviewer` 보안 렌즈 위임으로 교체 · 스택 중립 체크 항목 6 추가·인가 항목 개정 · 「Secret Management」 개정(설정 파일·`.env`·누출 경로·최소 권한·커밋 이력 회전) · 「Agent Operational Security」 절 신설 | F-3(AR11) · docs/prps/secure-coding-agents.md |
 | `rules/common/testing.md` | 미배포 `tdd-guide` → `implementer`가 TDD를 직접 수행하는 것으로 교체 | F-3(AR11) |
 | `rules/typescript/security.md` | 미배포 `security-reviewer` 참조 제거 | F-3(AR11) |
 | `rules/typescript/testing.md` | 미배포 `e2e-runner` 참조 제거 | F-3(AR11) |
@@ -213,6 +213,7 @@ common·typescript·react·react-native·web)는 상류 유래(파생)이고, `r
 | `rules/react/testing.md` | CRA(Create React App) 지원 종료 명시, 미배포 `skills/` 참조에 상류 URL 명시(현재 정칭 `affaan-m/ECC`) | F-3(AR11)·F-4(AR12) |
 | `rules/react-native/testing.md` | 미배포 `tdd-guide` → `implementer` 직접 수행으로 교체 | F-3(AR11) |
 | `rules/web/hooks.md` | 훅 JSON 6블록을 공식 3계층 스키마(`hooks` 배열 + `type: "command"`)로 교정 | A-1(AR1) |
+| `rules/web/security.md` | 「Secrets in the Client Bundle」 절 신설(공개 접두 env 는 브라우저로 간다) | docs/prps/secure-coding-agents.md |
 | `agents/code-reviewer.md` | 재검수 모드 신설, 검수 루프 종결 규약(3회 상한 + 정체 감지), 파일 재읽기 절 신설(같은 범위 재읽기 방지), CLAUDE.md 재-Read 제거, 경량 검증(절차 6)·재검수 규칙 4 의 실행 범위를 「변경이 닿은 테스트만」으로 좁힘(전체 스위트는 검수자가 돌리지 않고 메인 세션이 커밋 직전에 1회 — docs/prps/t37-incremental-k6.md §12), 보고 양식의 `[제안]` → `[재현]`(CRITICAL/HIGH 에 재현 증거 의무, 못 붙이면 한 단계 하향), 기준 커밋 SHA 기록과 diff 1회 수집, 절차 재배열(결함 탐색 → 구현자 보고서·PRP 를 미검증 주장으로 대조), FAIL 사유 범주 4종, frontmatter 의 `effort` 고정과 `tools` 의 `Task` → 정식 이름 `Agent`(docs/prps/harness-benchmark-adoption.md) — 누적 10개 커밋 · secure coding: XSS 항목의 클라이언트 주입 확장·공통 보안 체크 정본 참조(`rules/common/security.md`)·의존성 항목 확장(typosquat·설치 스크립트·lockfile)·설정 파일 자격 증명과 비밀 노출 경로 항목·신뢰 경계 음성 테스트 누락(HIGH)·재현 출력 비밀값 가림·PRP 보안 절 대조(절차 7) | F-2(AR15) 재작성 표기 대상·품질 트랙 다수 · docs/prps/secure-coding-agents.md |
 | `commands/code-review.md` | VALIDATE 경량 단계(Phase 3) 신설 — 기존 테스트 실행·기록, 실패 시 HIGH 이슈로 등록, 실행 범위를 변경이 닿은 테스트로 좁힘(전체 스위트는 검수 단계에서 돌리지 않음), Phase 1 에 기준 SHA 기록·diff 1회 수집, Phase 4 의 `Suggested fix` → `Reproduction`(CRITICAL/HIGH 재현 의무·하향 규칙)과 FAIL 사유 범주(docs/prps/harness-benchmark-adoption.md) · secure coding: 자격 증명·XSS 줄 확장·정본 참조 줄·재현 출력 가림·신뢰 경계 코드의 악성 입력 음성 테스트 누락을 HIGH 로 판정하는 줄(Code Quality)·PR 모드 `isCrossRepository` 필드와 비신뢰(포크) PR 실행 금지 | 기존 로컬 패치(검수 워크플로우) · docs/prps/secure-coding-agents.md |
 | `commands/prp-commit.md` | 커밋 컨벤션 해석 우선순위(프로젝트 CLAUDE.md → commitlint 설정 파일 → 기본 형식) 절 신설 | 검수 R3 3회차 지적 ①(§5 누락 보완 — 상류 원문 diff 로 신규 확인) |

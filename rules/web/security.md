@@ -44,6 +44,10 @@ Adjust origins to the project. Do not cargo-cult this block unchanged.
 - Escape dynamic template values
 - Sanitize user HTML with a vetted local sanitizer when absolutely necessary
 
+## Secrets in the Client Bundle
+
+- Env vars with a public prefix (`VITE_`, `NEXT_PUBLIC_`, `NUXT_PUBLIC_`, `PUBLIC_`, `REACT_APP_`, `VUE_APP_`) are shipped to the browser — never put secrets there; call a server endpoint that holds the secret
+
 ## Third-Party Scripts
 
 - Load asynchronously

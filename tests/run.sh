@@ -318,7 +318,12 @@ trap suite_exit_guard EXIT
 # VERSION 파일을 본 세션이 feat: 커밋마다 번호를 올리는 것이 가장 그럴듯한 실패이고, 그 실패는 동시 세션 병합
 # 충돌과 새 버전 알림 남발(HV4)을 직접 깬다 — 규칙 전문은 README 「버전」에 두고 상시 컨텍스트에는 포인터만 둔다
 # (T41-7c 가 그 포인터를 잠근다). 이 값도 편집 후 재측정한 실측치다(PRP 추정 약 250B).
-readonly ALWAYS_ON_CONTEXT_BUDGET_BYTES=54892
+# 54892 → 56532(+1640B, docs/prps/secure-coding-agents.md SC2·SC3·SC11): rules/common/security.md 에 스택 중립 체크
+# 항목 6줄·인가 항목 개정, 「Secret Management」 개정, 「Agent Operational Security」 절 신설을 더했다. 근거: 운영 보안은
+# 메인·서브에이전트 모두가 행동하는 내용이고, 확장 체크 항목은 스택 중립 보편 원칙이며, 비밀값 사고의 주 경로인 설정
+# 1줄 변경은 메인 세션이 워크플로우 없이 직접 하므로 common 층이 정본이다(사용자 결정 2026-11-08 — A 안). 이 값도
+# 편집 후 재측정한 실측치다(PRP 예상 56,532B 와 일치).
+readonly ALWAYS_ON_CONTEXT_BUDGET_BYTES=56532
 
 # 허브 진행 기록 규칙 파일 증분 상한 래칫(T40-5, docs/prps/dashboard-into-hub.md HD2·HD10).
 # 옛 DASHBOARD_MD_BUDGET_BYTES(T22-163, dashboard.md 대상)를 승계한다 — dashboard.md 자체가
