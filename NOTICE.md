@@ -158,7 +158,7 @@ common·typescript·react·react-native·web)는 상류 유래(파생)이고, `r
 - **워크플로우 재구성**: 설계(`design-architect`)→구현(`implementer`)→검수
   (`code-reviewer`) 역할 분리, `/dashboard`·`/hub` 등 이 저장소 고유 도구를 추가했다.
 - **로컬 패치**: 상류 파생 파일(`rules/README.md` 포함)과 상류 유래·본문 재작성으로
-  표기한 `rules/python/`을 합쳐 25개 파일에 이 저장소 고유의 수정이 있다 — 목록·근거는
+  표기한 `rules/python/`을 합쳐 26개 파일에 이 저장소 고유의 수정이 있다 — 목록·근거는
   §5.
 - **CLAUDE.md 배포 채널 이관**(2026-09-02): 루트 `CLAUDE.md`가 배포물과 이 저장소 자신의
   프로젝트 지침을 동시에 겸하던 것을, 배포되는 범용 워크플로우 지침은
@@ -204,7 +204,7 @@ common·typescript·react·react-native·web)는 상류 유래(파생)이고, `r
 | `rules/common/coding-style.md` | 중첩 한도를 `>4 levels`→`>3 levels`로 강화, 에러 처리 절을 "실제 발생 가능한 실패만 처리"하는 `karpathy-guidelines.md` #2 참조로 교체(추측성 에러 처리 배제) | 검수 R3 3회차 지적 ①(§5 누락 보완 — 상류 원문 diff 로 신규 확인) |
 | `rules/common/development-workflow.md` | 0단계를 "필수"에서 "도구(gh/MCP) 미설치 시 스킵"으로 완화, Context7·Exa 고유명사 의존 완화, `planner`/`tdd-guide` → `design-architect`/`implementer` 치환 | F-3(AR11)·F-4(AR12)·harness-landscape-survey |
 | `rules/common/performance.md` | 모델 선택·thinking 절을 공식 문서 출처 기반으로 재작성(adaptive reasoning 반영), `/effort` 지속성 서술 정정, 미배포 `build-error-resolver` 제거 | A-3(AR3)·F-3(AR11)·기존 로컬 패치(품질 트랙) |
-| `rules/common/security.md` | 미배포 `security-reviewer` → `code-reviewer` 보안 렌즈 위임으로 교체 | F-3(AR11) |
+| `rules/common/security.md` | 미배포 `security-reviewer` → `code-reviewer` 보안 렌즈 위임으로 교체 · 스택 중립 체크 항목 6 추가·인가 항목 개정 · 「Secret Management」 개정(설정 파일·`.env`·누출 경로·최소 권한·커밋 이력 회전) · 「Agent Operational Security」 절 신설 | F-3(AR11) · docs/prps/secure-coding-agents.md |
 | `rules/common/testing.md` | 미배포 `tdd-guide` → `implementer`가 TDD를 직접 수행하는 것으로 교체 | F-3(AR11) |
 | `rules/typescript/security.md` | 미배포 `security-reviewer` 참조 제거 | F-3(AR11) |
 | `rules/typescript/testing.md` | 미배포 `e2e-runner` 참조 제거 | F-3(AR11) |
@@ -213,11 +213,12 @@ common·typescript·react·react-native·web)는 상류 유래(파생)이고, `r
 | `rules/react/testing.md` | CRA(Create React App) 지원 종료 명시, 미배포 `skills/` 참조에 상류 URL 명시(현재 정칭 `affaan-m/ECC`) | F-3(AR11)·F-4(AR12) |
 | `rules/react-native/testing.md` | 미배포 `tdd-guide` → `implementer` 직접 수행으로 교체 | F-3(AR11) |
 | `rules/web/hooks.md` | 훅 JSON 6블록을 공식 3계층 스키마(`hooks` 배열 + `type: "command"`)로 교정 | A-1(AR1) |
-| `agents/code-reviewer.md` | 재검수 모드 신설, 검수 루프 종결 규약(3회 상한 + 정체 감지), 파일 재읽기 절 신설(같은 범위 재읽기 방지), CLAUDE.md 재-Read 제거, 경량 검증(절차 6)·재검수 규칙 4 의 실행 범위를 「변경이 닿은 테스트만」으로 좁힘(전체 스위트는 검수자가 돌리지 않고 메인 세션이 커밋 직전에 1회 — docs/prps/t37-incremental-k6.md §12), 보고 양식의 `[제안]` → `[재현]`(CRITICAL/HIGH 에 재현 증거 의무, 못 붙이면 한 단계 하향), 기준 커밋 SHA 기록과 diff 1회 수집, 절차 재배열(결함 탐색 → 구현자 보고서·PRP 를 미검증 주장으로 대조), FAIL 사유 범주 4종, frontmatter 의 `effort` 고정과 `tools` 의 `Task` → 정식 이름 `Agent`(docs/prps/harness-benchmark-adoption.md) — 누적 10개 커밋 | F-2(AR15) 재작성 표기 대상·품질 트랙 다수 |
-| `commands/code-review.md` | VALIDATE 경량 단계(Phase 3) 신설 — 기존 테스트 실행·기록, 실패 시 HIGH 이슈로 등록, 실행 범위를 변경이 닿은 테스트로 좁힘(전체 스위트는 검수 단계에서 돌리지 않음), Phase 1 에 기준 SHA 기록·diff 1회 수집, Phase 4 의 `Suggested fix` → `Reproduction`(CRITICAL/HIGH 재현 의무·하향 규칙)과 FAIL 사유 범주(docs/prps/harness-benchmark-adoption.md) | 기존 로컬 패치(검수 워크플로우) |
+| `rules/web/security.md` | 「Secrets in the Client Bundle」 절 신설(공개 접두 env 는 브라우저로 간다) | docs/prps/secure-coding-agents.md |
+| `agents/code-reviewer.md` | 재검수 모드 신설, 검수 루프 종결 규약(3회 상한 + 정체 감지), 파일 재읽기 절 신설(같은 범위 재읽기 방지), CLAUDE.md 재-Read 제거, 경량 검증(절차 6)·재검수 규칙 4 의 실행 범위를 「변경이 닿은 테스트만」으로 좁힘(전체 스위트는 검수자가 돌리지 않고 메인 세션이 커밋 직전에 1회 — docs/prps/t37-incremental-k6.md §12), 보고 양식의 `[제안]` → `[재현]`(CRITICAL/HIGH 에 재현 증거 의무, 못 붙이면 한 단계 하향), 기준 커밋 SHA 기록과 diff 1회 수집, 절차 재배열(결함 탐색 → 구현자 보고서·PRP 를 미검증 주장으로 대조), FAIL 사유 범주 4종, frontmatter 의 `effort` 고정과 `tools` 의 `Task` → 정식 이름 `Agent`(docs/prps/harness-benchmark-adoption.md) — 누적 10개 커밋 · secure coding: XSS 항목의 클라이언트 주입 확장·공통 보안 체크 정본 참조(`rules/common/security.md`)·의존성 항목 확장(typosquat·설치 스크립트·lockfile)·설정 파일 자격 증명과 비밀 노출 경로 항목·신뢰 경계 음성 테스트 누락(HIGH)·재현 출력 비밀값 가림·PRP 보안 절 대조(절차 7) | F-2(AR15) 재작성 표기 대상·품질 트랙 다수 · docs/prps/secure-coding-agents.md |
+| `commands/code-review.md` | VALIDATE 경량 단계(Phase 3) 신설 — 기존 테스트 실행·기록, 실패 시 HIGH 이슈로 등록, 실행 범위를 변경이 닿은 테스트로 좁힘(전체 스위트는 검수 단계에서 돌리지 않음), Phase 1 에 기준 SHA 기록·diff 1회 수집, Phase 4 의 `Suggested fix` → `Reproduction`(CRITICAL/HIGH 재현 의무·하향 규칙)과 FAIL 사유 범주(docs/prps/harness-benchmark-adoption.md) · secure coding: 자격 증명·XSS 줄 확장·정본 참조 줄·재현 출력 가림·신뢰 경계 코드의 악성 입력 음성 테스트 누락을 HIGH 로 판정하는 줄(Code Quality)·PR 모드 `isCrossRepository` 필드와 비신뢰(포크) PR 실행 금지 | 기존 로컬 패치(검수 워크플로우) · docs/prps/secure-coding-agents.md |
 | `commands/prp-commit.md` | 커밋 컨벤션 해석 우선순위(프로젝트 CLAUDE.md → commitlint 설정 파일 → 기본 형식) 절 신설 | 검수 R3 3회차 지적 ①(§5 누락 보완 — 상류 원문 diff 로 신규 확인) |
-| `commands/prp-implement.md` | `docs/prps/` 아래 산출물은 아카이브 이동을 생략(커밋된 정본 보호) | harness-landscape-survey(tier0-defect-fixes) |
-| `commands/prp-plan.md` | 호출자 지정 출력 경로(`docs/prps/{feature}.md`)를 지원, 기본 경로(`.claude/PRPs/plans/`)는 유지 | harness-landscape-survey(tier0-defect-fixes) |
+| `commands/prp-implement.md` | `docs/prps/` 아래 산출물은 아카이브 이동을 생략(커밋된 정본 보호) · 계획의 Security Considerations 절을 읽어 음성 테스트를 실행(Phase 1·Level 5) | harness-landscape-survey(tier0-defect-fixes) · docs/prps/secure-coding-agents.md |
+| `commands/prp-plan.md` | 호출자 지정 출력 경로(`docs/prps/{feature}.md`)를 지원, 기본 경로(`.claude/PRPs/plans/`)는 유지 · 템플릿에 Security Considerations 절(프론트엔드 sink·음성 테스트 형태 한 줄 포함)과 체크 2줄 추가 | harness-landscape-survey(tier0-defect-fixes) · docs/prps/secure-coding-agents.md |
 | `rules/python/coding-style.md` | 표준 라이브러리 우선·`X \| None` 타입힌트·`@dataclass(frozen=True)` 불변성·이름 있는 상수를 이 저장소 자신의 `hub/bin/*.py` 코드에서 귀납해 새로 작성 | 커밋 `4be8f58`·검수 R3 2회차 ②(§3 "상류 유래·본문 재작성" 재분류) |
 | `rules/python/hooks.md` | 훅·statusline 진입점은 예외를 삼키고 항상 exit 0 을 반환한다는 규칙을 `hub_hook.py`/`hub_statusline.py`의 `main()` 형태에서 귀납 | 〃 |
 | `rules/python/patterns.md` | 순수 모듈/I·O 모듈 분리, 프로즌 dataclass 로만 모듈 간 통신, 예상된 실패 전용 예외 클래스, 잎 모듈로 순환 참조 차단을 `hub_model.py`·`hub_collect.py`·`hub_server_state.py`에서 귀납 | 〃 |
@@ -272,12 +273,12 @@ ECC 재동기화 시 이 목록의 파일은 **통째로 덮어쓰지 않는다.
 원문에 닿는 경로가 보이지 않는다. 그러므로 `bash tests/run.sh` 가 그린인 것은 이 순서를 지켰다는
 증거가 아니다.
 
-### 커버리지 상태 (위 표 25행)
+### 커버리지 상태 (위 표 26행)
 
 계수 기준: **「열림」**은 어떤 검사의 판정이 그 파일의 바이트에 의존한다는 뜻, **「잠긴다」**는 그
 성분을 상류값으로 되돌리는 편집이 실제로 검사를 발화시킨다는 뜻이다. 설치·트리 복사·해시 대조·파일
 수 계수처럼 내용이 무엇이든 통과하는 사용은 「열림」에 넣지 않는다(예: T30-2 의 `ls agents/*` 계수,
-T4·T15·T18·T19·T27 이 이 표의 파일을 픽스처로 쓰는 자리). 아래 표는 위 25행과 1:1 로 대응하고
+T4·T15·T18·T19·T27 이 이 표의 파일을 픽스처로 쓰는 자리). 아래 표는 위 26행과 1:1 로 대응하고
 행 순서도 같다. `—` 는 해당 없음, `〃` 는 윗행과 같음이다. 성분 열거의 단위는 위 표의
 「패치 요지」가 파일별로 구분한 항목이다 — 재동기화 담당자가 그 열을 체크리스트로 쓰므로 단위를
 거기 맞췄다. 그 항목보다 더 잘게 쪼개 적는 것은 무방하다. 다만 그 아래 단위의 전수는 이 표가
@@ -292,7 +293,7 @@ T4·T15·T18·T19·T27 이 이 표의 파일을 픽스처로 쓰는 자리). 아
 | `rules/common/coding-style.md` | `>3 levels` 존재 + `>4 levels` 부재 | 에러 처리 절의 `karpathy-guidelines.md` #2 참조(파일 전체가 `602e377` 이후 무변경이라 `5f9552f` 대조로 잠글 토큰이 없다) | T28-4 |
 | `rules/common/development-workflow.md` | 미배포 13종 이름의 부재 · 0단계 완화 문구 존재 | 고유명사 의존 완화 문구 | T29-1 · T38-4 |
 | `rules/common/performance.md` | 미배포 13종 이름의 부재 · `persist across sessions` 존재 · adaptive reasoning 도입 문장 존재 | adaptive reasoning 재작성 중 도입 문장 밖의 나머지(effort 표·모델별 지원 등) | T29-1 · T28-3 · T38-4 |
-| `rules/common/security.md` | 미배포 13종 이름의 부재 | 보안 렌즈 위임 문안 | T29-1 |
+| `rules/common/security.md` | 미배포 13종 이름의 부재 · 확장 체크 항목 각각(명령 인젝션·SSRF·역직렬화·IDOR·CSPRNG·안전한 기본값·새 의존성 검증) · 「Secret Management」 개정(설정 파일·`.env.example`·공개 접두·최소 권한·git 이력) · 「Agent Operational Security」 절과 그 핵심 문구 | 보안 렌즈 위임 문안 | T29-1 · T31-13 |
 | `rules/common/testing.md` | 〃 | `implementer` 의 TDD 직접 수행 문안 | T29-1 |
 | `rules/typescript/security.md` | 〃 | — | T29-1 |
 | `rules/typescript/testing.md` | 〃 | — | T29-1 |
@@ -301,18 +302,19 @@ T4·T15·T18·T19·T27 이 이 표의 파일을 픽스처로 쓰는 자리). 아
 | `rules/react/testing.md` | CRA 지원 종료 명시 존재 · 상류 `skills/` URL 명시 존재 | e2e 스킬 링크 완화 표현 | T38-4 |
 | `rules/react-native/testing.md` | 미배포 13종 이름의 부재 | `implementer` 직접 수행 문안 | T29-1 |
 | `rules/web/hooks.md` | 훅 json 블록의 3계층 스키마 · `$FILE_PATH` 부재 | — | T28-1 |
-| `agents/code-reviewer.md` | 재검수 모드 절 존재 · 재현 형식(`[재현]`) · 미검증 주장 순서 · 사유 범주(T31-11) | 루프 종결 규약 · 파일 재읽기 절 · 검증 범위 문안(「변경이 닿은 테스트만」 — 상류 재동기화가 되돌려도 「검수자가 전체를 돌린다」로 돌아갈 뿐 안전 문제가 아니다. 메인 세션의 커밋 직전 전체 검증 의무는 `rules/workflow/role-separation.md` 의 T31-9 가 잠근다) · 기준 SHA 기록·diff 1회 수집 · 하향 규칙 문안 | T38-3 · T31-11 |
-| `commands/code-review.md` | VALIDATE 경량 단계 존재(T17 은 상호참조 토큰만 봄) · `Reproduction` 요구(T31-11) | Phase 3 표의 실행 범위 문안(위와 같은 이유) · Phase 1 의 기준 SHA·1회 수집 문안 | T38-3 · T31-11 |
+| `rules/web/security.md` | 「Secrets in the Client Bundle」 절의 존재(공개 접두 env 는 브라우저로 간다) | 나열된 공개 접두 이름 목록 | T31-13 |
+| `agents/code-reviewer.md` | 재검수 모드 절 존재 · 재현 형식(`[재현]`) · 미검증 주장 순서 · 사유 범주(T31-11) · secure coding(정본 참조·PRP 보안 절 대조·`<masked>` 가림·`typosquat`·클라이언트 주입·`git ls-files` 탐지·회전 표기 — T31-13) | 루프 종결 규약 · 파일 재읽기 절 · 검증 범위 문안(「변경이 닿은 테스트만」 — 상류 재동기화가 되돌려도 「검수자가 전체를 돌린다」로 돌아갈 뿐 안전 문제가 아니다. 메인 세션의 커밋 직전 전체 검증 의무는 `rules/workflow/role-separation.md` 의 T31-9 가 잠근다) · 기준 SHA 기록·diff 1회 수집 · 하향 규칙 문안 · SC6 강도 문안(테스트 누락 HIGH·잘못된 「해당 없음」 MEDIUM 「설계문서 불일치」 — 토큰 없음) | T38-3 · T31-11 · T31-13 |
+| `commands/code-review.md` | VALIDATE 경량 단계 존재(T17 은 상호참조 토큰만 봄) · `Reproduction` 요구(T31-11) · secure coding(정본 참조·`mask the value` 가림·`isCrossRepository` 포크 PR 실행 금지·창 간 메시지·회전 표기·신뢰 경계 코드의 악성 입력 음성 테스트 누락 HIGH 줄(`malicious-input negative test`) — T31-13) | Phase 3 표의 실행 범위 문안(위와 같은 이유) · Phase 1 의 기준 SHA·1회 수집 문안 | T38-3 · T31-11 · T31-13 |
 | `commands/prp-commit.md` | Message style 절(커밋 메시지 문체 규칙) 존재 | 커밋 컨벤션 해석 우선순위 절(상류 대비로는 로컬 패치이나 최초 반입 `602e377`에 이미 있어 `5f9552f` 대조로는 못 잠근다) | T38-3 |
-| `commands/prp-implement.md` | 아카이브 이동 생략 문구 존재 | — | T38-3 |
-| `commands/prp-plan.md` | 호출자 지정 출력 경로 문구 존재 | — | T38-3 |
+| `commands/prp-implement.md` | 아카이브 이동 생략 문구 존재 · Security Considerations 로드(T31-13) | — | T38-3 · T31-13 |
+| `commands/prp-plan.md` | 호출자 지정 출력 경로 문구 존재 · Security Considerations 절·음성 테스트 열·프론트엔드 sink·비밀값 질문(T31-13) | 템플릿 체크 2줄(Edge Cases·Context Completeness) | T38-3 · T31-13 |
 | `rules/python/coding-style.md` | 표준 라이브러리 우선 절 존재(T12 는 frontmatter 만 봄) | 타입힌트·불변성 본문 | T38-1 |
 | `rules/python/hooks.md` | 훅 진입점의 exit 0 규칙 절 존재 | — | T38-1 |
 | `rules/python/patterns.md` | 순수/IO 분리 절 존재 | 프로즌 dataclass 본문 | T38-1 |
 | `rules/python/security.md` | subprocess 리스트 인자 절 존재 | 평문 로깅 금지 본문 | T38-1 |
 | `rules/python/testing.md` | stdlib `unittest` 기본 문구 존재(T38-1) · 상류 pytest 관례 부재(T38-2) | — | T38-1 · T38-2 |
 
-**세 버킷의 합**(위 표 「검사」 열을 세면 나온다): 직접 커버 24 + T26 간접만 1 + 미커버 0 = 25행
+**세 버킷의 합**(위 표 「검사」 열을 세면 나온다): 직접 커버 25 + T26 간접만 1 + 미커버 0 = 26행
 이고 서로 겹치지 않는다. T26 계수 집합과 겹치는 8행은 그 24+1 안이라 네 번째 값이 아니다.
 
 ### 이 커버리지 판정의 근거와 한계
