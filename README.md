@@ -18,7 +18,7 @@
 | 워크플로우 커맨드 | `prp-prd → prp-plan → prp-implement → prp-pr` 체인 + `prp-commit`·`code-review` |
 | 에이전트 | `design-architect`(설계)·`implementer`(구현)·`code-reviewer`(검수)·`explore`(탐색) |
 | 규칙 | JS/TS·React·웹·RN·Python 스택 큐레이션 46개(공통·workflow 16개 항상 로드, 나머지 조건부) |
-| 보안 | 설계 보안 절 → 구현 악성 입력 테스트 → 검수 대조로 보안을 앞당김, 비밀값·파일 속 지시문 취급 규칙 — [secure coding 구성](#secure-coding-구성) |
+| 보안 | 설계·구현·검수 모든 단계에 secure coding 적용(설계 보안 절·구현 악성 입력 테스트·검수 확인), 비밀값·파일 속 지시문 취급 규칙 — [secure coding 구성](#secure-coding-구성) |
 | 허브 | `/hub` — 여러 프로젝트 진행 상황을 한 페이지에 집계, 진행 기록(대시보드) 포함(별도 설치) |
 
 ## 설치
@@ -257,8 +257,8 @@ Changes·Goal-Driven Execution)의 상세는 그 파일을 참조한다. `common
 
 ### secure coding 구성
 
-보안을 검수 단계에서 사후에 잡던 방식에서, 설계·구현 단계에서 먼저 막는 방식으로 앞당겼다.
-설계서에 보안 칸이 생기고, 구현자가 악성 입력 테스트를 쓰고, 검수자가 그 테스트가 있는지 다시 확인한다.
+설계·구현·검수·탐색 모든 단계에서 secure coding 을 적용한다.
+설계서에는 보안 칸이 있고, 구현자는 악성 입력 테스트를 쓰고, 검수자는 그 테스트가 있는지 다시 확인한다.
 점검 항목의 정본은 `rules/common/security.md` 한 곳이고, 에이전트와 커맨드는 그 목록을 가리킨다.
 설계 배경과 결정 근거는 [`docs/prps/secure-coding-agents.md`](docs/prps/secure-coding-agents.md) 에 있다.
 
