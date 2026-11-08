@@ -1009,7 +1009,10 @@ readonly LEDGER_EXEMPT_ROW_RATCHET=368
 #
 # 575 → 576(hub-bg-wait-passive-watch.md, 결정 PW1): 신설 1건 T25-295(깨우는 종류에 monitor 가 없다). 순증가 1.
 # collect_guard_ids 를 그대로 재현해 편집 전(575)·후(576) 재측정한다 — 차집합은 T25-295 하나다.
-readonly SOURCE_GUARD_ID_FLOOR=576
+# 576 → 577(secure-coding-agents.md §9-1, 결정 SC9): 신설 1건 T31-13(secure coding 계약 토큰 — 에이전트 4종·커맨드 3종·상시 규칙·web 규칙의 뼈대 45개).
+# 순증가 1. collect_guard_ids 를 그대로 재현해 편집 전(576)·후(577) 재측정한다 — 차집합은 T31-13 하나다. 원장에는 변조행이 아니라 면제행 1건으로
+# 등록했다(T31-10~12 와 같은 사용자 결정 2026-10-08, 전체 검사 시간 보호) — 변조 검증은 구현 시 수동 1회(같은 문서 §9-2).
+readonly SOURCE_GUARD_ID_FLOOR=577
 
 # 배포 트리(rules/·agents/·commands/)에 남는 "파일명:줄번호" 형태 인용 수의 상한
 # 래칫(T39-4). 배포되는 문서가 다른 파일의 줄 번호를 인용하면, 그 파일을 고치는 수정이
@@ -11888,10 +11891,19 @@ PYEOF
 # 아무것도 안 한다 — 프로젝트 메모리 「개명하면 정적 가드가 눈이 먼다」)를 본다. 등록 방식·한계는 T31-10 과 같다(면제행,
 # 구현 시 수동 변조 1회) — 문구·배선의 **존재만** 본다. 훅이 실제로 발화하는지·호스트 계약(입력 키·transcript 경로·결과 문장)이
 # 유지되는지·서브에이전트가 정리 문구를 지키는지는 보지 못한다(PRP §8.2 설치 후 수락 시험의 몫).
+#
+# T31-13(docs/prps/secure-coding-agents.md §9-1)은 secure coding 계약의 뼈대를 고정한다 — PRP 보안 절(설계자 「보안 고려」·
+# /prp-plan 템플릿·/prp-implement 로드) · 구현자의 악성 입력 음성 테스트와 백엔드·프론트엔드 형태 · 검수자·/code-review 의
+# 정본 참조·비밀값 가림·비신뢰 PR 실행 금지·클라이언트 주입·추적 중인 .env 탐지 · Explore 의 지시문 표시 ·
+# rules/common/security.md 의 확장 체크 항목·비밀값 관리·운영 보안 절 · rules/web/security.md 의 공개 접두 env 절. (경로, 토큰)
+# 쌍은 이 함수 안의 지역 배열이다(T31-11 과 같은 이유). 상류 재동기화가 벤더링 파일을 덮어써 패치가 사라지는 경로도 문다.
+# 등록 방식은 T31-10 과 같다(면제행, 구현 시 수동 변조 1회 — 같은 문서 §9-2). 한계: 토큰의 **존재만** 본다 — 같은 뜻을 다른
+# 낱말로 되돌리는 편집, 토큰은 두고 의미를 뒤집는 편집(「돌리지 않는다」→「돌린다」), 에이전트가 계약을 실제로 지키는지는
+# 보지 못한다(같은 문서 §9-3 설치 후 수락 시험의 몫). 위양성이 나면 고칠 것은 대상 문단이 아니라 토큰 목록이다.
 test_rules_workflow_guardrails() {
   group_failures=()   # 앞 그룹이 조기 return 했을 때의 잔여물 제거
   local test_name="T31"
-  local test_desc="워크플로우 지침 고정 래칫 (T31-1~T31-12)"
+  local test_desc="워크플로우 지침 고정 래칫 (T31-1~T31-13)"
   log_test_name "$test_name" "$test_desc"
 
   # ---- T31-1: rules/workflow/ 4파일 존재 — 파일명 리터럴 고정, 개명·누락이 곧 실패 ----
@@ -12071,6 +12083,67 @@ test_rules_workflow_guardrails() {
   if [[ ! -f "$REPO_ROOT/hub/bin/hub_handback_guard.py" ]]; then
     note_failure "T31-12: hub/bin/hub_handback_guard.py 가 없음(에이전트 frontmatter 훅이 존재하지 않는 스크립트를 부른다 — 개명·삭제됐으면 가드 토큰과 함께 고쳐야 한다)"
   fi
+
+  # ---- T31-13 (docs/prps/secure-coding-agents.md §9-1): secure coding 계약 토큰. (경로, 토큰) 쌍의 그룹 안 지역 평탄 배열이다
+  # (T31-11 과 같은 이유 — 최상위 배열은 증분 K6 를 전체 재확인으로 바꾼다). 토큰은 계약의 뼈대다: PRP 보안 절과 비례형 탈출구
+  # 「해당 없음 — 근거 한 줄」 · 프론트엔드 경계 예 · 비밀값 질문 · 구현자의 음성 테스트와 「정의하지 않는 입력」 차단 ·
+  # 검수자의 정본 참조·가림·공급망·클라이언트 주입·추적 중인 .env 탐지·회전 표기 · 포크 PR 실행 금지 · Explore 지시문 표시 ·
+  # 상시 규칙의 체크 항목 각각과 운영 보안·비밀값 관리. 프레임워크가 생기고 사라지는 공개 접두 이름과 localStorage·postMessage
+  # 같은 예시 낱말은 일부러 잠그지 않는다(정당한 다듬기에 위양성이 난다).
+  local secure_coding_contract_pairs=(
+    "agents/design-architect.md"  "보안 고려"
+    "agents/design-architect.md"  "해당 없음 — 근거 한 줄"
+    "agents/design-architect.md"  "프론트엔드"
+    "agents/design-architect.md"  "어떻게 회전하는지"
+    "commands/prp-plan.md"        "## Security Considerations"
+    "commands/prp-plan.md"        "negative test"
+    "commands/prp-plan.md"        "HTML rendering"
+    "commands/prp-plan.md"        "how rotated"
+    "commands/prp-implement.md"   "Security Considerations"
+    "agents/implementer.md"       "음성 테스트"
+    "agents/implementer.md"       "「정의하지 않는 입력」으로 넘기지 않는다"
+    "agents/implementer.md"       "거부 응답"
+    "agents/implementer.md"       "글자로 보임"
+    "agents/code-reviewer.md"     "Mandatory Security Checks"
+    "agents/code-reviewer.md"     "Security Considerations"
+    "agents/code-reviewer.md"     "<masked>"
+    "agents/code-reviewer.md"     "typosquat"
+    "agents/code-reviewer.md"     "오픈 리다이렉트"
+    "agents/code-reviewer.md"     "git ls-files"
+    "agents/code-reviewer.md"     "회전 필요"
+    "commands/code-review.md"     "Mandatory Security Checks"
+    "commands/code-review.md"     "mask the value"
+    "commands/code-review.md"     "isCrossRepository"
+    "commands/code-review.md"     "cross-window messages"
+    "commands/code-review.md"     "rotation, not just deletion"
+    "commands/code-review.md"     "malicious-input negative test"
+    "agents/explore.md"           "지시문 발견"
+    "rules/common/security.md"    "## Agent Operational Security"
+    "rules/common/security.md"    "address you as an agent"
+    "rules/common/security.md"    "fork PRs"
+    "rules/common/security.md"    "mask the value"
+    "rules/common/security.md"    "command injection"
+    "rules/common/security.md"    "SSRF"
+    "rules/common/security.md"    "deserialization"
+    "rules/common/security.md"    "IDOR"
+    "rules/common/security.md"    "CSPRNG"
+    "rules/common/security.md"    "Secure defaults"
+    "rules/common/security.md"    "typosquat"
+    "rules/common/security.md"    "config files"
+    "rules/common/security.md"    ".env.example"
+    "rules/common/security.md"    "public-prefixed"
+    "rules/common/security.md"    "Least privilege"
+    "rules/common/security.md"    "git history"
+    "rules/common/security.md"    "git check-ignore"
+    "rules/web/security.md"       "shipped to the browser"
+  )
+  local secure_coding_pair_index
+  for ((secure_coding_pair_index = 0; secure_coding_pair_index < ${#secure_coding_contract_pairs[@]}; secure_coding_pair_index += 2)); do
+    if ! grep -qF -- "${secure_coding_contract_pairs[secure_coding_pair_index + 1]}" \
+      "$REPO_ROOT/${secure_coding_contract_pairs[secure_coding_pair_index]}"; then
+      note_failure "T31-13: ${secure_coding_contract_pairs[secure_coding_pair_index]} 에 secure coding 계약 토큰 '${secure_coding_contract_pairs[secure_coding_pair_index + 1]}' 이 없음(해당 요구가 삭제됐거나 상류 재동기화로 되돌아갔을 수 있다)"
+    fi
+  done
 
   finish_group "$test_name"
 }
