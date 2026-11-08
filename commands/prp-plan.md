@@ -336,6 +336,21 @@ Code patterns discovered in the codebase. Follow these exactly.
 
 ---
 
+## Security Considerations
+
+`N/A — [one-line reason]` when no row applies; otherwise fill only the rows that apply.
+
+| Area | Applies? | Threats (1-3) → mitigation → negative test |
+|---|---|---|
+| Trust boundary — untrusted data coming in (requests, files, env, LLM output, URL params/hash, cross-window messages) or used in a risky sink (paths, shell, queries, outbound URLs, HTML rendering, links/redirects) | | |
+| Sensitive data — secrets, credentials, PII stored/logged/sent; tokens kept in client storage (localStorage etc.); for secrets: where stored per environment, who reads, how rotated | | |
+| AuthN/AuthZ — who may call this; per-resource checks | | |
+| New dependencies — exact name, install scripts, lockfile, maintenance | | |
+
+Negative test form — backend: a malicious request gets a rejection and data is unchanged; frontend: a malicious string renders as text, never as script, and a `javascript:` URL never becomes a link or navigation target.
+
+---
+
 ## Testing Strategy
 
 ### Unit Tests
@@ -351,6 +366,7 @@ Code patterns discovered in the codebase. Follow these exactly.
 - [ ] Concurrent access
 - [ ] Network failure (if applicable)
 - [ ] Permission denied
+- [ ] Malicious input (negative tests from Security Considerations)
 
 ---
 
@@ -476,6 +492,7 @@ Before finalizing, verify the plan against these checklists:
 - [ ] Error handling patterns documented
 - [ ] Test patterns identified
 - [ ] Dependencies listed
+- [ ] Security Considerations filled, or N/A with a one-line reason
 
 ### Implementation Readiness
 - [ ] Every task has ACTION, IMPLEMENT, MIRROR, and VALIDATE
