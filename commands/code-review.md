@@ -43,7 +43,7 @@ Read each changed file in full. Check for:
 
 **Security Issues (CRITICAL):**
 - Hardcoded credentials, API keys, tokens — incl. config files, compose/Dockerfile, test fixtures, tracked `.env*` (`git ls-files ':(glob)**/.env*'`, excluding `.env.example`), secrets in public-prefixed env vars; a committed real secret needs rotation, not just deletion
-- SQL injection vulnerabilities
+- SQL injection vulnerabilities (queries built by concatenation or interpolation — template literals, f-strings, MyBatis `${}`)
 - XSS vulnerabilities (incl. unvalidated link/redirect URLs, cross-window messages without origin checks)
 - Missing input validation
 - Insecure dependencies
@@ -55,6 +55,7 @@ Read each changed file in full. Check for:
 - Files > 800 lines
 - Nesting depth > 3 levels
 - Missing error handling
+- Backend changes: writes that must succeed together outside one transaction, check-then-act updates on shared rows, breaking API changes, migrations that break while old and new code run together
 - console.log statements
 - TODO/FIXME comments
 - Missing JSDoc for public APIs
@@ -76,17 +77,18 @@ Read each changed file in full. Check for:
 
 | 작업 분류 | 실행 범위 |
 |---|---|
-| 축약 경로 (소규모 수정) | 변경 파일과 관련된 테스트만 (예: `npm test -- <관련 경로>`, `pytest <관련 경로>`, `go test ./<변경 패키지>/...`) |
+| 축약 경로 (소규모 수정) | 변경 파일과 관련된 테스트만 (예: `npm test -- <관련 경로>`, `pytest <관련 경로>`, `go test ./<변경 패키지>/...`, `./gradlew test --tests '<관련 테스트 클래스>'`) |
 | 전체 경로 / 민감 영역 (인증·결제·권한·데이터 삭제) | 변경이 닿은 모듈·테스트 묶음 전부 + build |
 
 프로젝트 타입 감지와 명령은 PR Review Mode의 Phase 4 — VALIDATE와 동일한
-방식을 따른다 (`package.json`, `Cargo.toml`, `go.mod`, `pyproject.toml` 등).
+방식을 따른다 (`package.json`, `Cargo.toml`, `go.mod`, `pyproject.toml`, `build.gradle`·`pom.xml` 등).
 
 기록 규칙:
 - 각 명령의 pass/fail을 리포트의 Validation 표에 기록한다
 - **테스트 실패 = HIGH** 이슈로 등록한다 (커밋 차단 대상)
 - 테스트 명령이 없는 프로젝트는 `Skipped (no test setup)`으로 기록하고,
   이번 변경에 새 로직이 포함되어 있으면 "테스트 누락"을 별도 이슈로 지적한다
+- 빌드 환경 때문에 명령이 돌지 못하면(JDK·빌드 도구 버전 불일치, 의존성 저장소 접근 불가) `Blocked (env: <첫 오류 줄>)` 로 기록한다 — 테스트 실패와 구분하되 통과로 치지 않고, 빌드 파일·빌드 설정을 고쳐 우회하지 않는다(wrapper 버전·language level·dependency/plugin 버전·저장소 URL·JVM 옵션 등)
 
 ### Phase 4 — REPORT
 
@@ -153,12 +155,12 @@ Apply the review checklist across 7 categories:
 
 | Category | What to Check |
 |---|---|
-| **Correctness** | Logic errors, off-by-ones, null handling, edge cases, race conditions |
+| **Correctness** | Logic errors, off-by-ones, null handling, edge cases, race conditions, transaction boundaries |
 | **Type Safety** | Type mismatches, unsafe casts, `any` usage, missing generics |
 | **Pattern Compliance** | Matches project conventions (naming, file structure, error handling, imports) |
 | **Security** | Injection, auth gaps, secret exposure, SSRF, path traversal, XSS — full list: `rules/common/security.md` |
 | **Performance** | N+1 queries, missing indexes, unbounded loops, memory leaks, large payloads |
-| **Completeness** | Missing tests, missing error handling, incomplete migrations, missing docs |
+| **Completeness** | Missing tests, missing error handling, incomplete or non-backward-compatible migrations and API changes, missing docs |
 | **Maintainability** | Dead code, magic numbers, deep nesting, unclear naming, missing types |
 
 Assign severity to each finding:
@@ -178,7 +180,7 @@ in the Validation table.
 
 Run available validation commands:
 
-Detect the project type from config files (`package.json`, `Cargo.toml`, `go.mod`, `pyproject.toml`, etc.), then run the appropriate commands:
+Detect the project type from config files (`package.json`, `Cargo.toml`, `go.mod`, `pyproject.toml`, `build.gradle(.kts)`, `pom.xml`, etc.), then run the appropriate commands:
 
 **Node.js / TypeScript** (has `package.json`):
 ```bash
@@ -202,12 +204,23 @@ go test ./...   # Tests
 go build ./...  # Build
 ```
 
-**Python** (has `pyproject.toml` / `setup.py`):
+**Java / JVM** (has `build.gradle` / `build.gradle.kts` → Gradle, `pom.xml` → Maven) — use the wrapper
+(`./gradlew`, `./mvnw`) when present, `gradle` / `mvn` otherwise:
 ```bash
-pytest  # Tests
+./gradlew testClasses       # Compile main + test (type check)  — Maven: ./mvnw -q test-compile
+./gradlew test              # Tests                              — Maven: ./mvnw test
+./gradlew build -x test     # Build + configured static checks   — Maven: ./mvnw -q verify -DskipTests
 ```
 
+**Python** (has `pyproject.toml` / `setup.py`) — prefix with `uv run` / `poetry run` when `uv.lock` /
+`poetry.lock` exists:
+```bash
+pytest  # Tests — `python -m unittest discover` when the project uses unittest
+```
+Also run the linter / type checker `pyproject.toml` configures (`[tool.ruff]`, `[tool.mypy]`).
+
 Run only the commands that apply to the detected project type. Record pass/fail for each.
+A command that can't run because of the environment (JDK or build-tool mismatch, dependency repository unreachable) is recorded as `Blocked (env: <first error line>)` — neither Fail nor Pass.
 
 ### Phase 5 — DECIDE
 
@@ -260,8 +273,8 @@ Create review artifact at `.claude/PRPs/reviews/pr-<NUMBER>-review.md`:
 |---|---|
 | Type check | Pass / Fail / Skipped |
 | Lint | Pass / Fail / Skipped |
-| Tests | Pass / Fail / Skipped |
-| Build | Pass / Fail / Skipped |
+| Tests | Pass / Fail / Skipped / Blocked (env: <첫 오류 줄>) |
+| Build | Pass / Fail / Skipped / Blocked (env: <첫 오류 줄>) |
 
 ## Files Reviewed
 <list of files with change type: Added/Modified/Deleted>

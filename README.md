@@ -17,7 +17,7 @@
 | 설치/업데이트 | `install.sh`(project/user scope, dry-run, force) · `/harness-update` |
 | 워크플로우 커맨드 | `prp-prd → prp-plan → prp-implement → prp-pr` 체인 + `prp-commit`·`code-review` |
 | 에이전트 | `design-architect`(설계)·`implementer`(구현)·`code-reviewer`(검수)·`explore`(탐색) |
-| 규칙 | JS/TS·React·웹·RN·Python 스택 큐레이션 46개(공통·workflow 16개 항상 로드, 나머지 조건부) |
+| 규칙 | JS/TS·React·웹·RN·Python·Java 스택 큐레이션 48개(공통·workflow 16개 항상 로드, 나머지 조건부) |
 | 보안 | 설계·구현·검수 모든 단계에 secure coding 적용(설계 보안 절·구현 악성 입력 테스트·검수 확인), 비밀값·파일 속 지시문 취급 규칙 — [secure coding 구성](#secure-coding-구성) |
 | 허브 | `/hub` — 여러 프로젝트 진행 상황을 한 페이지에 집계, 진행 기록(대시보드) 포함(별도 설치) |
 
@@ -97,19 +97,19 @@ cd /path/to/my-project
 
 | 항목 | 파일 수 | project 경로 | user 경로 | 로드 시점 |
 |------|--------|-------------|----------|----------|
-| rules/ | 46 | `./.claude/rules/` | `~/.claude/rules/` | 16개 항상 · 30개 조건부 |
+| rules/ | 48 | `./.claude/rules/` | `~/.claude/rules/` | 16개 항상 · 32개 조건부 |
 | agents/ | 4 | `./.claude/agents/` | `~/.claude/agents/` | 호출 시 |
 | commands/ | 8 | `./.claude/commands/` | `~/.claude/commands/` | 호출 시 |
 
-**합계**: project·user 모두 58개 파일. (`CLAUDE.md` 는 배포 대상이 아니다 — project
+**합계**: project·user 모두 60개 파일. (`CLAUDE.md` 는 배포 대상이 아니다 — project
 scope 는 대상 프로젝트의 `./CLAUDE.md` 를 건드리지 않고, user scope 는 예전 설치가 남긴
 `~/.claude/CLAUDE.md` 를 안전하게 은퇴시킨다. 판정 규칙은 아래
 「`~/.claude/CLAUDE.md` 은퇴」 절 참고.)
 
-상시 컨텍스트를 차지하는 것은 **CLAUDE.md 1개 + rules 16개 = 17개(실측 56,532B)** 뿐이다.
+상시 컨텍스트를 차지하는 것은 **CLAUDE.md 1개 + rules 16개 = 17개(실측 56,789B)** 뿐이다.
 이 수치는 `tests/run.sh` 의 T26 이 예산 상한으로 강제한다(래칫 — 내리는 것은 자유, 올리려면
 그 값을 고치는 커밋에 근거를 남겨야 한다).
-나머지는 조건이 맞을 때(rules 30개) 또는 호출할 때(agents 4개, commands 8개)만 로드된다.
+나머지는 조건이 맞을 때(rules 32개) 또는 호출할 때(agents 4개, commands 8개)만 로드된다.
 
 ### rules/workflow 구성
 
@@ -227,7 +227,7 @@ scope 는 대상 프로젝트의 `./CLAUDE.md` 를 건드리지 않고, user sco
 
 ### rules 구성
 
-46개 규칙 파일은 JS/TS + React + 웹 + React Native/Expo + Python 스택 큐레이션에, 범용
+48개 규칙 파일은 JS/TS + React + 웹 + React Native/Expo + Python + Java 스택 큐레이션에, 범용
 개발 워크플로우를 더한 구성이다:
 
 | 분류 | 파일 수 | 로드 방식 | 설명 |
@@ -240,8 +240,9 @@ scope 는 대상 프로젝트의 `./CLAUDE.md` 를 건드리지 않고, user sco
 | web/ | 7 | **조건부** | `paths`(tsx/jsx/vue/svelte/css/scss/sass/less/html) 매칭 시 로드 |
 | react-native/ | 8 | **조건부** | React Native/Expo 확장 (accessibility·production-readiness 포함) |
 | python/ | 5 | **조건부** | `paths`(py/pyi) 매칭 시 로드 |
+| java/ | 2 | **조건부** | `paths`(java, build.gradle(.kts), pom.xml) 매칭 시 로드 |
 
-**항상 로드되는 rules**: 16개 (CLAUDE.md 포함 시 17개, 실측 56,532B — `tests/run.sh` T26 예산 상한으로 강제)
+**항상 로드되는 rules**: 16개 (CLAUDE.md 포함 시 17개, 실측 56,789B — `tests/run.sh` T26 예산 상한으로 강제)
 
 `common/karpathy-guidelines.md` 는 Andrej Karpathy의 관찰에서 파생된, LLM 코딩의 흔한 실패(추측성
 코드·과잉 수정·불명확한 목표)를 줄이기 위한 행동 지침이며, `paths` frontmatter가 없어 **설치된
@@ -254,6 +255,19 @@ Changes·Goal-Driven Execution)의 상세는 그 파일을 참조한다. `common
 **주의 — react-native/ 와 웹 규칙의 glob 겹침**: RN 소스도 `.ts(x)`라서 react-native 규칙 역시 `**/*.ts(x)`를 사용한다(확장자로는 구분 불가). 따라서 순수 웹 프로젝트에서도 TS 파일 편집 시 RN 규칙이 함께 로드된다. 웹 전용 프로젝트라면 설치 후 `.claude/rules/react-native/` 를 삭제한다 (RN 프로젝트에서는 반대로 web/ 삭제 가능). 단, 재설치하면 누락 파일로 간주되어 자동 복원되므로 그때 다시 삭제해야 한다.
 
 자세한 구조는 [`rules/README.md`](./rules/README.md)를 참조한다.
+
+### 백엔드 지원
+
+백엔드 프로젝트(Python·Java)에서는 규칙과 검증 명령이 그 프로젝트가 이미 고른 도구와 버전을 따른다.
+
+| 주제 | 어디에 있나 | 하는 일 |
+|------|------------|--------|
+| Python 규칙 | `rules/python/` 5개 | 프로젝트의 파이썬 버전·테스트 도구(pytest·unittest)·린터를 따른다 |
+| Java 규칙 | `rules/java/` 2개 | 빌드 파일의 언어 수준에서 컴파일되는 문법만 쓰고, 쓰고 있는 JUnit 세대를 따른다 |
+| 검증 명령 감지 | `/prp-implement`·`/code-review` | `uv.lock`·`poetry.lock`·`./gradlew`·`./mvnw` 를 알아보고, JDK 불일치 같은 빌드 환경 실패는 `Blocked (env)` 로 따로 적는다 |
+| 백엔드 위험 | 설계서 「Backend Changes」·검수 「백엔드 패턴」 | 트랜잭션·동시 갱신·API 하위 호환·DB 마이그레이션 안전성을 설계와 검수에서 확인한다 |
+
+이 저장소 허브 코드의 Python 관례는 배포되지 않는 허브 폴더의 `CLAUDE.md` 에 있다(아래 파일 구조 참고).
 
 ### secure coding 구성
 
@@ -391,7 +405,7 @@ coding-harness/
 ├── VERSION                        # 릴리스 번호 정본(SemVer 한 줄) — 릴리스할 때만 올린다 (배포 대상 아님)
 ├── CLAUDE.md                      # 프로젝트 지침(배포 대상 아님) — coding-harness 자신의 아키텍처·검증 명령
 ├── removals.txt                   # 툼스톤 목록 — 레포에서 제거된 관리 파일의 대상측 삭제 대상 (배포 대상 아님)
-├── rules/                         # 46개 규칙 (JS/TS·React·웹·RN/Expo·Python 스택 큐레이션 + workflow)
+├── rules/                         # 48개 규칙 (JS/TS·React·웹·RN/Expo·Python·Java 스택 큐레이션 + workflow)
 │   ├── README.md                  # rules 구조 설명
 │   ├── common/                    # 언어 무관 (11개, karpathy-guidelines 포함)
 │   ├── workflow/                  # 범용 개발 워크플로우 (4개, 항상 로드)
@@ -399,7 +413,8 @@ coding-harness/
 │   ├── react/                     # React 전용 (5개, 조건부 로드)
 │   ├── react-native/              # React Native/Expo 전용 (8개, 조건부 로드)
 │   ├── web/                       # 웹 프론트엔드 전용 (7개, 조건부 로드)
-│   └── python/                    # Python 전용 (5개, 조건부 로드)
+│   ├── python/                    # Python 전용 (5개, 조건부 로드)
+│   └── java/                      # Java 전용 (2개, 조건부 로드)
 ├── agents/                        # 4개 에이전트
 │   ├── design-architect.md
 │   ├── implementer.md
@@ -415,8 +430,9 @@ coding-harness/
 │   ├── harness-update.md
 │   └── hub.md
 ├── hub/                            # 통합 허브 — 별도 설치(hub/README.md). 진행 기록(대시보드)
-│                                   #   자산도 이 안에서 배포된다(hub/bin·hub/rules)
-├── docs/prps/                      # 설계·조사 문서 96개 — coding-harness.md·hub-dashboard.md·
+│                                   #   자산도 이 안에서 배포된다(hub/bin·hub/rules). hub/CLAUDE.md 는 배포되지 않는
+│                                   #   허브 코드 관례(이 저장소 전용)
+├── docs/prps/                      # 설계·조사 문서 97개 — coding-harness.md·hub-dashboard.md·
 │   │                               #   dashboard-rationale.md 등
 │   └── ab-artifacts/               # 모델×스캐폴딩 A/B 실험 원본 6건 — 승인된 설계가 아니다
 ├── docs/images/                    # hub/README.md 의 스크린샷 3장 — 허브 화면 2장은 가상 데이터, 진행 기록 화면 1장은 이 저장소 자신의 작업 기록

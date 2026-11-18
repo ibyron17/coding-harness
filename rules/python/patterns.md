@@ -7,48 +7,30 @@ paths:
 
 > This file extends [common/patterns.md](../common/patterns.md) with Python specific content.
 
-## Pure Modules vs. I/O Modules
+## Expected Failures Get Their Own Exception
 
-Separate modules that touch the filesystem, clock, or environment from modules that don't. Mark
-a pure module in its docstring so the boundary is explicit and checkable:
+Give an expected failure its own exception class instead of letting a raw `OSError`, `KeyError`, or
+driver error propagate. At an API boundary, translate it once (e.g. a FastAPI exception handler) into
+the error format the API already uses — never send the internal message or traceback to the client.
 
-```python
-"""hub_model.py — 허브 스냅샷 계약(HubSnapshot·HubConfig)과 그 직렬화·렌더(순수).
+## Validate at the Boundary
 
-이 모듈은 파일시스템·시각·환경변수에 닿지 않는다(★순수, tests/hub/test_hub_model.py 대상).
-"""
-```
+Parse request bodies, configuration, and external responses into typed models at the edge (pydantic
+where the project uses it); inner layers take those models, not raw dicts.
 
-(`hub_model.py`'s own module docstring; the boundary is enforced mechanically, not just
-documented — `tests/run.sh: T25-10` fails the suite if a `★순수` module imports
-`open`/`Path`/`os`)
+## Never Block the Event Loop
 
-## Cross-Module Contracts
+Inside `async def`, never call blocking I/O — `requests`, `time.sleep`, a synchronous DB driver, large
+file reads. Use the async client the project already has, or offload the call (`asyncio.to_thread`,
+Starlette's `run_in_threadpool`). In FastAPI a plain `def` endpoint already runs in a thread pool; an
+`async def` endpoint does not.
 
-Let separate modules communicate only through frozen dataclasses, never through ad-hoc dicts
-(see [coding-style.md](coding-style.md) for the `@dataclass(frozen=True)` convention). A module
-header should say which dataclass is the contract and with whom (`hub_model.py` header).
+## Dependencies Through the Framework
 
-## Expected Failures
+Get DB sessions, clients, and settings through the framework's injection mechanism (FastAPI `Depends`,
+etc.) rather than module-level globals, so tests can override them.
 
-Give an expected failure its own exception class instead of letting a raw `OSError` propagate,
-when there is no lower-tier fallback to absorb it:
+## Leaf Modules Break Import Cycles
 
-```python
-class HubCollectError(Exception):
-    """collect 파이프라인에서 예상된 실패(배포 자산 누락 등)를 나타낸다."""
-```
-
-(`hub_collect.py: HubCollectError` — anchor on the exception class name, not a line range)
-
-## Leaf Modules Break Cycles
-
-If two modules would otherwise import each other, extract the shared piece into a module that
-imports nothing else from the package (a leaf module):
-
-```python
-"""hub_server_state.py — ... 어떤 허브 모듈도 임포트하지 않는 **잎 모듈**이다."""
-```
-
-(`hub_server_state.py` module docstring — the "잎 모듈" claim itself, not necessarily the
-docstring's first line)
+If two modules would otherwise import each other, move the shared piece into a module that imports
+neither of them.

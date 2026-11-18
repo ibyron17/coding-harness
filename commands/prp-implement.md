@@ -25,9 +25,13 @@ Execute a plan file step-by-step with continuous validation. Every change is ver
 | `pnpm-lock.yaml` | pnpm | `pnpm run` |
 | `yarn.lock` | yarn | `yarn` |
 | `package-lock.json` | npm | `npm run` |
-| `pyproject.toml` or `requirements.txt` | uv / pip | `uv run` or `python -m` |
+| `uv.lock` | uv | `uv run` |
+| `poetry.lock` | poetry | `poetry run` |
+| `pyproject.toml` or `requirements.txt` (no lock above) | pip | `python -m` |
 | `Cargo.toml` | cargo | `cargo` |
 | `go.mod` | go | `go` |
+| `gradlew` or `build.gradle` / `build.gradle.kts` | gradle | `./gradlew` (wrapper first; `gradle` only when there is none) |
+| `mvnw` or `pom.xml` | maven | `./mvnw` (wrapper first; `mvn` only when there is none) |
 
 ### Validation Scripts
 
@@ -39,6 +43,12 @@ cat package.json | grep -A 20 '"scripts"'
 ```
 
 Note available commands for: type-check, lint, test, build.
+
+JVM builds have no scripts block — map the plan's validation levels to lifecycle tasks: type check
+`./gradlew testClasses` / `./mvnw -q test-compile`; tests `./gradlew test [--tests '<Class>']` /
+`./mvnw test [-Dtest=<Class>]`; build `./gradlew build -x test` / `./mvnw -q verify -DskipTests`.
+Python: the tools `pyproject.toml` configures (`[tool.pytest.ini_options]`, `[tool.ruff]`,
+`[tool.mypy]`), run through the runner above.
 
 ---
 
@@ -56,6 +66,7 @@ Extract these sections from the plan:
 - **Files to Change** — What to create or modify
 - **Step-by-Step Tasks** — Implementation sequence
 - **Security Considerations** — mitigations to build and negative tests to write (skip if N/A)
+- **Backend Changes** — transaction, concurrency, compatibility, and migration decisions to build and verify (skip if N/A)
 - **Validation Commands** — How to verify correctness
 - **Acceptance Criteria** — Definition of done
 
@@ -358,6 +369,7 @@ Report to user:
 4. Continue only when clean
 
 ### Build Fails
+0. If the cause is the environment — JDK or build-tool version mismatch, dependency repository unreachable — stop and report the first error line. Don't edit build files or build settings to get past it (wrapper version, language level, dependency/plugin versions, repository URLs, JVM options, …).
 1. Usually a type or import issue — check error message
 2. Fix the offending file
 3. Re-run build

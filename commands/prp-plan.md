@@ -349,6 +349,17 @@ Code patterns discovered in the codebase. Follow these exactly.
 
 Negative test form — backend: a malicious request gets a rejection and data is unchanged; frontend: a malicious string renders as text, never as script, and a `javascript:` URL never becomes a link or navigation target.
 
+## Backend Changes
+
+`N/A — [one-line reason]` when no server, API, or database code changes; otherwise fill only the rows that apply.
+
+| Area | Applies? | Decision → how it is verified |
+|---|---|---|
+| Transaction boundary — which writes commit together, what a partial failure leaves behind; no remote calls inside the transaction | | |
+| Concurrent updates — two requests changing the same row/resource (conditional update, lock, unique constraint) | | |
+| API compatibility — changed request/response fields, status codes, error format; how existing clients keep working (additive change, versioning, deprecation window) | | |
+| Migration safety — old and new code both run against the schema during rollout (expand → migrate → contract); lock/size impact on large tables; rollback path | | |
+
 ---
 
 ## Testing Strategy
@@ -395,10 +406,12 @@ EXPECT: No regressions
 
 ### Database Validation (if applicable)
 ```bash
-# Verify schema/migrations
+# Apply the migration to a scratch copy of the current schema with the project's own tool, then roll it back —
+# Alembic: alembic upgrade head / alembic downgrade -1; Flyway or Liquibase: the project's migrate/validate task;
+# hand-written SQL patch files: apply them in order to a scratch database
 [project-specific db command]
 ```
-EXPECT: Schema up to date
+EXPECT: Migration applies and rolls back on a scratch database; the currently deployed code still works against the migrated schema
 
 ### Browser Validation (if applicable)
 ```bash
@@ -493,6 +506,7 @@ Before finalizing, verify the plan against these checklists:
 - [ ] Test patterns identified
 - [ ] Dependencies listed
 - [ ] Security Considerations filled, or N/A with a one-line reason
+- [ ] Backend Changes filled, or N/A with a one-line reason
 
 ### Implementation Readiness
 - [ ] Every task has ACTION, IMPLEMENT, MIRROR, and VALIDATE

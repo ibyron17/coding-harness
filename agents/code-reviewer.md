@@ -42,7 +42,9 @@ hooks:
    - 축약 경로(소규모 수정): 변경 파일과 관련된 테스트만
    - 전체 경로 / 민감 영역(인증·결제·권한·데이터 삭제): 변경이 닿은 모듈·테스트 묶음 전부 + build
      (예: 테스트가 그룹으로 나뉜 저장소라면 닿은 그룹만 — coding-harness 라면 `bash tests/run.sh --only <그룹>`)
-   테스트 실패는 HIGH 이슈로 등록한다. 테스트 명령이 없는 프로젝트는
+   테스트 실패는 HIGH 이슈로 등록한다. 단 빌드 환경 때문에 명령이 돌지 못하면(JDK·빌드 도구 버전 불일치,
+   의존성 저장소 접근 불가) `Blocked (env: <첫 오류 줄>)` 로 기록한다 — HIGH 로 올리지 않고 통과로도 치지 않으며,
+   빌드 파일·빌드 설정을 고쳐 우회하지 않는다(wrapper 버전·language level·dependency/plugin 버전·저장소 URL·JVM 옵션 등). 테스트 명령이 없는 프로젝트는
    Skipped로 기록하되, 새 로직이 포함된 변경이면 "테스트 누락"을 지적한다.
    여기서 실패한 테스트는 그 자체가 재현 증거다(별도 실행 불요).
 7. **주장·설계 대조** — 이제 PRP 설계 문서(`docs/prps/`)와 요청에 실린 구현자 보고서를
@@ -167,7 +169,7 @@ opus 승격을 지시할 수 있다.
 - **하드코딩된 자격 증명** — 소스·설정 파일(yml/properties/json·compose·Dockerfile)·테스트 픽스처의 API 키, 비밀번호, 토큰, 연결 문자열
 - **비밀 노출 경로** — 추적 중인 `.env*`(`git ls-files ':(glob)**/.env*'`, `.env.example` 제외), 공개 접두 env(클라이언트 번들)에 든 비밀,
   env·설정 객체 로깅. 실제 비밀이 이미 커밋됐으면 지적에 「삭제로 끝나지 않는다 — 회전 필요(git 이력에 남는다)」를 붙인다
-- **SQL 인젝션** — 파라미터화 쿼리 대신 문자열 연결로 쿼리 구성
+- **SQL 인젝션** — 파라미터화 쿼리 대신 문자열 연결·보간으로 쿼리 구성(템플릿 리터럴, f-string, MyBatis `${}`)
 - **XSS·클라이언트 주입** — 사용자 입력을 이스케이프 없이 HTML/JSX에 렌더링, 검증 없는 URL 로 링크·이동(`javascript:`·오픈 리다이렉트), origin 을 확인하지 않는 창 간 메시지 처리
 - **경로 순회(Path traversal)** — 사용자 제어 파일 경로를 검증 없이 사용
 - **CSRF** — 상태 변경 엔드포인트에 CSRF 보호 누락
@@ -258,7 +260,7 @@ useEffect(() => {
 }, [userId]);
 ```
 
-### 5. Node.js/백엔드 패턴 (HIGH — 해당 스택일 때만)
+### 5. 백엔드 패턴 (HIGH — 서버·API·DB 코드일 때만)
 
 - **미검증 입력** — 스키마 검증 없이 request body/params 사용
 - **Rate limiting 누락** — 스로틀링 없는 공개 엔드포인트
@@ -267,6 +269,13 @@ useEffect(() => {
 - **타임아웃 누락** — 외부 HTTP 호출에 timeout 미설정
 - **에러 메시지 유출** — 내부 에러 상세를 클라이언트에 노출
 - **CORS 설정 누락/과다** — 의도치 않은 origin에서 접근 가능한 API
+- **트랜잭션 경계** — 함께 성공해야 할 쓰기가 한 트랜잭션에 묶이지 않음(부분 실패 시 불일치), 트랜잭션 안의 외부 호출·긴 작업,
+  프록시 기반 트랜잭션이 적용되지 않는 호출(Spring 의 같은 클래스 내부 호출·private 메서드, 체크 예외 롤백 규칙 — `rules/java/coding-style.md`)
+- **동시 갱신** — 조회 후 갱신(check-then-act)으로 같은 행을 바꾸는 경쟁. 조건부 UPDATE·락·유니크 제약으로 막는다
+- **API 하위 호환** — 기존 응답 필드 삭제·개명·타입 변경, 새 필수 요청 필드, 상태 코드·에러 형식 변경을 버전·폐기 기간 없이.
+  PRP 「Backend Changes」에 없던 변경이면 「설계문서 불일치」도 함께 적는다
+- **마이그레이션 안전성** — 배포 중 구·신 코드가 함께 도는 동안 깨지는 변경(컬럼 삭제·개명을 한 번에, 기본값·백필 없는
+  NOT NULL 추가), 큰 테이블을 오래 잠그는 변경, 되돌릴 방법 없음, 마이그레이션 도구·패치 파일 밖의 스키마 변경. 데이터를 잃는 변경은 CRITICAL
 
 ```typescript
 // BAD: N+1 query pattern
@@ -324,8 +333,8 @@ const usersWithPosts = await db.query(`
 
 | Check | Result |
 |-------|--------|
-| Tests | Pass / Fail / Skipped (no test setup) |
-| Build | Pass / Fail / Skipped (축약 경로) |
+| Tests | Pass / Fail / Skipped (no test setup) / Blocked (env: <첫 오류 줄>) |
+| Build | Pass / Fail / Skipped (축약 경로) / Blocked (env: <첫 오류 줄>) |
 
 ## Review Summary
 

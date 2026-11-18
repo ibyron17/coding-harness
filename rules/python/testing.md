@@ -9,46 +9,33 @@ paths:
 
 ## Framework
 
-Use stdlib **`unittest`** as the default framework — not pytest. This repo's own Python tests run
-on it exclusively — every `test_*.py` module under `tests/hub/` — in line with
-the "Standard Library First" rule in [python/coding-style.md](coding-style.md). Adopt pytest only
-as an explicit decision recorded in the project's own `CLAUDE.md` (see the "Rule Priority" section
-of [rules/README.md](../README.md), which defines the Language note convention).
+Use the test framework the project already uses — don't convert existing tests or add a second runner.
 
-```bash
-python3 -m unittest discover -s <dir> -t <root>
-```
+- **pytest** — `[tool.pytest.ini_options]` in `pyproject.toml`, a `pytest.ini`, a `conftest.py`, or
+  pytest in the dev dependencies.
+- **unittest** — test classes subclass `unittest.TestCase` and no pytest configuration exists.
 
-(`tests/run.sh: test_hub_unit_tests()` / T24 — anchor on the function name, not a line
-number)
+A project with no tests yet: default to **pytest**, and record the choice in the project's
+`CLAUDE.md` so later sessions don't decide it again.
 
-## Test Isolation
+## Running
 
-Isolate tests that touch module-level state by swapping the module constants in `setUp` and
-restoring them in `tearDown`, rather than mocking the module itself:
+Run through the project's environment manager so the pinned dependencies are used — `uv run …` when
+`uv.lock` exists, `poetry run …` when `poetry.lock` exists, otherwise `python -m …` (`python -m pytest`,
+`python -m unittest discover -s <dir> -t <root>`). Narrow to the affected path first, then run the
+whole suite.
 
-```python
-def setUp(self) -> None:
-    self.original_events_dir = hub_collect.EVENTS_DIR
-    hub_collect.EVENTS_DIR = self.temp_dir / "events"
+## Async Tests
 
-def tearDown(self) -> None:
-    hub_collect.EVENTS_DIR = self.original_events_dir
-```
+Follow the async plugin and mode the configuration already sets (e.g. pytest-asyncio's
+`asyncio_mode`); don't add event-loop fixtures the configuration already provides.
 
-(`test_hub_hook.py`, `HubHookScenarioTest.setUp` / `tearDown`)
+## Isolation
 
-## Mocking
-
-Use `unittest.mock.patch.object` to replace a specific module function, and `mock.patch` for
-dotted paths (`subprocess.Popen`, `sys.stdin`):
-
-```python
-with mock.patch.object(hub_collect, "collect_snapshot") as mock_collect_snapshot:
-    ...
-```
-
-(`test_hub_hook.py`, `SpawnsBackgroundCollectTest`)
+- Replace the narrowest seam — an attribute of the module under test (pytest `monkeypatch`,
+  `unittest.mock.patch.object`) — and restore it after the test.
+- Unit tests make no real network or database calls; reach those only through the project's existing
+  integration-test setup (its fixtures, containers, or test database).
 
 ## Structure
 

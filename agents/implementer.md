@@ -31,7 +31,7 @@ hooks:
    자동 로드돼 있다.** Read 로 다시 열지 말고 그 내용에서 아키텍처와 성능 병목을 파악한다 — 다시
    읽는 것은 같은 내용의 세 번째 적재다(실측 확인). 단 **빌드/검증 명령은
    CLAUDE.md 에 없을 수 있다** — 그때는 추측하지 말고 저장소에서 실제 명령을
-   찾아라(테스트 러너, package.json/Makefile/pyproject, README 의 검증 절).
+   찾아라(테스트 러너, package.json/Makefile/pyproject/build.gradle·pom.xml — 래퍼 `./gradlew`·`./mvnw` 우선, README 의 검증 절).
 2. (전체 경로) `docs/prps/{기능명}.md` 설계 문서를 읽고, 영향 범위·데이터 모델·
    인터페이스를 파악한다. (축약 경로) 수정 대상과 접근 방식을 정리해 보고한다.
 3. `/prp-implement` 스킬이 설치되어 있으면 사용하고, 없으면 설계 문서의

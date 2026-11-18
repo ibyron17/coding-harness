@@ -7,43 +7,30 @@ paths:
 
 > This file extends [common/security.md](../common/security.md) with Python specific content.
 
-## Don't Log Prompts or Credentials in Plaintext
-
-If a tool logs prompt text or other user input, disclose the cap, retention period, and an
-opt-out in its install-time notice (see `commands/hub.md`'s hook-install disclosure for a
-worked example), and mask known secret token shapes before writing the log line — see
-`hub_redact.redact_secret_tokens` for the reference implementation.
-
 ## Subprocess: argv List, Never a Shell
 
-Pass a list of arguments to `subprocess.run`/`subprocess.Popen`. Never build a shell command string
-(shell injection risk, and portability loss):
+Pass a list of arguments to `subprocess.run`/`subprocess.Popen` and keep `shell=False`. Never build a
+command string out of input (shell injection, and portability loss).
 
-```python
-subprocess.run(
-    ["security", "find-generic-password", "-s", KEYCHAIN_SERVICE_NAME, "-w"],
-    capture_output=True, text=True, timeout=KEYCHAIN_TIMEOUT_SECONDS, check=False,
-)
-```
+## SQL: Bind Parameters
 
-(`hub_usage_fetch.py`, the `subprocess.run` call shown above — anchor on the call site,
-not a line range)
+Use the driver's or ORM's parameter binding — `cursor.execute(sql, params)`, SQLAlchemy
+`text("... WHERE id = :id")` with bound values. Never format input into SQL with f-strings, `%`, or
+`.format()`. An identifier that must vary (a sort column) comes from a fixed whitelist.
 
 ## No Path Assembly From Request Strings
 
-When serving files, never build a filesystem path out of a request string. Extract only a
-constrained token (e.g. a fixed-length hex key) and use it solely as a lookup key into a
-whitelist dictionary — the request string itself never reaches the filesystem:
+Never build a filesystem path directly from request data. Either map a constrained token (a
+fixed-length key) to a whitelisted path, or resolve the joined path and confirm it stays under the
+base directory (`resolved.is_relative_to(base)`, 3.9+).
 
-```python
-ALLOWED_REQUEST_PATHS = ("/", "/hub.html")
-PROJECT_DASHBOARD_PATH_PATTERN = re.compile(r"^/project/([0-9a-f]{16})/dashboard\.html\Z")
-```
+## Untrusted Data: Safe Loaders Only
 
-(`hub_server.py`, the `ALLOWED_REQUEST_PATHS`/`PROJECT_DASHBOARD_PATH_PATTERN` constants
-shown above — anchor on the constant names, not line numbers)
+`yaml.safe_load`, never `yaml.load`, `pickle`, or `eval` on data from outside the process.
 
-## Keep Tokens in Local Variables
+## Secrets and Logs
 
-Don't assign a credential or token to a module-level variable — keep it scoped to the function
-that needs it, so it can't be read back by unrelated code later in the process lifetime.
+- Read secrets from the environment or the project's settings object inside the function that needs
+  them; don't keep them in module-level variables.
+- Never log credentials. If a tool logs user prompts or other free text, mask token-shaped values
+  before writing, and disclose the size cap, retention, and opt-out where the tool is installed.

@@ -15,7 +15,7 @@ set -euo pipefail
 
 REPO_ROOT="$(cd "$(dirname "$0")" && pwd)"
 readonly REPO_ROOT
-readonly RULES_FILE_COUNT=46
+readonly RULES_FILE_COUNT=48
 readonly AGENTS_FILE_COUNT=4
 readonly COMMANDS_FILE_COUNT=8
 readonly MAX_DIFF_LINES=20

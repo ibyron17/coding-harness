@@ -323,7 +323,11 @@ trap suite_exit_guard EXIT
 # 메인·서브에이전트 모두가 행동하는 내용이고, 확장 체크 항목은 스택 중립 보편 원칙이며, 비밀값 사고의 주 경로인 설정
 # 1줄 변경은 메인 세션이 워크플로우 없이 직접 하므로 common 층이 정본이다(사용자 결정 2026-11-08 — A 안). 이 값도
 # 편집 후 재측정한 실측치다(PRP 예상 56,532B 와 일치).
-readonly ALWAYS_ON_CONTEXT_BUDGET_BYTES=56532
+# 56532 → 56789(+257B, docs/prps/backend-stack-support.md D2·D4): rules/README.md 에 java 트랙 반영(구조도 줄·굵은 목록·
+# 조건부 로드 불릿, 문서 첫 문단 개정)과 CLAUDE.md 에 `hub/CLAUDE.md` 포인터 1문장·수량(46→48)을 더했다. 근거: 포인터는 하위 디렉토리
+# CLAUDE.md 가 `tests/hub/*.py` 만 여는 작업에는 붙지 않아서 상시 컨텍스트에서 그 파일을 찾아가게 하려는 것이고, README 는
+# 조건부 로드 목록이 실제 배포와 어긋나지 않게 하려는 것이다. 이 값도 편집 후 재측정한 실측치다(PRP 추정 56,774B 보다 15B 많다).
+readonly ALWAYS_ON_CONTEXT_BUDGET_BYTES=56789
 
 # 허브 진행 기록 규칙 파일 증분 상한 래칫(T40-5, docs/prps/dashboard-into-hub.md HD2·HD10).
 # 옛 DASHBOARD_MD_BUDGET_BYTES(T22-163, dashboard.md 대상)를 승계한다 — dashboard.md 자체가
@@ -634,7 +638,10 @@ readonly MUTATION_HARNESS_GROUP="T37"
 # 152 → 153(hub-bg-wait-passive-watch.md, 결정 PW1): 신규 가드 T25-295(깨우는 종류에 monitor 가 없다 — 역)의 변조행 1건을 붙였다. T25-251 은 원래 변조행이라 같은 ID 로
 # 변조 sed 리터럴만 새 상수 값에 맞춰 옮겼다. T99-6 은 이 상수 인용을 바꾼 수정에 맞춰 sed 리터럴을 옮겼다. 순증가 1. 동시 작업(hub-dashboard-multi-task)이 먼저 T25-294 를
 # 써서 이 기능의 가드는 develop 병합 뒤 T25-295 로 확정했다.
-readonly LEDGER_MUTATION_ROW_FLOOR=153
+#
+# 153 → 154(backend-stack-support.md D6): 신설 가드 T38-6(rules 언어 트랙의 저장소 내부 참조 부재)의 변조행 1건을 붙였다. 개정한 T38-1·T38-2·T39-4 는
+# 같은 ID 라 변조 sed 만 새 본문에 맞춰 옮겼다. T99-6 은 이 상수 인용을 바꾼 수정에 맞춰 sed 리터럴을 옮겼다. 순증가 1.
+readonly LEDGER_MUTATION_ROW_FLOOR=154
 
 # 원장 면제행 수의 상한 래칫(T37-14 가 실행마다 검사, PRP §12 「면제행이 영구 도피처가
 # 된다」의 두 번째 완화). 착지 시점 실측 390. 신규 가드를 기존 공통 사유로 면제 등록하면
@@ -734,7 +741,11 @@ readonly LEDGER_MUTATION_ROW_FLOOR=153
 # 370 → 368 로 내린 이유(hub-dashboard-multi-task.md 1회차 검수 반영 — T22-24·T22-53 변조행 승급): 위 문단이 면제 사유로 든 「한 파일만 바꾸는 변조로
 # 재현되지 않는다」는 T22-24(<ol class="steps"> 는 렌더러에만 있다)·T22-53(syncTasks 본문은 템플릿에만 있다)에는 사실이 아니었다 — 검수자가 단일 파일
 # 변조로 재현됨을 확인해 두 가드를 변조행으로 승급시켰다. 내리는 방향이라 의무는 아니지만 위 항목들과 나란히 적는다.
-readonly LEDGER_EXEMPT_ROW_RATCHET=368
+#
+# 368 → 369 로 올린 이유(backend-stack-support.md D6 — 신설 T31-14 면제행): 스택 규칙 파일이 paths: frontmatter 를 잃지 않았는지 보는 정적 grep
+# 가드다. T31-10~13 과 같은 사용자 결정(2026-10-08, 전체 검사 시간 보호)에 따라 변조행이 아니라 면제행으로 등록하고, 변조 검증은 구현 시 수동 1회로
+# 대신했다.
+readonly LEDGER_EXEMPT_ROW_RATCHET=369
 
 # 소스에서 추출되는 서브체크 ID 수의 하한(T37-11 이 실행마다 검사). 실측 399 — S3b 가
 # 신규 가드 5종(T28-4 · T31-6 · T36-8 · T36-9 · T36-10)을 붙여 394 에서 올렸다(그 394 는
@@ -1012,7 +1023,9 @@ readonly LEDGER_EXEMPT_ROW_RATCHET=368
 # 576 → 577(secure-coding-agents.md §9-1, 결정 SC9): 신설 1건 T31-13(secure coding 계약 토큰 — 에이전트 4종·커맨드 3종·상시 규칙·web 규칙의 뼈대 45개).
 # 순증가 1. collect_guard_ids 를 그대로 재현해 편집 전(576)·후(577) 재측정한다 — 차집합은 T31-13 하나다. 원장에는 변조행이 아니라 면제행 1건으로
 # 등록했다(T31-10~12 와 같은 사용자 결정 2026-10-08, 전체 검사 시간 보호) — 변조 검증은 구현 시 수동 1회(같은 문서 §9-2).
-readonly SOURCE_GUARD_ID_FLOOR=577
+# 577 → 579(backend-stack-support.md D6): 신설 2건 T31-14(스택 규칙의 paths: frontmatter — 면제행)·T38-6(rules 언어 트랙의 저장소 내부 참조 부재 — 변조행).
+# 순증가 2. 개정한 T38-1·T38-2 는 같은 ID 라 개수에 닿지 않는다. collect_guard_ids 를 그대로 재현해 편집 전(577)·후(579) 재측정한다.
+readonly SOURCE_GUARD_ID_FLOOR=579
 
 # 배포 트리(rules/·agents/·commands/)에 남는 "파일명:줄번호" 형태 인용 수의 상한
 # 래칫(T39-4). 배포되는 문서가 다른 파일의 줄 번호를 인용하면, 그 파일을 고치는 수정이
@@ -1414,11 +1427,11 @@ test_scope_project_new_install() {
     return 1
   fi
 
-  # rules 46개 확인
+  # rules 48개 확인
   local rules_count
   rules_count=$(count_files_recursive "./.claude/rules")
-  if ! assert_equals 46 "$rules_count" "rules 파일 개수"; then
-    record_failure "$test_name" "rules 파일 개수: 기대=46, 실제=$rules_count"
+  if ! assert_equals 48 "$rules_count" "rules 파일 개수"; then
+    record_failure "$test_name" "rules 파일 개수: 기대=48, 실제=$rules_count"
     return 1
   fi
 
@@ -1573,11 +1586,11 @@ test_partial_damage_recovery() {
     return 1
   fi
 
-  # rules 46개 확인
+  # rules 48개 확인
   local rules_count
   rules_count=$(count_files_recursive "./.claude/rules")
-  if ! assert_equals 46 "$rules_count" "rules 파일 개수"; then
-    record_failure "$test_name" "rules 파일 개수: 기대=46, 실제=$rules_count"
+  if ! assert_equals 48 "$rules_count" "rules 파일 개수"; then
+    record_failure "$test_name" "rules 파일 개수: 기대=48, 실제=$rules_count"
     return 1
   fi
 
@@ -1634,11 +1647,11 @@ test_scope_project_ignores_existing_claude_md() {
     return 1
   fi
 
-  # rules 46개 설치 확인 — CLAUDE.md 존재 여부와 무관하게 정상 설치된다(현행 "미생성" 단언의 반전)
+  # rules 48개 설치 확인 — CLAUDE.md 존재 여부와 무관하게 정상 설치된다(현행 "미생성" 단언의 반전)
   local rules_count
   rules_count=$(count_files_recursive "./.claude/rules")
-  if ! assert_equals 46 "$rules_count" "rules 파일 개수"; then
-    record_failure "$test_name" "rules 파일 개수: 기대=46, 실제=$rules_count"
+  if ! assert_equals 48 "$rules_count" "rules 파일 개수"; then
+    record_failure "$test_name" "rules 파일 개수: 기대=48, 실제=$rules_count"
     return 1
   fi
 
@@ -11900,10 +11913,16 @@ PYEOF
 # 등록 방식은 T31-10 과 같다(면제행, 구현 시 수동 변조 1회 — 같은 문서 §9-2). 한계: 토큰의 **존재만** 본다 — 같은 뜻을 다른
 # 낱말로 되돌리는 편집, 토큰은 두고 의미를 뒤집는 편집(「돌리지 않는다」→「돌린다」), 에이전트가 계약을 실제로 지키는지는
 # 보지 못한다(같은 문서 §9-3 설치 후 수락 시험의 몫). 위양성이 나면 고칠 것은 대상 문단이 아니라 토큰 목록이다.
+#
+# T31-14(docs/prps/backend-stack-support.md D6)는 T31-2 의 짝이다 — T31-2 는 상시 로드여야 할 workflow 에 paths: 가 없음을,
+# 이 검사는 조건부여야 할 스택 규칙(rules/ 아래 common·workflow 를 뺀 디렉토리의 .md 전부)이 `---` 로 시작하고 frontmatter 에
+# paths: 줄을 가짐을 본다. 스택 파일이 frontmatter 를 잃으면 모든 세션에 상시 로드되는데, T26 의 상시 집합에는 들지
+# 않아 예산 래칫도 그것을 보지 못한다. 등록 방식은 T31-10 과 같다(면제행, 구현 시 수동 변조 1회). 한계: paths: 줄의
+# **존재만** 본다 — glob 이 옳은지(예: 너무 넓은 `**/*`)는 보지 못한다.
 test_rules_workflow_guardrails() {
   group_failures=()   # 앞 그룹이 조기 return 했을 때의 잔여물 제거
   local test_name="T31"
-  local test_desc="워크플로우 지침 고정 래칫 (T31-1~T31-13)"
+  local test_desc="워크플로우 지침 고정 래칫 (T31-1~T31-14)"
   log_test_name "$test_name" "$test_desc"
 
   # ---- T31-1: rules/workflow/ 4파일 존재 — 파일명 리터럴 고정, 개명·누락이 곧 실패 ----
@@ -11921,6 +11940,18 @@ test_rules_workflow_guardrails() {
   if [[ -n "$paths_frontmatter_hits" ]]; then
     note_failure "T31-2: rules/workflow/ 에 paths: frontmatter 가 있음(조건부 로드로 전락) — $paths_frontmatter_hits"
   fi
+
+  # ---- T31-14: 스택 규칙(common·workflow·README 제외)은 모두 `---` 로 시작하고 frontmatter 에 paths: 가 있다 —
+  # 없으면 조건부 규칙이 조용히 상시 로드로 바뀌고 T26 도 그것을 보지 못한다(T31-2 의 짝) ----
+  local stack_rule_file
+  while IFS= read -r stack_rule_file; do
+    local stack_rule_first_line stack_rule_frontmatter
+    stack_rule_first_line=$(head -n 1 "$stack_rule_file")
+    stack_rule_frontmatter=$(awk 'NR == 1 { next } $0 == "---" { exit } { print }' "$stack_rule_file")
+    if [[ "$stack_rule_first_line" != "---" ]] || ! grep -qE '^paths:' <<< "$stack_rule_frontmatter"; then
+      note_failure "T31-14: 스택 규칙에 paths: frontmatter 가 없음(상시 로드로 전락) — ${stack_rule_file#"$REPO_ROOT"/}"
+    fi
+  done < <(find "$REPO_ROOT/rules" -mindepth 2 -type f -name '*.md' ! -path "*/rules/common/*" ! -path "*/rules/workflow/*" | sort)
 
   # ---- T31-3: install.sh 에 $REPO_ROOT/CLAUDE.md 리터럴 0건 — CLAUDE.md 배포 부활 차단.
   # 은퇴 로직은 레포 원본을 읽지 않는다(대장·센티널 판정이므로) — 이 0건이 성립하는 이유.
@@ -12041,6 +12072,7 @@ test_rules_workflow_guardrails() {
     "agents/code-reviewer.md"   "[재현]"
     "agents/code-reviewer.md"   "미검증 주장"
     "agents/code-reviewer.md"   "사유 범주"
+    "agents/code-reviewer.md"   "Blocked (env"
     "commands/code-review.md"   "Reproduction"
     "agents/implementer.md"     "사전 조건"
     "agents/implementer.md"     "RED 실행 명령"
@@ -15766,6 +15798,7 @@ readonly README_PROSE_DECLARATIONS=(
   '`react-native/` \([0-9]+ files\)'              "dir:react-native"
   '`web/` \([0-9]+ files\)'                       "dir:web"
   '`python/` \([0-9]+ files\)'                    "dir:python"
+  '`java/` \([0-9]+ files\)'                      "dir:java"
   'All [0-9]+ rules'                              "agg:all"
   '\*\*Always loaded\*\* \([0-9]+ files\)'        "agg:always"
   '\*\*Conditionally loaded\*\* \([0-9]+ files\)' "agg:conditional"
@@ -15800,13 +15833,14 @@ readme_prose_actual_count() {
       echo $((common_count + workflow_count + 1))
       ;;
     agg:conditional)
-      local ts_count react_count rn_count web_count python_count
+      local ts_count react_count rn_count web_count python_count java_count
       ts_count=$(find "$REPO_ROOT/rules/typescript" -maxdepth 1 -type f | wc -l | tr -d ' ')
       react_count=$(find "$REPO_ROOT/rules/react" -maxdepth 1 -type f | wc -l | tr -d ' ')
       rn_count=$(find "$REPO_ROOT/rules/react-native" -maxdepth 1 -type f | wc -l | tr -d ' ')
       web_count=$(find "$REPO_ROOT/rules/web" -maxdepth 1 -type f | wc -l | tr -d ' ')
       python_count=$(find "$REPO_ROOT/rules/python" -maxdepth 1 -type f | wc -l | tr -d ' ')
-      echo $((ts_count + react_count + rn_count + web_count + python_count))
+      java_count=$(find "$REPO_ROOT/rules/java" -maxdepth 1 -type f | wc -l | tr -d ' ')
+      echo $((ts_count + react_count + rn_count + web_count + python_count + java_count))
       ;;
   esac
 }
@@ -16005,11 +16039,17 @@ readonly PATCH_CONTRACT_PAIRS=(
   "commands/prp-commit.md"                "Message style — applies to every convention above"
   "commands/prp-implement.md"             "Committed docs are not archived"
   "commands/prp-plan.md"                  "caller specifies an output"
-  "rules/python/coding-style.md"          "Standard Library First"
-  "rules/python/hooks.md"                 "Entry Points Always Exit 0"
-  "rules/python/patterns.md"              "Pure Modules vs. I/O Modules"
+  "rules/python/coding-style.md"          "requires-python"
+  "rules/python/hooks.md"                 "the Project Configures"
+  "rules/python/patterns.md"              "Never Block the Event Loop"
   "rules/python/security.md"              "argv List, Never a Shell"
-  "rules/python/testing.md"               "Use stdlib"
+  "rules/python/testing.md"               "test framework the project already uses"
+  "rules/java/coding-style.md"            "sourceCompatibility"
+  "rules/java/testing.md"                 "JUnit generation"
+  "commands/code-review.md"               "build.gradle"
+  "commands/prp-implement.md"             "gradlew"
+  "commands/prp-plan.md"                  "## Backend Changes"
+  "agents/code-reviewer.md"               "마이그레이션 안전성"
   "rules/react/testing.md"                "CRA itself is deprecated"
   "rules/react/testing.md"                "see its \`skills/react-testing/SKILL.md\`"
   "rules/common/development-workflow.md"  "skip steps whose tool"
@@ -16019,30 +16059,36 @@ readonly PATCH_CONTRACT_PAIRS=(
 
 # T38-2 전용 — rules/python/testing.md 하나가 상류 pytest 관례로 되돌아왔을 때 나타나는
 # 리터럴(D3 — 되돌림 리터럴을 지목할 근거가 있는 파일은 이 파일 하나다). 아래 네 토큰
-# 모두 지금 rules/python/ 전체에서 0건이다(재현: grep -rcF '<토큰>' rules/python/).
+# 모두 지금 rules/python/testing.md 에서 0건이다(재현: grep -cF '<토큰>' rules/python/testing.md).
+# 백엔드 지원 개정(docs/prps/backend-stack-support.md)으로 `conftest.py` 를 뺐다 — 범용 규칙이
+# pytest 감지 신호로 정당하게 쓴다. 대신 상류의 강제 문장 `Use **pytest** as the testing
+# framework` 를 넣었다.
 readonly UPSTREAM_PYTEST_TOKENS=(
   "pytest.fixture"
   "@pytest.mark"
   "import pytest"
-  "conftest.py"
+  "Use **pytest** as the testing framework"
 )
 
 # T38(§21-7 항목 1+2+3+4, 설계 §4 「묶음 3」) — NOTICE.md §5 커버리지 표의 미커버 11행과
-# 「잠기지 않는 성분」 3건, 합쳐서 15개 (경로, 계약 토큰) 성분을 닫는다. 계약 토큰은
+# 「잠기지 않는 성분」 3건, 합쳐서 15개 (경로, 계약 토큰) 성분을 닫는다(이후 backend-stack-support 가 6개를 더해 21개). 계약 토큰은
 # 재동기화가 그 로컬 패치를 되돌리면 사라지거나(존재 쪽), 상류 관례가 되돌아오면
 # 나타나는(부재 쪽) 리터럴이다.
 #
-# 기제: 세 부류다 — (a) PATCH_CONTRACT_PAIRS 표 구동 존재 검사(T38-1·T38-3·T38-4, 경로
-# 패턴으로 메시지만 가른다) (b) rules/python/testing.md 한 파일에서만 상류 pytest 관례의
-# 부재를 보는 UPSTREAM_PYTEST_TOKENS 검사(T38-2, D3 — 되돌아왔을 때 나타날 리터럴을
-# 지목할 근거가 있는 파일은 이 파일 하나다) (c) 표 길이·순회 쌍 수 대조(T38-5).
+# 기제: 네 부류다 — (a) PATCH_CONTRACT_PAIRS 표 구동 존재 검사(T38-1·T38-3·T38-4, 경로
+# 패턴으로 메시지만 가른다; T38-1 은 rules/python·rules/java 언어 트랙 전체) (b)
+# rules/python/testing.md 한 파일에서만 상류 pytest 관례의 부재를 보는
+# UPSTREAM_PYTEST_TOKENS 검사(T38-2, D3 — 되돌아왔을 때 나타날 리터럴을 지목할 근거가
+# 있는 파일은 이 파일 하나다) (c) 표 길이·순회 쌍 수 대조(T38-5) (d) rules/python·
+# rules/java 에 이 저장소 내부 참조(hub/bin·tests/hub·hub_<이름>·coding-harness·★순수)가
+# 없는지 보는 T38-6 — 허브 코드에서 규칙을 다시 귀납하던 결함의 재발 차단.
 #
 # 그 기제에서 따라오는 한계: (a)는 같은 뜻을 다른 낱말로 되돌리는 편집이나, 토큰만
 # 남기고 주변 문장의 의미를 뒤집는 편집을 보지 못한다(T28 헤더와 같은 한계). (b)는 그
 # 네 토큰 밖의 다른 상류 pytest 관용구(예: fixture 없는 parametrize 데코레이터)가
 # 들어와도 못 본다.
 #
-# 표 구동 선택에서 따라오는 한계(D2·R3, §12 원문과 같은 모양) — 원장의 변조행 5건은 각
+# 표 구동 선택에서 따라오는 한계(D2·R3, §12 원문과 같은 모양) — 원장의 표 구동 변조행(T38-1~T38-5)은 각
 # 메시지 분기의 루프 경로 하나씩만 문다. 표의 나머지 항목이 개별로 판정에 기여했다는
 # 증거는 이 설계가 내지 않는다. T38-5 의 계수 단언은 「루프가 표 길이만큼 돌았다」까지고,
 # UPSTREAM_PYTEST_TOKENS 배열에는 같은 형태의 계수 단언이 없다 — 그 배열이 비어도 이
@@ -16053,7 +16099,7 @@ readonly UPSTREAM_PYTEST_TOKENS=(
 # 이 그룹이 빨개지면, 고칠 것은 그 문단이 아니라 위 두 배열의 토큰 목록이다(T32-7 이
 # 경고한 「빨개지면 검사를 지운다」 회피).
 #
-# 비망라 예시 — 이 그룹이 보지 않는 것: 위 15성분 밖의 「패치 요지」 서술 자체(상류
+# 비망라 예시 — 이 그룹이 보지 않는 것: 위 21성분 밖의 「패치 요지」 서술 자체(상류
 # 재대조 없음 — 네트워크를 쓰지 않는다) · rules/python/testing.md 밖 4파일의 상류 관례
 # 부재(D3 — 그 파일들은 존재 단언만 있다) · 숫자·구조 형태의 문서 표류.
 #
@@ -16061,7 +16107,7 @@ readonly UPSTREAM_PYTEST_TOKENS=(
 test_vendor_patch_contract_tokens() {
   group_failures=()   # 앞 그룹이 조기 return 했을 때의 잔여물 제거
   local test_name="T38"
-  local test_desc="벤더링 로컬 패치 계약 토큰 — rules/python 존재(T38-1)·상류 pytest 부재(T38-2)·rules 밖 존재(T38-3)·미잠금 성분(T38-4)·쌍 수 대조(T38-5)"
+  local test_desc="벤더링 로컬 패치 계약 토큰 — rules 언어 트랙(python·java) 존재(T38-1)·상류 pytest 부재(T38-2)·rules 밖 존재(T38-3)·미잠금 성분(T38-4)·쌍 수 대조(T38-5)·언어 트랙 내부 참조 부재(T38-6)"
   log_test_name "$test_name" "$test_desc"
 
   # ---- T38-1·T38-3·T38-4: PATCH_CONTRACT_PAIRS 표 구동 존재 검사(경로로 메시지를 가른다) ----
@@ -16076,8 +16122,8 @@ test_vendor_patch_contract_tokens() {
     local expect_local_token="${PATCH_CONTRACT_PAIRS[pair_index + 1]}"
     if ! grep -qF -- "$expect_local_token" "$REPO_ROOT/$rel_path" 2> /dev/null; then
       case "$rel_path" in
-        rules/python/*)
-          note_failure "T38-1: rules python 로컬 패치 계약 토큰 부재 — $rel_path 에 '$expect_local_token' 없음"
+        rules/python/* | rules/java/*)
+          note_failure "T38-1: rules 언어 트랙 로컬 계약 토큰 부재 — $rel_path 에 '$expect_local_token' 없음"
           ;;
         agents/* | commands/*)
           # 검수 1회차 LOW 반영 — 리터럴 agents/code-reviewer.md 하나만 매치하던 것을
@@ -16108,6 +16154,20 @@ test_vendor_patch_contract_tokens() {
       note_failure "T38-2: rules python 에 상류 pytest 관례가 재도입됨 — rules/python/testing.md 에 '$pytest_token' 있음"
     fi
     pytest_index=$((pytest_index + 1))
+  done
+
+  # ---- T38-6: rules 언어 트랙(python·java)에 이 저장소 내부 참조가 없는가 ----
+  # 허브 코드에서 규칙을 다시 귀납하던 결함(docs/prps/backend-stack-support.md)의 재발을
+  # 막는다. `github_` 같은 낱말 안의 `hub_` 는 앞 글자 조건으로 거른다.
+  local internal_reference_pattern='hub/bin|tests/hub|(^|[^[:alnum:]_])hub_[a-z_]+|coding-harness|★순수'
+  local language_rule_file
+  for language_rule_file in "$REPO_ROOT"/rules/python/*.md "$REPO_ROOT"/rules/java/*.md; do
+    [[ -f "$language_rule_file" ]] || continue
+    local first_internal_line
+    first_internal_line=$(grep -nE -- "$internal_reference_pattern" "$language_rule_file" 2> /dev/null | head -n 1) || true
+    if [[ -n "$first_internal_line" ]]; then
+      note_failure "T38-6: rules 언어 트랙에 이 저장소 내부 참조가 있음 — ${language_rule_file#"$REPO_ROOT"/}:${first_internal_line}"
+    fi
   done
 
   finish_group "$test_name"

@@ -19,10 +19,10 @@
 
 - **배포 채널**: `install.sh` — 순수 bash, 외부 의존성 0. 소유권 원칙(레포가 배포하는
   파일만 관리하고, 대상 디렉토리의 다른 파일은 건드리지 않는다).
-- **배포 자산**: `rules/` 46개 · `agents/` 4개 · `commands/` 8개 — 3종. 레이어 간
+- **배포 자산**: `rules/` 48개 · `agents/` 4개 · `commands/` 8개 — 3종. 레이어 간
   통신은 manifest(`.coding-harness.json`, v3)의 해시 대장뿐이다.
 - **허브 런타임**: `hub/` — python3 표준 라이브러리 전용(문서화된 결정, 새 의존성 추가
-  금지).
+  금지). 코드 관례는 `hub/CLAUDE.md`(hub/ 파일을 열면 자동 로드).
 - **검증**: `tests/run.sh`(install.sh·문서 정합성 T 그룹) · `tests/hub`(stdlib unittest).
 
 ## 3. 성능 (병목)

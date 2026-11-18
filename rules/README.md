@@ -2,8 +2,8 @@
 ## Structure
 
 Rules are organized into a **common** layer plus **stack-specific** directories.
-This distribution is curated for a JavaScript/TypeScript + React + web stack, plus a recovered
-Python ruleset (see below):
+This distribution is curated for a JavaScript/TypeScript + React + web stack, plus Python and Java
+backend rulesets (see below):
 
 ```
 rules/
@@ -24,6 +24,7 @@ rules/
 │   ├── model-routing.md
 │   ├── code-quality-baseline.md
 │   └── project-instructions-checklist.md
+├── java/            # Java specific (conditional)
 ├── python/          # Python specific (conditional)
 ├── react/           # React specific (conditional)
 ├── react-native/    # React Native / Expo specific (conditional)
@@ -33,14 +34,14 @@ rules/
 
 - **common/** (11 files) contains universal principles — no language-specific code examples. **Always loaded at launch**, same priority as `CLAUDE.md`.
 - **workflow/** (4 files) contains the general development workflow (role separation, model routing, code quality baseline, project-instructions checklist) migrated out of this repo's own `CLAUDE.md` so it deploys as user-scope rules instead of overwriting a project's `CLAUDE.md`. **Always loaded at launch**, same as `common/`.
-- **typescript/**, **react/**, **react-native/**, **web/**, **python/** extend common rules with stack-specific patterns, tools, and code examples. Each file references its common counterpart.
+- **typescript/**, **react/**, **react-native/**, **web/**, **python/**, **java/** extend common rules with stack-specific patterns, tools, and code examples. Each file references its common counterpart.
 - **Conditional loading via `paths` frontmatter**: Stack-specific files declare glob patterns in frontmatter (e.g., `paths: ["**/*.tsx"]`). A rule loads when Claude **reads or edits** a file matching the glob (not merely when matching files exist). Multiple globs are OR'd. See [Claude docs: Memory](https://code.claude.com/docs/en/memory).
 
 ## Installation
 
 ### Install All Rules (Default)
 
-All 46 rules are installed. Rule files without `paths` frontmatter (common/, workflow/, README.md) are always loaded. Stack-specific files load only when their glob patterns match files in your project.
+All 48 rules are installed. Rule files without `paths` frontmatter (common/, workflow/, README.md) are always loaded. Stack-specific files load only when their glob patterns match files in your project.
 
 ```bash
 # Install to project directory (.claude/rules/)
@@ -58,12 +59,13 @@ All 46 rules are installed. Rule files without `paths` frontmatter (common/, wor
    - This README
    - Loaded at launch alongside `CLAUDE.md`
 
-2. **Conditionally loaded** (30 files):
+2. **Conditionally loaded** (32 files):
    - `typescript/` (5 files) — loads when `**/*.ts`, `**/*.tsx`, `**/*.js`, `**/*.jsx` match
    - `react/` (5 files) — loads when `**/*.tsx`, `**/*.jsx`, or `components/`·`hooks/` sources match
    - `react-native/` (8 files) — loads when React Native/Expo sources match
    - `web/` (7 files) — loads when frontend files match (`**/*.tsx`, `**/*.css`, `**/*.html`, etc.)
    - `python/` (5 files) — loads when `**/*.py`, `**/*.pyi` match
+   - `java/` (2 files) — loads when `**/*.java`, `**/build.gradle`, `**/build.gradle.kts`, `**/pom.xml` match
    - Loaded only when glob matches project files
    - No setup required — matching happens automatically
 

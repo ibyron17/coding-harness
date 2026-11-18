@@ -1,7 +1,7 @@
 """hub_session_cost 단위 테스트 — 세션 비용 캡처 파일의 I/O 층(⑨, docs/prps/harness-benchmark-adoption.md §10-1).
 
 실제 ~/.claude 는 건드리지 않는다. 모듈 상수 SESSION_COSTS_DIR 을 임시 디렉터리로 바꿔치기한 뒤
-원상복구한다(rules/python/testing.md 의 Test Isolation 관례).
+원상복구한다(hub/CLAUDE.md 의 테스트 관례).
 """
 
 import os

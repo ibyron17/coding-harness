@@ -103,7 +103,11 @@ web 7] + agents 1 + commands 6).
 일치한다). 그러나 본문은 상류에서 옮겨온 것이 아니라 이 저장소가 자신의
 `hub/bin/*.py` 코드 패턴에서 귀납해 전면 재작성했다(커밋 `4be8f58`, 커밋 메시지 원문:
 "내용은 지어내지 않고 hub/bin/*.py 에서 귀납했다" — 그 앞서 `602e377`이 상류 원문을
-반입했다가 `5f9552f`가 79→37 큐레이션에서 전량 삭제한 이력이 있다).
+반입했다가 `5f9552f`가 79→37 큐레이션에서 전량 삭제한 이력이 있다). 이후 `docs/prps/backend-stack-support.md`
+가 본문을 범용 Python 규칙(프로젝트의 버전·테스트 프레임워크·도구·의존성을 따른다)으로 다시 썼고,
+허브 관례는 배포되지 않는 `hub/CLAUDE.md` 로 옮겼다. `rules/java/` 2개(`coding-style.md`·`testing.md`)는
+상류에 같은 경로가 있으나 상류 본문을 반입한 적이 없는 원저작이다 — 상류 java 트랙은 Java 16~21 전제라 이
+저장소의 구버전 지원 목적과 반대다. 재동기화 보호 대상(§5)이다.
 
 **직접 대조 방법과 한계**: 상류 원문과 줄 단위 매칭 블록(difflib `SequenceMatcher`,
 공백만 있는 줄은 제외하고 비교)으로 대조했다. 이 방법에서 곧바로 따라오는 한계 —
@@ -116,7 +120,7 @@ web 7] + agents 1 + commands 6).
 파일별로도 남는 줄이 있다(`coding-style.md` 의 `## Immutability` 소제목과
 `from dataclasses import dataclass`·`@dataclass(frozen=True)` 예시 코드 2줄,
 `testing.md` 의 `## Framework` 소제목, 각 파일의 코드펜스 구분자 ` ``` `). 이 지표
-(상류 비공백 행 대비 매칭 비율)로 재는 값은 44.4%(상류 비공백 117행 중 52행)다 —
+(상류 비공백 행 대비 매칭 비율)로 재는 값은 44.4%(상류 비공백 117행 중 52행, `4be8f58` 판본 기준 — 재작성 전)다 —
 **이 수치는 이 지표에서만 유효하다**: 프런트매터·코드펜스를 세는지, 분모를 상류
 쪽 행수로 두는지 로컬 쪽으로 두는지에 따라 다른 값이 나온다(같은 대상을 다른
 기준으로 잰 값이 이 PRP 의 이전 검수 회차들에도 보고된 적이 있다). **전수 대조가
@@ -127,10 +131,11 @@ web 7] + agents 1 + commands 6).
 패치 목록·재동기화 규칙의 보호 대상에도 포함한다 — 상류가 이 경로를 지금도
 배포하므로, 재동기화가 이 5개 파일을 상류 pytest 규칙으로 되돌릴 위험이 실재한다.
 
-**원저작(상류 트리에 그 경로 자체가 없음)**: `rules/` 46개 중 위 표의 36개(README·
-common·typescript·react·react-native·web)는 상류 유래(파생)이고, `rules/python/`
-5개는 상류 유래이나 본문 재작성(바로 위 문단), 나머지 5개는 상류 트리를 조회해도
-경로 자체가 없다 — 이 저장소가 처음부터 새로 썼다:
+**원저작(상류 트리에 그 경로 자체가 없음)**: `rules/` 48개(파생 36 + python 5 + java 2 + 원저작 5) 중
+위 표의 36개(README·common·typescript·react·react-native·web)는 상류 유래(파생)이고,
+`rules/python/` 5개는 상류 유래이나 본문 재작성, `rules/java/` 2개는 상류와 같은 경로의
+원저작(둘 다 바로 위 문단), 나머지 5개는 상류 트리를 조회해도 경로 자체가 없다 — 이 저장소가
+처음부터 새로 썼다:
 
 - `rules/common/karpathy-guidelines.md` — 한국어 82줄. 「실패 사례(실제 관측)」 절이
   이 저장소 자신의 `install.sh` 개발 중 사고(`set -e` 가 조건문에서 호출된 함수
@@ -198,7 +203,7 @@ common·typescript·react·react-native·web)는 상류 유래(파생)이고, `r
 
 | 파일 | 패치 요지 | 근거(PRP/감사 항목) |
 |---|---|---|
-| `rules/README.md` | `rules/python/` 재도입과 `rules/workflow/` 신설을 구조도·상시로드 목록·설치 수량(37→42→46)에 반영 | 커밋 `4be8f58`·`0b0281d` |
+| `rules/README.md` | `rules/python/` 재도입·`rules/java/` 신설과 `rules/workflow/` 신설을 구조도·상시로드 목록·설치 수량(37→42→46→48)과 `rules/java/` 에 반영 | 커밋 `4be8f58`·`0b0281d` |
 | `rules/common/agents.md` | 로스터를 배포 4종(`design-architect`·`implementer`·`code-reviewer`·`Explore`)으로 교체, 미배포 10종 제거 | F-3(AR11) |
 | `rules/common/code-review.md` | 미배포 리뷰어 5종 참조를 `code-reviewer` 위임 표현으로 교체 · 중첩 한도 `>4 levels`→`>3 levels` 2곳 · **Review Checklist 에 「새 검사·보호 분기를 일부러 깨뜨려 실패를 확인했다」 항목 1줄 추가**(상류에 없는 신규 항목) | F-3(AR11) · tests-hardening 승인 4 |
 | `rules/common/coding-style.md` | 중첩 한도를 `>4 levels`→`>3 levels`로 강화, 에러 처리 절을 "실제 발생 가능한 실패만 처리"하는 `karpathy-guidelines.md` #2 참조로 교체(추측성 에러 처리 배제) | 검수 R3 3회차 지적 ①(§5 누락 보완 — 상류 원문 diff 로 신규 확인) |
@@ -214,16 +219,16 @@ common·typescript·react·react-native·web)는 상류 유래(파생)이고, `r
 | `rules/react-native/testing.md` | 미배포 `tdd-guide` → `implementer` 직접 수행으로 교체 | F-3(AR11) |
 | `rules/web/hooks.md` | 훅 JSON 6블록을 공식 3계층 스키마(`hooks` 배열 + `type: "command"`)로 교정 | A-1(AR1) |
 | `rules/web/security.md` | 「Secrets in the Client Bundle」 절 신설(공개 접두 env 는 브라우저로 간다) | docs/prps/secure-coding-agents.md |
-| `agents/code-reviewer.md` | 재검수 모드 신설, 검수 루프 종결 규약(3회 상한 + 정체 감지), 파일 재읽기 절 신설(같은 범위 재읽기 방지), CLAUDE.md 재-Read 제거, 경량 검증(절차 6)·재검수 규칙 4 의 실행 범위를 「변경이 닿은 테스트만」으로 좁힘(전체 스위트는 검수자가 돌리지 않고 메인 세션이 커밋 직전에 1회 — docs/prps/t37-incremental-k6.md §12), 보고 양식의 `[제안]` → `[재현]`(CRITICAL/HIGH 에 재현 증거 의무, 못 붙이면 한 단계 하향), 기준 커밋 SHA 기록과 diff 1회 수집, 절차 재배열(결함 탐색 → 구현자 보고서·PRP 를 미검증 주장으로 대조), FAIL 사유 범주 4종, frontmatter 의 `effort` 고정과 `tools` 의 `Task` → 정식 이름 `Agent`(docs/prps/harness-benchmark-adoption.md) — 누적 10개 커밋 · secure coding: XSS 항목의 클라이언트 주입 확장·공통 보안 체크 정본 참조(`rules/common/security.md`)·의존성 항목 확장(typosquat·설치 스크립트·lockfile)·설정 파일 자격 증명과 비밀 노출 경로 항목·신뢰 경계 음성 테스트 누락(HIGH)·재현 출력 비밀값 가림·PRP 보안 절 대조(절차 7) | F-2(AR15) 재작성 표기 대상·품질 트랙 다수 · docs/prps/secure-coding-agents.md |
-| `commands/code-review.md` | VALIDATE 경량 단계(Phase 3) 신설 — 기존 테스트 실행·기록, 실패 시 HIGH 이슈로 등록, 실행 범위를 변경이 닿은 테스트로 좁힘(전체 스위트는 검수 단계에서 돌리지 않음), Phase 1 에 기준 SHA 기록·diff 1회 수집, Phase 4 의 `Suggested fix` → `Reproduction`(CRITICAL/HIGH 재현 의무·하향 규칙)과 FAIL 사유 범주(docs/prps/harness-benchmark-adoption.md) · secure coding: 자격 증명·XSS 줄 확장·정본 참조 줄·재현 출력 가림·신뢰 경계 코드의 악성 입력 음성 테스트 누락을 HIGH 로 판정하는 줄(Code Quality)·PR 모드 `isCrossRepository` 필드와 비신뢰(포크) PR 실행 금지 | 기존 로컬 패치(검수 워크플로우) · docs/prps/secure-coding-agents.md |
+| `agents/code-reviewer.md` | 재검수 모드 신설, 검수 루프 종결 규약(3회 상한 + 정체 감지), 파일 재읽기 절 신설(같은 범위 재읽기 방지), CLAUDE.md 재-Read 제거, 경량 검증(절차 6)·재검수 규칙 4 의 실행 범위를 「변경이 닿은 테스트만」으로 좁힘(전체 스위트는 검수자가 돌리지 않고 메인 세션이 커밋 직전에 1회 — docs/prps/t37-incremental-k6.md §12), 보고 양식의 `[제안]` → `[재현]`(CRITICAL/HIGH 에 재현 증거 의무, 못 붙이면 한 단계 하향), 기준 커밋 SHA 기록과 diff 1회 수집, 절차 재배열(결함 탐색 → 구현자 보고서·PRP 를 미검증 주장으로 대조), FAIL 사유 범주 4종, frontmatter 의 `effort` 고정과 `tools` 의 `Task` → 정식 이름 `Agent`(docs/prps/harness-benchmark-adoption.md) — 누적 10개 커밋 · secure coding: XSS 항목의 클라이언트 주입 확장·공통 보안 체크 정본 참조(`rules/common/security.md`)·의존성 항목 확장(typosquat·설치 스크립트·lockfile)·설정 파일 자격 증명과 비밀 노출 경로 항목·신뢰 경계 음성 테스트 누락(HIGH)·재현 출력 비밀값 가림·PRP 보안 절 대조(절차 7) · 백엔드 지원: 「백엔드 패턴」 일반화와 4항목(트랜잭션 경계·동시 갱신·API 하위 호환·마이그레이션 안전성)·SQL 인젝션 보간 예시 | F-2(AR15) 재작성 표기 대상·품질 트랙 다수 · docs/prps/secure-coding-agents.md · docs/prps/backend-stack-support.md |
+| `commands/code-review.md` | VALIDATE 경량 단계(Phase 3) 신설 — 기존 테스트 실행·기록, 실패 시 HIGH 이슈로 등록, 실행 범위를 변경이 닿은 테스트로 좁힘(전체 스위트는 검수 단계에서 돌리지 않음), Phase 1 에 기준 SHA 기록·diff 1회 수집, Phase 4 의 `Suggested fix` → `Reproduction`(CRITICAL/HIGH 재현 의무·하향 규칙)과 FAIL 사유 범주(docs/prps/harness-benchmark-adoption.md) · secure coding: 자격 증명·XSS 줄 확장·정본 참조 줄·재현 출력 가림·신뢰 경계 코드의 악성 입력 음성 테스트 누락을 HIGH 로 판정하는 줄(Code Quality)·PR 모드 `isCrossRepository` 필드와 비신뢰(포크) PR 실행 금지 · 백엔드 지원: JVM(Gradle·Maven) 검증 명령·Python 환경 관리자 접두·`Blocked (env: …)` 기록·백엔드 변경 HIGH 줄 | 기존 로컬 패치(검수 워크플로우) · docs/prps/secure-coding-agents.md · docs/prps/backend-stack-support.md |
 | `commands/prp-commit.md` | 커밋 컨벤션 해석 우선순위(프로젝트 CLAUDE.md → commitlint 설정 파일 → 기본 형식) 절 신설 | 검수 R3 3회차 지적 ①(§5 누락 보완 — 상류 원문 diff 로 신규 확인) |
-| `commands/prp-implement.md` | `docs/prps/` 아래 산출물은 아카이브 이동을 생략(커밋된 정본 보호) · 계획의 Security Considerations 절을 읽어 음성 테스트를 실행(Phase 1·Level 5) | harness-landscape-survey(tier0-defect-fixes) · docs/prps/secure-coding-agents.md |
-| `commands/prp-plan.md` | 호출자 지정 출력 경로(`docs/prps/{feature}.md`)를 지원, 기본 경로(`.claude/PRPs/plans/`)는 유지 · 템플릿에 Security Considerations 절(프론트엔드 sink·음성 테스트 형태 한 줄 포함)과 체크 2줄 추가 | harness-landscape-survey(tier0-defect-fixes) · docs/prps/secure-coding-agents.md |
-| `rules/python/coding-style.md` | 표준 라이브러리 우선·`X \| None` 타입힌트·`@dataclass(frozen=True)` 불변성·이름 있는 상수를 이 저장소 자신의 `hub/bin/*.py` 코드에서 귀납해 새로 작성 | 커밋 `4be8f58`·검수 R3 2회차 ②(§3 "상류 유래·본문 재작성" 재분류) |
-| `rules/python/hooks.md` | 훅·statusline 진입점은 예외를 삼키고 항상 exit 0 을 반환한다는 규칙을 `hub_hook.py`/`hub_statusline.py`의 `main()` 형태에서 귀납 | 〃 |
-| `rules/python/patterns.md` | 순수 모듈/I·O 모듈 분리, 프로즌 dataclass 로만 모듈 간 통신, 예상된 실패 전용 예외 클래스, 잎 모듈로 순환 참조 차단을 `hub_model.py`·`hub_collect.py`·`hub_server_state.py`에서 귀납 | 〃 |
-| `rules/python/security.md` | 프롬프트·자격증명 평문 로깅 금지(보관기한·옵트아웃 고지 + 시크릿 마스킹)·`subprocess` 리스트 인자 강제·요청 문자열로 경로 조립 금지를 `hub_hook.py`·`hub_usage_fetch.py`·`hub_server.py` 패턴에서 귀납 | 〃 |
-| `rules/python/testing.md` | stdlib `unittest` 를 기본 프레임워크로 명시(pytest 금지)·`setUp`/`tearDown` 모듈 상태 스왑·`mock.patch.object` 관례를 `tests/hub/*.py` 실제 패턴에서 귀납 | 〃 |
+| `commands/prp-implement.md` | `docs/prps/` 아래 산출물은 아카이브 이동을 생략(커밋된 정본 보호) · 계획의 Security Considerations 절을 읽어 음성 테스트를 실행(Phase 1·Level 5) · 백엔드 지원: 감지 표에 uv·poetry·gradle·maven 행·JVM 검증 태스크 대응·Backend Changes 로드·환경 원인 빌드 실패는 보고하고 우회하지 않음 | harness-landscape-survey(tier0-defect-fixes) · docs/prps/secure-coding-agents.md · docs/prps/backend-stack-support.md |
+| `commands/prp-plan.md` | 호출자 지정 출력 경로(`docs/prps/{feature}.md`)를 지원, 기본 경로(`.claude/PRPs/plans/`)는 유지 · 템플릿에 Security Considerations 절(프론트엔드 sink·음성 테스트 형태 한 줄 포함)과 체크 2줄 추가 · 백엔드 지원: Backend Changes 절(트랜잭션·동시 갱신·API 호환·마이그레이션)·Database Validation 도구별 예시와 기대 결과·체크 1줄 | harness-landscape-survey(tier0-defect-fixes) · docs/prps/secure-coding-agents.md · docs/prps/backend-stack-support.md |
+| `rules/python/coding-style.md` | 범용 Python 규칙으로 재작성 — 프로젝트의 `requires-python`·포매터/린터/타입체커·기존 의존성을 따른다(표준 라이브러리 우선 기본값 제거), 불변성·상수·비공개 helper·`pathlib` 유지. 허브 관례는 `hub/CLAUDE.md` 로 이동 | docs/prps/backend-stack-support.md (이전: 커밋 `4be8f58`·검수 R3 2회차 ②) |
+| `rules/python/hooks.md` | 프로젝트가 설정한 포매터·린터를 편집 훅에서 돌린다는 한 절로 축소(진입점 exit 0 관례는 `hub/CLAUDE.md` 로 이동) | 〃 |
+| `rules/python/patterns.md` | 예상된 실패 전용 예외·경계에서 타입 모델로 검증·이벤트 루프를 막지 않기·프레임워크 주입·잎 모듈 순환 차단으로 재작성(허브 모듈 구조 관례는 `hub/CLAUDE.md` 로 이동) | 〃 |
+| `rules/python/security.md` | `subprocess` 리스트 인자·요청 문자열로 경로 조립 금지·비밀값 지역 변수·평문 로깅 금지를 범용 문장으로 유지하고 SQL 바인딩·안전한 로더 2항목을 추가 | 〃 |
+| `rules/python/testing.md` | 프로젝트가 이미 쓰는 테스트 프레임워크(pytest·unittest)를 감지해 따르고 새 프로젝트 기본값은 pytest, 환경 관리자(`uv run`·`poetry run`·`python -m`)로 실행, 비동기·격리 관례(허브의 unittest 관례는 `hub/CLAUDE.md` 로 이동) | 〃 |
 
 **상류가 벤더링 이후 갱신했으나 아직 취하지 않은 파일**: `rules/common/git-workflow.md`
 는 위 표에 넣지 않는다 — 로컬 파일은 상류가 `569b1d5b`(2026-08-12, "disable Claude
@@ -273,6 +278,9 @@ ECC 재동기화 시 이 목록의 파일은 **통째로 덮어쓰지 않는다.
 원문에 닿는 경로가 보이지 않는다. 그러므로 `bash tests/run.sh` 가 그린인 것은 이 순서를 지켰다는
 증거가 아니다.
 
+상류 `rules/java/` 트랙은 반입하지 않는다 — 이 저장소의 `rules/java/` 2개는 같은 경로의 원저작이라
+반입하면 덮인다. T38-1 이 계약 토큰(`sourceCompatibility`·`JUnit generation`)으로 덮어쓰기를 잡는다.
+
 ### 커버리지 상태 (위 표 26행)
 
 계수 기준: **「열림」**은 어떤 검사의 판정이 그 파일의 바이트에 의존한다는 뜻, **「잠긴다」**는 그
@@ -303,16 +311,16 @@ T4·T15·T18·T19·T27 이 이 표의 파일을 픽스처로 쓰는 자리). 아
 | `rules/react-native/testing.md` | 미배포 13종 이름의 부재 | `implementer` 직접 수행 문안 | T29-1 |
 | `rules/web/hooks.md` | 훅 json 블록의 3계층 스키마 · `$FILE_PATH` 부재 | — | T28-1 |
 | `rules/web/security.md` | 「Secrets in the Client Bundle」 절의 존재(공개 접두 env 는 브라우저로 간다) | 나열된 공개 접두 이름 목록 | T31-13 |
-| `agents/code-reviewer.md` | 재검수 모드 절 존재 · 재현 형식(`[재현]`) · 미검증 주장 순서 · 사유 범주(T31-11) · secure coding(정본 참조·PRP 보안 절 대조·`<masked>` 가림·`typosquat`·클라이언트 주입·`git ls-files` 탐지·회전 표기 — T31-13) | 루프 종결 규약 · 파일 재읽기 절 · 검증 범위 문안(「변경이 닿은 테스트만」 — 상류 재동기화가 되돌려도 「검수자가 전체를 돌린다」로 돌아갈 뿐 안전 문제가 아니다. 메인 세션의 커밋 직전 전체 검증 의무는 `rules/workflow/role-separation.md` 의 T31-9 가 잠근다) · 기준 SHA 기록·diff 1회 수집 · 하향 규칙 문안 · SC6 강도 문안(테스트 누락 HIGH·잘못된 「해당 없음」 MEDIUM 「설계문서 불일치」 — 토큰 없음) | T38-3 · T31-11 · T31-13 |
-| `commands/code-review.md` | VALIDATE 경량 단계 존재(T17 은 상호참조 토큰만 봄) · `Reproduction` 요구(T31-11) · secure coding(정본 참조·`mask the value` 가림·`isCrossRepository` 포크 PR 실행 금지·창 간 메시지·회전 표기·신뢰 경계 코드의 악성 입력 음성 테스트 누락 HIGH 줄(`malicious-input negative test`) — T31-13) | Phase 3 표의 실행 범위 문안(위와 같은 이유) · Phase 1 의 기준 SHA·1회 수집 문안 | T38-3 · T31-11 · T31-13 |
+| `agents/code-reviewer.md` | 재검수 모드 절 존재 · 재현 형식(`[재현]`) · 미검증 주장 순서 · 사유 범주(T31-11) · secure coding(정본 참조·PRP 보안 절 대조·`<masked>` 가림·`typosquat`·클라이언트 주입·`git ls-files` 탐지·회전 표기 — T31-13) · 백엔드 패턴 절의 `마이그레이션 안전성` 존재(T38-3) | 루프 종결 규약 · 파일 재읽기 절 · 검증 범위 문안(「변경이 닿은 테스트만」 — 상류 재동기화가 되돌려도 「검수자가 전체를 돌린다」로 돌아갈 뿐 안전 문제가 아니다. 메인 세션의 커밋 직전 전체 검증 의무는 `rules/workflow/role-separation.md` 의 T31-9 가 잠근다) · 기준 SHA 기록·diff 1회 수집 · 하향 규칙 문안 · SC6 강도 문안(테스트 누락 HIGH·잘못된 「해당 없음」 MEDIUM 「설계문서 불일치」 — 토큰 없음) | T38-3 · T31-11 · T31-13 |
+| `commands/code-review.md` | VALIDATE 경량 단계 존재(T17 은 상호참조 토큰만 봄) · `Reproduction` 요구(T31-11) · secure coding(정본 참조·`mask the value` 가림·`isCrossRepository` 포크 PR 실행 금지·창 간 메시지·회전 표기·신뢰 경계 코드의 악성 입력 음성 테스트 누락 HIGH 줄(`malicious-input negative test`) — T31-13) · JVM 검증 블록(`build.gradle`) 존재(T38-3) | Phase 3 표의 실행 범위 문안(위와 같은 이유) · Phase 1 의 기준 SHA·1회 수집 문안 | T38-3 · T31-11 · T31-13 |
 | `commands/prp-commit.md` | Message style 절(커밋 메시지 문체 규칙) 존재 | 커밋 컨벤션 해석 우선순위 절(상류 대비로는 로컬 패치이나 최초 반입 `602e377`에 이미 있어 `5f9552f` 대조로는 못 잠근다) | T38-3 |
-| `commands/prp-implement.md` | 아카이브 이동 생략 문구 존재 · Security Considerations 로드(T31-13) | — | T38-3 · T31-13 |
-| `commands/prp-plan.md` | 호출자 지정 출력 경로 문구 존재 · Security Considerations 절·음성 테스트 열·프론트엔드 sink·비밀값 질문(T31-13) | 템플릿 체크 2줄(Edge Cases·Context Completeness) | T38-3 · T31-13 |
-| `rules/python/coding-style.md` | 표준 라이브러리 우선 절 존재(T12 는 frontmatter 만 봄) | 타입힌트·불변성 본문 | T38-1 |
-| `rules/python/hooks.md` | 훅 진입점의 exit 0 규칙 절 존재 | — | T38-1 |
-| `rules/python/patterns.md` | 순수/IO 분리 절 존재 | 프로즌 dataclass 본문 | T38-1 |
-| `rules/python/security.md` | subprocess 리스트 인자 절 존재 | 평문 로깅 금지 본문 | T38-1 |
-| `rules/python/testing.md` | stdlib `unittest` 기본 문구 존재(T38-1) · 상류 pytest 관례 부재(T38-2) | — | T38-1 · T38-2 |
+| `commands/prp-implement.md` | 아카이브 이동 생략 문구 존재 · Security Considerations 로드(T31-13) · JVM 감지 행(`gradlew`) 존재(T38-3) | — | T38-3 · T31-13 |
+| `commands/prp-plan.md` | 호출자 지정 출력 경로 문구 존재 · Security Considerations 절·음성 테스트 열·프론트엔드 sink·비밀값 질문(T31-13) · `## Backend Changes` 절 존재(T38-3) | 템플릿 체크 2줄(Edge Cases·Context Completeness) | T38-3 · T31-13 |
+| `rules/python/coding-style.md` | 프로젝트 도구 우선 절(`requires-python`) 존재(T12 는 frontmatter 만 봄) · 내부 참조 부재(T38-6) | 타입힌트·불변성 본문 | T38-1 · T38-6 |
+| `rules/python/hooks.md` | 프로젝트 설정 포매터·린터 절(`the Project Configures`) 존재 · 내부 참조 부재(T38-6) | — | T38-1 · T38-6 |
+| `rules/python/patterns.md` | 이벤트 루프 절(`Never Block the Event Loop`) 존재 · 내부 참조 부재(T38-6) | 예외·경계 검증·주입 본문 | T38-1 · T38-6 |
+| `rules/python/security.md` | subprocess 리스트 인자 절 존재 · 내부 참조 부재(T38-6) | SQL 바인딩·안전한 로더·평문 로깅 금지 본문 | T38-1 · T38-6 |
+| `rules/python/testing.md` | 프로젝트 프레임워크 따르기 문구(`test framework the project already uses`) 존재(T38-1) · 상류 pytest 강제 문장 부재(T38-2) · 내부 참조 부재(T38-6) | — | T38-1 · T38-2 · T38-6 |
 
 **세 버킷의 합**(위 표 「검사」 열을 세면 나온다): 직접 커버 25 + T26 간접만 1 + 미커버 0 = 26행
 이고 서로 겹치지 않는다. T26 계수 집합과 겹치는 8행은 그 24+1 안이라 네 번째 값이 아니다.
